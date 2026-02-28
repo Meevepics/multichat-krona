@@ -333,10 +333,180 @@ function handleKickDonationFromBrowser(data) {
   });
 }
 
-function connectKick() {
+// ══════════════════════════════════════════════════════════════
+//  KICK — Conexión directa desde el servidor via Pusher WebSocket
+//  No requiere dashboard abierto en el navegador
+// ══════════════════════════════════════════════════════════════
+const { WebSocket: NodeWS } = require('ws');
+
+const PUSHER_URLS = [
+  'wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0-rc2&flash=false',
+  'wss://ws-us2.pusher.com/app/eb1d5f283081a78b932c?protocol=7&client=js&version=7.6.0&flash=false',
+];
+
+let kickPusherWs     = null;
+let kickRetryDelay   = 5000;
+let kickRetryTimeout = null;
+let kickUrlIndex     = 0;
+let kickPingInterval = null;
+
+async function resolveKickChannelId(channelName) {
+  return new Promise((resolve) => {
+    const url = `https://kick.com/api/v2/channels/${channelName.toLowerCase()}`;
+    const req = https.get(url, {
+      headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+    }, (res) => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          const id = String((data.chatroom && data.chatroom.id) || data.id || '');
+          resolve(id || null);
+        } catch(e) { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(10000, () => { req.destroy(); resolve(null); });
+  });
+}
+
+async function connectKick() {
   if (!CONFIG.kick) return;
-  state.kick.connected = false;
-  broadcastStatus();
+
+  // Resolver el channel ID si no lo tenemos
+  if (!CONFIG.kickId) {
+    console.log(`[Kick] Resolviendo chatroom ID para canal: ${CONFIG.kick}`);
+    const id = await resolveKickChannelId(CONFIG.kick);
+    if (!id) {
+      console.log('[Kick] ❌ No se pudo resolver el chatroom ID. Reintentando en 60s...');
+      kickRetryTimeout = setTimeout(connectKick, 60000);
+      return;
+    }
+    CONFIG.kickId = id;
+    console.log(`[Kick] ✅ Chatroom ID resuelto: ${CONFIG.kickId}`);
+  }
+
+  tryKickPusher(CONFIG.kickId);
+}
+
+function tryKickPusher(channelId) {
+  if (kickPusherWs) {
+    try { kickPusherWs.terminate(); } catch(e) {}
+    kickPusherWs = null;
+  }
+  if (kickPingInterval) { clearInterval(kickPingInterval); kickPingInterval = null; }
+
+  const url = PUSHER_URLS[kickUrlIndex % PUSHER_URLS.length];
+  console.log(`[Kick] Conectando a Pusher (chatroom ${channelId})...`);
+
+  let ws;
+  try {
+    ws = new NodeWS(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
+    });
+  } catch(e) {
+    console.error('[Kick] Error creando WS:', e.message);
+    kickRetryTimeout = setTimeout(() => { kickUrlIndex++; tryKickPusher(channelId); }, kickRetryDelay);
+    return;
+  }
+
+  kickPusherWs = ws;
+
+  ws.on('open', () => {
+    kickRetryDelay = 5000;
+    ws.send(JSON.stringify({ event: 'pusher:subscribe', data: { auth: '', channel: `chatrooms.${channelId}.v2` } }));
+
+    // Ping cada 25 segundos para mantener la conexión viva
+    kickPingInterval = setInterval(() => {
+      if (ws.readyState === 1) ws.send(JSON.stringify({ event: 'pusher:ping', data: {} }));
+    }, 25000);
+  });
+
+  ws.on('message', (raw) => {
+    let msg;
+    try { msg = JSON.parse(raw); } catch(e) { return; }
+
+    const event = msg.event || '';
+
+    if (event === 'pusher:connection_established' || event === 'pusher:pong') return;
+
+    if (event === 'pusher_internal:subscription_succeeded') {
+      console.log(`[Kick] ✅ Conectado al chatroom ${channelId}`);
+      state.kick.connected = true;
+      broadcastStatus();
+      return;
+    }
+
+    if (event === 'pusher:error') {
+      console.error('[Kick] Error de Pusher:', msg.data);
+      ws.terminate();
+      return;
+    }
+
+    // Mensaje de chat o donación
+    let d;
+    try { d = typeof msg.data === 'string' ? JSON.parse(msg.data) : msg.data; } catch(e) { return; }
+    if (!d) return;
+
+    if (event === 'App\\Events\\ChatMessageEvent' || event === 'App.Events.ChatMessageEvent') {
+      const sender   = d.sender || {};
+      const username = sender.username || d.chatname || 'KickUser';
+      const content  = d.content || '';
+      const badges   = (sender.identity && sender.identity.badges) || [];
+      const nameColor = (sender.identity && sender.identity.color) || '#53FC18';
+
+      const kickRoles = [];
+      badges.forEach(b => {
+        const bt = (b.type || '').toLowerCase();
+        if (bt === 'broadcaster' || bt === 'owner') kickRoles.push({ type: 'broadcaster', label: 'Owner' });
+        else if (bt === 'moderator' || bt === 'mod') kickRoles.push({ type: 'moderator', label: 'Mod' });
+        else if (bt === 'vip') kickRoles.push({ type: 'vip', label: 'VIP' });
+        else if (bt === 'subscriber' || bt === 'sub') kickRoles.push({ type: 'subscriber', label: 'Sub' });
+        else kickRoles.push({ type: bt, label: b.type });
+      });
+
+      getKickAvatar(username, (avatar) => {
+        broadcast({
+          type: 'kick', platform: 'kick',
+          chatname: username, chatmessage: content,
+          nameColor, chatimg: avatar || null,
+          roles: kickRoles,
+          mid: d.id || ('kick-' + Date.now()),
+        });
+      });
+    }
+
+    // Gifted subs / donaciones de Kick
+    if (event === 'App\\Events\\GiftedSubscriptionsEvent' || event === 'App.Events.GiftedSubscriptionsEvent') {
+      const gifter = (d.gifted_by && d.gifted_by.username) || 'Anónimo';
+      const qty = (d.gifted_usernames && d.gifted_usernames.length) || 1;
+      getKickAvatar(gifter, (avatar) => {
+        broadcast({ type: 'donation', platform: 'kick', donationType: 'giftedsub', chatname: gifter, chatmessage: `¡Regaló ${qty} sub(s)!`, amount: qty, chatimg: avatar || null, nameColor: '#53FC18', roles: [], mid: 'kick-gift-' + Date.now() });
+      });
+    }
+
+    if (event === 'App\\Events\\SubscriptionEvent' || event === 'App.Events.SubscriptionEvent') {
+      const username = (d.user_ids && d.usernames && d.usernames[0]) || d.username || 'KickUser';
+      getKickAvatar(username, (avatar) => {
+        broadcast({ type: 'donation', platform: 'kick', donationType: 'sub', chatname: username, chatmessage: '¡Se suscribió!', chatimg: avatar || null, nameColor: '#53FC18', roles: [], mid: 'kick-sub-' + Date.now() });
+      });
+    }
+  });
+
+  ws.on('close', (code) => {
+    console.log(`[Kick] Desconectado (code ${code}). Reintentando en ${kickRetryDelay / 1000}s...`);
+    if (kickPingInterval) { clearInterval(kickPingInterval); kickPingInterval = null; }
+    state.kick.connected = false;
+    broadcastStatus();
+    kickUrlIndex++;
+    kickRetryDelay = Math.min(kickRetryDelay * 1.5, 60000);
+    kickRetryTimeout = setTimeout(() => tryKickPusher(channelId), kickRetryDelay);
+  });
+
+  ws.on('error', (e) => {
+    console.error('[Kick] WS error:', e.message);
+  });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -512,7 +682,7 @@ async function connectYouTube() {
 }
 
 // ── HTTP ENDPOINTS ───────────────────────────────────────────
-app.get('/health', (req, res) => res.json({ ok: true, uptime: Math.floor(process.uptime()), messages: state.msgCount, clients: state.clients.size, twitch: state.twitch.connected, kick: state.kick.connected, tiktok: state.tiktok.connected, youtube: state.youtube.connected }));
+app.get('/health', (req, res) => res.json({ ok: true, uptime: Math.floor(process.uptime()), messages: state.msgCount, clients: state.clients.size, twitch: state.twitch.connected, kick: state.kick.connected, kickChatroomId: CONFIG.kickId || null, tiktok: state.tiktok.connected, youtube: state.youtube.connected }));
 
 app.get('/tiktok-preview', (req, res) => {
   const user = CONFIG.tiktok || req.query.user || '';
@@ -523,6 +693,15 @@ app.post('/api/tiktok/restart', (req, res) => {
   state.tiktok.connected = false; state.tiktok.restartCount++;
   broadcastStatus(); connectTikTokConnector();
   res.json({ ok: true, restarts: state.tiktok.restartCount });
+});
+
+app.post('/api/kick/restart', (req, res) => {
+  if (kickRetryTimeout) { clearTimeout(kickRetryTimeout); kickRetryTimeout = null; }
+  state.kick.connected = false;
+  CONFIG.kickId = process.env.KICK_CHANNEL_ID || '';
+  broadcastStatus();
+  connectKick();
+  res.json({ ok: true });
 });
 
 app.post('/api/youtube/restart', (req, res) => {
