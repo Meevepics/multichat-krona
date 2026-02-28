@@ -689,7 +689,7 @@ function connectWS(url){
   var wsUrl=url.replace(/^https?/,'ws').replace(/\/$/,'');
   try{ws=new WebSocket(wsUrl);}catch(e){setStatus(false);scheduleRetry(url);return;}
   ws.onopen=function(){isConnected=true;retryDelay=1000;setStatus(true);var id=store.get('kickChannelId');if(id)connectKickBrowser(id);};
-  ws.onmessage=function(e){try{var d=JSON.parse(e.data);if(d.type==='status')handleStatus(d);else appendMessage(d);}catch(err){}};
+  ws.onmessage=function(e){try{var d=JSON.parse(e.data);if(d.type==='status')handleStatus(d);else if(d.type==='highlight'||d.type==='highlight_clear')return;else appendMessage(d);}catch(err){}};
   ws.onclose=function(){isConnected=false;setStatus(false);scheduleRetry(url);};
   ws.onerror=function(){ws.close();};
 }
