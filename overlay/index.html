@@ -13,211 +13,69 @@
       --glow-sm: 0 0 6px #00ff9d;
       --font-title: 'Creepster', cursive;
       --font-body:  'Special Elite', monospace;
+      --ov-emote-size: 26px;
     }
-
     * { margin:0; padding:0; box-sizing:border-box; }
+    body { background: transparent; font-family: var(--font-body); overflow: hidden; min-height: 100vh; position: relative; }
 
-    body {
-      background: transparent;
-      font-family: var(--font-body);
-      overflow: hidden;
-      min-height: 100vh;
-      position: relative;
-    }
+    .particles { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+    .particle { position: absolute; width: 2px; height: 2px; background: var(--green); border-radius: 50%; box-shadow: 0 0 8px var(--green); animation: floatUp linear infinite; }
+    @keyframes floatUp { 0%{ transform:translateY(100vh) translateX(0);opacity:0; } 10%{ opacity:0.8; } 90%{ opacity:0.6; } 100%{ transform:translateY(-80px) translateX(60px);opacity:0; } }
 
-    /* ── PARTÍCULAS ── */
-    .particles {
-      position: fixed; inset: 0;
-      pointer-events: none; z-index: 0;
-    }
-    .particle {
-      position: absolute;
-      width: 2px; height: 2px;
-      background: var(--green);
-      border-radius: 50%;
-      box-shadow: 0 0 8px var(--green);
-      animation: floatUp linear infinite;
-    }
-    @keyframes floatUp {
-      0%   { transform:translateY(100vh) translateX(0); opacity:0; }
-      10%  { opacity:0.8; }
-      90%  { opacity:0.6; }
-      100% { transform:translateY(-80px) translateX(60px); opacity:0; }
-    }
+    .fog { position: fixed; inset: 0; pointer-events: none; z-index: 1; background: radial-gradient(ellipse at 50% 0%,rgba(0,255,157,0.04) 0%,transparent 50%),radial-gradient(ellipse at 50% 100%,rgba(0,255,157,0.04) 0%,transparent 50%); animation: fogMove 15s ease-in-out infinite; }
+    @keyframes fogMove { 0%,100%{opacity:0.4;transform:translateY(0);}50%{opacity:0.7;transform:translateY(-10px);} }
 
-    /* ── NIEBLA ── */
-    .fog {
-      position: fixed; inset: 0;
-      pointer-events: none; z-index: 1;
-      background:
-        radial-gradient(ellipse at 50% 0%,   rgba(0,255,157,0.04) 0%, transparent 50%),
-        radial-gradient(ellipse at 50% 100%, rgba(0,255,157,0.04) 0%, transparent 50%);
-      animation: fogMove 15s ease-in-out infinite;
-    }
-    @keyframes fogMove {
-      0%,100%{ opacity:0.4; transform:translateY(0); }
-      50%    { opacity:0.7; transform:translateY(-10px); }
-    }
-
-    /* ── CHAT CONTAINER ── */
-    #chat-container {
-      position: fixed;
-      bottom: 20px; left: 50%;
-      transform: translateX(-50%);
-      width: 100%; max-width: 680px;
-      height: calc(100vh - 40px);
-      overflow: hidden;
-      padding: 0 16px;
-      z-index: 10;
-    }
+    #chat-container { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: 100%; max-width: 680px; height: calc(100vh - 40px); overflow: hidden; padding: 0 16px; z-index: 10; }
 
     #message-list-wrapper { width: 100%; }
     #spacer { width: 100%; height: 0; background: transparent; }
 
-    /* ── BURBUJA KRONA ── */
-    .message-bubble {
-      position: relative;
-      margin-bottom: 12px;
-      padding: 12px 14px;
-      background: rgba(0, 20, 20, 0.65);
-      border-left: 3px solid var(--green);
-      border-radius: 4px;
-      overflow: hidden;
-      opacity: 0;
-      filter: drop-shadow(0 2px 8px rgba(0,255,157,0.15));
-    }
+    .message-bubble { position: relative; margin-bottom: 12px; padding: 12px 14px; background: rgba(0, 20, 20, 0.65); border-left: 3px solid var(--green); border-radius: 4px; overflow: hidden; opacity: 0; filter: drop-shadow(0 2px 8px rgba(0,255,157,0.15)); }
     .message-bubble.visible { opacity: 1; }
+    .message-bubble::before { content: ''; position: absolute; top:0; left:-100%; width:100%; height:100%; background: linear-gradient(90deg, transparent, rgba(0,255,157,0.07), transparent); animation: specSweep 4s ease-in-out infinite; }
+    @keyframes specSweep { 0%{left:-100%;}50%{left:100%;}100%{left:100%;} }
 
-    /* Barrido espectral */
-    .message-bubble::before {
-      content: '';
-      position: absolute; top:0; left:-100%; width:100%; height:100%;
-      background: linear-gradient(90deg, transparent, rgba(0,255,157,0.07), transparent);
-      animation: specSweep 4s ease-in-out infinite;
-    }
-    @keyframes specSweep {
-      0%  { left:-100%; }
-      50% { left:100%; }
-      100%{ left:100%; }
-    }
-
-    /* Colores por plataforma */
     .bubble-twitch  { border-left-color: #9146FF; }
     .bubble-kick    { border-left-color: #53FC18; }
     .bubble-tiktok  { border-left-color: #FF0050; }
     .bubble-youtube { border-left-color: #FF0000; }
     .bubble-custom  { border-left-color: #FF6B9D; }
 
-    /* ── HEADER MENSAJE ── */
-    .msg-header {
-      display: flex; align-items: center;
-      gap: 10px; margin-bottom: 8px;
-      position: relative; z-index: 1;
-    }
+    .msg-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; position: relative; z-index: 1; }
 
-    .avatar-box {
-      width: 40px; height: 40px;
-      border-radius: 50%;
-      border: 2px solid var(--green);
-      overflow: hidden;
-      background: rgba(0,20,20,0.8);
-      flex-shrink: 0;
-      box-shadow: 0 0 12px rgba(0,255,157,0.3);
-    }
-    .avatar-box img {
-      width: 100%; height: 100%;
-      object-fit: cover; display: block;
-    }
-    .avatar-fallback {
-      width: 100%; height: 100%;
-      display: flex; align-items: center;
-      justify-content: center;
-      color: rgba(0,255,157,0.4);
-      padding: 8px;
-    }
+    .avatar-box { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--green); overflow: hidden; background: rgba(0,20,20,0.8); flex-shrink: 0; box-shadow: 0 0 12px rgba(0,255,157,0.3); }
+    .avatar-box img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .avatar-fallback { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(0,255,157,0.4); padding: 8px; }
 
-    .username-box {
-      flex: 1;
-      display: flex; align-items: center;
-      gap: 6px; flex-wrap: wrap;
-    }
+    .username-box { flex: 1; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
-    .username {
-      font-family: var(--font-title);
-      font-size: 17px;
-      color: var(--green);
-      text-shadow: var(--glow-sm);
-      letter-spacing: 0.5px;
-    }
+    .username { font-family: var(--font-title); font-size: 17px; color: var(--green); text-shadow: var(--glow-sm); letter-spacing: 0.5px; }
 
-    .platform-badge {
-      display: inline-flex; align-items: center; gap: 3px;
-      font-size: 9px; padding: 2px 6px;
-      border-radius: 3px; font-weight: 700;
-      letter-spacing: 0.5px;
-      border: 1px solid rgba(0,255,157,0.4);
-      background: rgba(0,255,157,0.08);
-      color: var(--green);
-    }
-    .platform-badge.twitch  { border-color:rgba(145,70,255,0.5); background:rgba(145,70,255,0.1); color:#9146FF; }
-    .platform-badge.kick    { border-color:rgba(83,252,24,0.5);  background:rgba(83,252,24,0.08); color:#53FC18; }
-    .platform-badge.tiktok  { border-color:rgba(255,0,80,0.5);   background:rgba(255,0,80,0.08);  color:#FF0050; }
-    .platform-badge.youtube { border-color:rgba(255,0,0,0.5);    background:rgba(255,0,0,0.08);   color:#FF0000; }
+    .platform-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 9px; padding: 2px 6px; border-radius: 3px; font-weight: 700; letter-spacing: 0.5px; border: 1px solid rgba(0,255,157,0.4); background: rgba(0,255,157,0.08); color: var(--green); }
+    .platform-badge.twitch  { border-color:rgba(145,70,255,0.5);background:rgba(145,70,255,0.1);color:#9146FF; }
+    .platform-badge.kick    { border-color:rgba(83,252,24,0.5); background:rgba(83,252,24,0.08);color:#53FC18; }
+    .platform-badge.tiktok  { border-color:rgba(255,0,80,0.5);  background:rgba(255,0,80,0.08); color:#FF0050; }
+    .platform-badge.youtube { border-color:rgba(255,0,0,0.5);   background:rgba(255,0,0,0.08);  color:#FF0000; }
     .platform-badge.custom  { border-color:rgba(255,107,157,0.5);background:rgba(255,107,157,0.08);color:#FF6B9D; }
     .platform-badge svg { width: 10px; height: 10px; flex-shrink:0; }
 
-    .role-badge {
-      font-size: 9px; padding: 1px 5px;
-      border-radius: 3px; font-weight: 700;
-      background: rgba(0,255,157,0.08);
-      border: 1px solid rgba(0,255,157,0.3);
-      color: #5eead4;
-    }
-
+    .role-badge { font-size: 9px; padding: 1px 5px; border-radius: 3px; font-weight: 700; background: rgba(0,255,157,0.08); border: 1px solid rgba(0,255,157,0.3); color: #5eead4; }
     .msg-badge { height: 14px; width: auto; vertical-align: middle; filter: drop-shadow(0 0 4px var(--green)); }
 
-    /* ── CONTENIDO ── */
-    .msg-content {
-      color: #e0e0e0;
-      font-size: 14px;
-      line-height: 1.55;
-      word-break: break-word;
-      position: relative; z-index: 1;
-    }
-
-    /* EMOTES */
+    .msg-content { color: #e0e0e0; font-size: 14px; line-height: 1.55; word-break: break-word; position: relative; z-index: 1; }
+    /* ★ FIX EMOTES */
     .msg-content img.emote {
-      height: 26px; width: auto;
+      height: var(--ov-emote-size, 26px);
+      width: auto;
       vertical-align: middle;
       margin: 0 2px;
       image-rendering: -webkit-optimize-contrast;
+      display: inline-block;
     }
 
-    /* Donación */
-    .donation-box {
-      margin-top: 8px;
-      padding: 7px 12px;
-      background: rgba(0,255,157,0.1);
-      border: 1px solid rgba(0,255,157,0.5);
-      border-radius: 3px;
-      font-size: 13px; font-weight: 700;
-      color: var(--green);
-      text-align: center;
-      text-shadow: var(--glow-sm);
-      box-shadow: 0 0 12px rgba(0,255,157,0.2);
-      position: relative; z-index: 1;
-    }
+    .donation-box { margin-top: 8px; padding: 7px 12px; background: rgba(0,255,157,0.1); border: 1px solid rgba(0,255,157,0.5); border-radius: 3px; font-size: 13px; font-weight: 700; color: var(--green); text-align: center; text-shadow: var(--glow-sm); box-shadow: 0 0 12px rgba(0,255,157,0.2); position: relative; z-index: 1; }
 
-    /* Indicador conexión */
-    #conn-dot {
-      position: fixed; top:10px; right:10px;
-      width: 8px; height: 8px;
-      border-radius: 50%;
-      background: #ef4444;
-      box-shadow: 0 0 6px #ef4444;
-      z-index: 999;
-      transition: all 0.3s;
-    }
+    #conn-dot { position: fixed; top:10px; right:10px; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; box-shadow: 0 0 6px #ef4444; z-index: 999; transition: all 0.3s; }
     #conn-dot.ok { background: var(--green); box-shadow: 0 0 8px var(--green); }
   </style>
 </head>
@@ -225,7 +83,6 @@
   <div class="particles" id="particles"></div>
   <div class="fog"></div>
   <div id="conn-dot"></div>
-
   <div id="chat-container">
     <div id="message-list-wrapper">
       <div id="spacer"></div>
@@ -238,7 +95,6 @@
     var MAX_MESSAGES = urlParams.has('limit') ? parseInt(urlParams.get('limit')) : 50;
     var MAX_SPACER   = 5000;
 
-    // ── PARTÍCULAS ──
     (function(){
       var c=document.getElementById('particles');
       for(var i=0;i<20;i++){
@@ -266,16 +122,33 @@
 
     function esc(str){return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
-    function processEmotes(text, emotes) {
-      if (!emotes||!emotes.length) return esc(text);
-      var result = esc(text);
-      emotes.forEach(function(e){
-        if (e.text && e.url) {
-          var r=e.text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-          result=result.replace(new RegExp(r,'g'),'<img class="emote" src="'+esc(e.url)+'" alt="'+esc(e.text)+'" title="'+esc(e.text)+'">');
-        }
-      });
+    // ★ FIX EMOTES: Twitch usa chatemotes[], Kick usa [emote:ID:name]
+    function processTwitchEmotes(text, emotes) {
+      if (!emotes || !emotes.length) return esc(text);
+      var sorted = emotes.slice().sort(function(a,b){ return a.start - b.start; });
+      var result = '', cursor = 0;
+      for (var i = 0; i < sorted.length; i++) {
+        var e = sorted[i];
+        if (e.start > cursor) result += esc(text.slice(cursor, e.start));
+        result += '<img class="emote" src="' + esc(e.url) + '" alt="' + esc(e.text) + '" title="' + esc(e.text) + '" onerror="this.style.display=\'none\'">';
+        cursor = e.end + 1;
+      }
+      if (cursor < text.length) result += esc(text.slice(cursor));
       return result;
+    }
+
+    function parseKickEmotesFromText(text) {
+      return esc(text).replace(/\[emote:(\d+):([^\]]+)\]/g, function(match, id, name) {
+        return '<img class="emote" src="https://files.kick.com/emotes/' + id + '/fullsize" alt="' + name + '" title="' + name + '" onerror="this.style.display=\'none\'">';
+      });
+    }
+
+    function processMessageHTML(data) {
+      var text = data.chatmessage || '';
+      var platform = data.platform || data.type || '';
+      if (platform === 'twitch' && data.chatemotes && data.chatemotes.length > 0) return processTwitchEmotes(text, data.chatemotes);
+      if (platform === 'kick') return parseKickEmotesFromText(text);
+      return esc(text);
     }
 
     function adjustScroll() {
@@ -290,75 +163,45 @@
 
     function addMessage(data) {
       if (!data.chatname && !data.chatmessage) return;
-
       var platform = data.platform||data.type||'custom';
       var logo = PLATFORM_LOGOS[platform]||PLATFORM_LOGOS.custom;
-
       var msgDiv = document.createElement('div');
       msgDiv.className = 'message-bubble bubble-'+platform;
       msgDiv.id = data.mid||('msg-'+Date.now());
 
-      // Avatar
       var avatarHTML = data.chatimg
         ? '<div class="avatar-box"><img src="'+esc(data.chatimg)+'" onerror="this.style.display=\'none\'"></div>'
         : '<div class="avatar-box"><div class="avatar-fallback">'+logo+'</div></div>';
 
-      // Platform badge
       var platBadge = '<span class="platform-badge '+platform+'" style="display:inline-flex;align-items:center;gap:3px;"><span style="width:10px;height:10px;display:inline-flex;align-items:center;">'+logo+'</span>'+platform.charAt(0).toUpperCase()+platform.slice(1)+'</span>';
-
-      // Roles
       var rolesHTML='';
       if(data.roles&&data.roles.length) data.roles.forEach(function(r){ rolesHTML+='<span class="role-badge">'+esc(r.label||r.type)+'</span>'; });
-
-      // Badges
       var badgesHTML='';
       if(data.chatbadges&&data.chatbadges.length) data.chatbadges.forEach(function(b){
         if(typeof b==='string') badgesHTML+='<img class="msg-badge" src="'+esc(b)+'">';
         else if(b.src) badgesHTML+='<img class="msg-badge" src="'+esc(b.src)+'">';
       });
-
-      // Name
       var nameStyle=data.nameColor?'color:'+data.nameColor+';text-shadow:0 0 8px '+data.nameColor+';':'';
 
-      // Message text + emotes
-      var msgHTML = processEmotes(data.chatmessage||'', data.chatemotes);
+      // ★ EMOTES ARREGLADOS
+      var msgHTML = processMessageHTML(data);
 
-      // Donación
       var donHTML='';
       if(data.type==='donation'&&data.amount){
-        var dl=data.donationType==='bits'?'💎 '+data.amount+' Bits'
-              :data.donationType==='sub'?'🌟 ¡Nuevo Sub!'
-              :data.donationType==='resub'?'🔄 '+data.months+' meses'
-              :data.donationType==='subgift'?'🎁 Sub regalada'
-              :data.donationType==='superchat'?'💰 '+(data.amountDisplay||data.amount)
-              :data.donationType==='member'?'⭐ ¡Nuevo Miembro!'
-              :data.donationType==='gift'?'🎁 Regalo TikTok'
-              :'💰 '+data.amount;
+        var dl=data.donationType==='bits'?'💎 '+data.amount+' Bits':data.donationType==='sub'?'🌟 ¡Nuevo Sub!':data.donationType==='resub'?'🔄 '+data.months+' meses':data.donationType==='subgift'?'🎁 Sub regalada':data.donationType==='superchat'?'💰 '+(data.amountDisplay||data.amount):data.donationType==='member'?'⭐ ¡Nuevo Miembro!':data.donationType==='gift'?'🎁 Regalo TikTok':'💰 '+data.amount;
         donHTML='<div class="donation-box">'+dl+'</div>';
       }
 
       msgDiv.innerHTML=
-        '<div class="msg-header">'+
-          avatarHTML+
-          '<div class="username-box">'+
-            '<span class="username" style="'+nameStyle+'">'+esc(data.chatname||'')+'</span>'+
-            platBadge+rolesHTML+badgesHTML+
-          '</div>'+
+        '<div class="msg-header">'+avatarHTML+
+          '<div class="username-box"><span class="username" style="'+nameStyle+'">'+esc(data.chatname||'')+'</span>'+platBadge+rolesHTML+badgesHTML+'</div>'+
         '</div>'+
-        '<div class="msg-content">'+msgHTML+'</div>'+
-        donHTML;
+        '<div class="msg-content">'+msgHTML+'</div>'+donHTML;
 
       messageListWrapper.appendChild(msgDiv);
-
-      // Animación entrada
       gsap.set(msgDiv, {opacity:0, x:-20, filter:'blur(4px)'});
-      gsap.to(msgDiv, {
-        opacity:1, x:0, filter:'blur(0px)',
-        duration:0.55, ease:'power2.out',
-        onStart: function(){ msgDiv.classList.add('visible'); }
-      });
+      gsap.to(msgDiv, { opacity:1, x:0, filter:'blur(0px)', duration:0.55, ease:'power2.out', onStart: function(){ msgDiv.classList.add('visible'); } });
 
-      // Limpiar mensajes viejos
       var msgs=Array.from(messageListWrapper.children).filter(function(c){return c.id!=='spacer'&&c.classList.contains('message-bubble');});
       if (msgs.length>MAX_MESSAGES) {
         var old=msgs[0];
@@ -369,11 +212,9 @@
         gsap.killTweensOf(old);
         gsap.to(old,{opacity:0,duration:0.3,onComplete:function(){old.remove();}});
       }
-
       setTimeout(adjustScroll, 80);
     }
 
-    // ── WEBSOCKET ──
     var ws, retryDelay=1000;
     function connect() {
       try { ws=new WebSocket(SERVER_URL); } catch(e) { connDot.className=''; setTimeout(connect,retryDelay); return; }
