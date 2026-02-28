@@ -24,13 +24,10 @@
       --glow-sm:  0 0 6px #00ff9d;
       --font-title: 'Creepster', cursive;
       --font-body:  'Special Elite', monospace;
+      --ov-emote-size: 24px;
     }
 
-    /* ── SIN BRILLO (glow desactivado) ── */
-    body.no-glow {
-      --glow:    none;
-      --glow-sm: none;
-    }
+    body.no-glow { --glow: none; --glow-sm: none; }
     body.no-glow .header-title        { text-shadow: none !important; }
     body.no-glow .card-title-text     { text-shadow: none !important; }
     body.no-glow .msg-user            { text-shadow: none !important; }
@@ -94,10 +91,7 @@
         radial-gradient(ellipse at 50% 100%, rgba(0,255,157,0.04) 0%, transparent 50%);
       animation: fogMove 15s ease-in-out infinite;
     }
-    @keyframes fogMove {
-      0%,100%{ opacity:0.4; transform:translateY(0); }
-      50%    { opacity:0.7; transform:translateY(-15px); }
-    }
+    @keyframes fogMove { 0%,100%{ opacity:0.4; transform:translateY(0); } 50%{ opacity:0.7; transform:translateY(-15px); } }
 
     header {
       position: fixed; top:0; left:0; right:0; height: 50px;
@@ -106,7 +100,6 @@
       box-shadow: 0 4px 30px rgba(0,255,157,0.25);
       display: flex; align-items: center; justify-content: space-between;
       padding: 0 16px; z-index: 200;
-      transition: border-color 0.4s, box-shadow 0.4s;
     }
 
     .header-title {
@@ -115,7 +108,6 @@
       text-shadow: 0 0 20px var(--green), 0 0 40px var(--green);
       animation: titleFlicker 4s ease-in-out infinite;
       letter-spacing: 2px;
-      transition: color 0.4s, text-shadow 0.4s;
     }
     @keyframes titleFlicker { 0%,100%{ opacity:1; } 45%,55%{ opacity:0.7; } 50%{ opacity:0.9; } }
 
@@ -142,9 +134,7 @@
       padding: 12px;
       display: flex; flex-direction: column; gap: 10px;
       transition: transform 0.4s cubic-bezier(0.4,0,0.2,1),
-                  min-width 0.4s cubic-bezier(0.4,0,0.2,1),
-                  width 0.4s cubic-bezier(0.4,0,0.2,1),
-                  border-color 0.3s;
+                  min-width 0.4s, width 0.4s, border-color 0.3s;
       transform: translateX(0); flex-shrink: 0;
       position: relative; z-index: 20;
     }
@@ -161,42 +151,19 @@
       border-radius: 0 8px 8px 0;
       cursor: pointer; z-index: 300;
       display: flex; align-items: center; justify-content: center;
-      transition: left 0.4s cubic-bezier(0.4,0,0.2,1), background 0.2s, box-shadow 0.2s;
-      box-shadow: 4px 0 16px rgba(0,255,157,0.15);
+      transition: left 0.4s cubic-bezier(0.4,0,0.2,1), background 0.2s;
     }
-    #sidebar-toggle:hover { background: rgba(0,255,157,0.12); box-shadow: 4px 0 24px rgba(0,255,157,0.35); }
-    #sidebar-toggle.collapsed {
-      left: 0; border-left: 2px solid rgba(0,255,157,0.6); border-right: none;
-      border-radius: 8px 0 0 8px; box-shadow: -4px 0 16px rgba(0,255,157,0.15);
-    }
-    .toggle-arrow {
-      font-size: 13px; color: var(--green); text-shadow: var(--glow-sm);
-      transition: transform 0.4s cubic-bezier(0.4,0,0.2,1);
-      user-select: none; line-height: 1;
-    }
+    #sidebar-toggle:hover { background: rgba(0,255,157,0.12); }
+    #sidebar-toggle.collapsed { left: 0; border-left: 2px solid rgba(0,255,157,0.6); border-right: none; border-radius: 8px 0 0 8px; }
+    .toggle-arrow { font-size: 13px; color: var(--green); user-select: none; line-height: 1; transition: transform 0.4s; }
     #sidebar-toggle.collapsed .toggle-arrow { transform: rotate(180deg); }
 
     .card { display: flex; flex-direction: column; gap: 8px; }
-
-    .card-header {
-      display: flex; align-items: center; gap: 7px;
-      padding: 4px 0 6px 0;
-      border-bottom: 1px solid rgba(0,255,157,0.2);
-    }
-
-    .card-title-text {
-      font-family: var(--font-title); font-size: 13px;
-      color: var(--green); text-shadow: var(--glow-sm);
-      letter-spacing: 1px; transition: color 0.4s;
-    }
-
+    .card-header { display: flex; align-items: center; gap: 7px; padding: 4px 0 6px 0; border-bottom: 1px solid rgba(0,255,157,0.2); }
+    .card-title-text { font-family: var(--font-title); font-size: 13px; color: var(--green); text-shadow: var(--glow-sm); letter-spacing: 1px; }
     .card-body { display: flex; flex-direction: column; gap: 8px; }
 
-    label {
-      font-size: 10px; color: var(--muted);
-      text-transform: uppercase; letter-spacing: 0.8px;
-      display: block; margin-bottom: 3px; transition: color 0.4s;
-    }
+    label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; display: block; margin-bottom: 3px; }
 
     .input-row { display: flex; gap: 6px; }
 
@@ -206,96 +173,39 @@
       border-radius: 4px; padding: 7px 10px;
       color: var(--text); font-family: var(--font-body);
       font-size: 12px; outline: none; flex: 1;
-      transition: border-color 0.2s, box-shadow 0.2s;
     }
-    select {
-      cursor: pointer; -webkit-appearance: none; appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2300ff9d'/%3E%3C/svg%3E");
-      background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px;
-    }
-    input[type=text]:focus, input[type=number]:focus, select:focus {
-      border-color: var(--green); box-shadow: 0 0 8px rgba(0,255,157,0.3);
-    }
+    select { cursor: pointer; -webkit-appearance: none; appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2300ff9d'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; }
+    input[type=text]:focus, input[type=number]:focus, select:focus { border-color: var(--green); box-shadow: 0 0 8px rgba(0,255,157,0.3); }
     input::placeholder { color: rgba(0,255,157,0.25); }
 
-    .btn {
-      padding: 7px 14px; border-radius: 4px; border: none;
-      font-family: var(--font-body); font-size: 12px; font-weight: 700;
-      cursor: pointer; transition: all 0.2s; white-space: nowrap; letter-spacing: 0.5px;
-    }
-    .btn-primary {
-      background: rgba(0,255,157,0.15); border: 1px solid var(--green);
-      color: var(--green); box-shadow: 0 0 10px rgba(0,255,157,0.2);
-      transition: background 0.2s, box-shadow 0.2s, border-color 0.4s, color 0.4s;
-    }
+    .btn { padding: 7px 14px; border-radius: 4px; border: none; font-family: var(--font-body); font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; white-space: nowrap; letter-spacing: 0.5px; }
+    .btn-primary { background: rgba(0,255,157,0.15); border: 1px solid var(--green); color: var(--green); box-shadow: 0 0 10px rgba(0,255,157,0.2); }
     .btn-primary:hover { background: rgba(0,255,157,0.25); box-shadow: var(--glow); transform: translateY(-1px); }
-    .btn-secondary {
-      background: rgba(255,255,255,0.04); border: 1px solid rgba(0,255,157,0.25); color: var(--text);
-    }
+    .btn-secondary { background: rgba(255,255,255,0.04); border: 1px solid rgba(0,255,157,0.25); color: var(--text); }
     .btn-secondary:hover { background: rgba(0,255,157,0.08); border-color: var(--green); }
     .btn-full { width: 100%; }
     .btn-danger { background: rgba(255,68,68,0.1); border: 1px solid rgba(255,68,68,0.5); color: var(--red); }
-    .btn-danger:hover { background: rgba(255,68,68,0.2); box-shadow: 0 0 10px rgba(255,68,68,0.3); }
+    .btn-danger:hover { background: rgba(255,68,68,0.2); }
 
-    /* ── TOGGLE SWITCH ── */
-    .toggle-row {
-      display: flex; align-items: center; justify-content: space-between;
-      gap: 10px; padding: 4px 0;
-    }
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; }
     .toggle-label { font-size: 11px; color: var(--text); flex: 1; }
     .toggle-switch { position: relative; width: 40px; height: 20px; flex-shrink: 0; }
     .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
-    .toggle-slider {
-      position: absolute; inset: 0;
-      background: rgba(0,255,157,0.08);
-      border: 1px solid rgba(0,255,157,0.25);
-      border-radius: 20px; cursor: pointer; transition: all 0.3s;
-    }
-    .toggle-slider::before {
-      content: ''; position: absolute;
-      width: 14px; height: 14px; left: 2px; top: 50%;
-      transform: translateY(-50%);
-      background: rgba(0,255,157,0.3); border-radius: 50%;
-      transition: all 0.3s; box-shadow: 0 0 4px rgba(0,255,157,0.2);
-    }
-    .toggle-switch input:checked + .toggle-slider {
-      background: rgba(0,255,157,0.15); border-color: var(--green);
-      box-shadow: 0 0 8px rgba(0,255,157,0.3);
-    }
-    .toggle-switch input:checked + .toggle-slider::before {
-      left: 22px; background: var(--green); box-shadow: 0 0 8px var(--green);
-    }
+    .toggle-slider { position: absolute; inset: 0; background: rgba(0,255,157,0.08); border: 1px solid rgba(0,255,157,0.25); border-radius: 20px; cursor: pointer; transition: all 0.3s; }
+    .toggle-slider::before { content: ''; position: absolute; width: 14px; height: 14px; left: 2px; top: 50%; transform: translateY(-50%); background: rgba(0,255,157,0.3); border-radius: 50%; transition: all 0.3s; }
+    .toggle-switch input:checked + .toggle-slider { background: rgba(0,255,157,0.15); border-color: var(--green); box-shadow: 0 0 8px rgba(0,255,157,0.3); }
+    .toggle-switch input:checked + .toggle-slider::before { left: 22px; background: var(--green); box-shadow: 0 0 8px var(--green); }
 
-
-
-    /* ── FONT PREVIEW ── */
-    .font-preview {
-      padding: 7px 10px;
-      background: rgba(0,30,20,0.4);
-      border: 1px solid rgba(0,255,157,0.15);
-      border-radius: 4px; font-size: 13px;
-      color: var(--green); text-align: center;
-      letter-spacing: 1px; min-height: 34px;
-      display: flex; align-items: center; justify-content: center;
-      transition: color 0.4s, font-family 0.1s;
-    }
+    .font-preview { padding: 7px 10px; background: rgba(0,30,20,0.4); border: 1px solid rgba(0,255,157,0.15); border-radius: 4px; font-size: 13px; color: var(--green); text-align: center; min-height: 34px; display: flex; align-items: center; justify-content: center; }
 
     .separator { border-top: 1px solid rgba(0,255,157,0.1); margin: 2px 0; padding-top: 2px; }
 
-    .platform-row {
-      display: flex; align-items: center; gap: 8px; padding: 8px 10px;
-      background: rgba(0,30,20,0.5); border: 1px solid rgba(0,255,157,0.15);
-      border-radius: 4px;
-    }
-    .platform-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: var(--red); box-shadow: 0 0 6px var(--red);
-      flex-shrink: 0; transition: all 0.3s;
-    }
+    .platform-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(0,30,20,0.5); border: 1px solid rgba(0,255,157,0.15); border-radius: 4px; }
+    .platform-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); box-shadow: 0 0 6px var(--red); flex-shrink: 0; transition: all 0.3s; }
     .platform-dot.ok { background: var(--green); box-shadow: 0 0 8px var(--green); }
     .platform-icon { font-size: 16px; }
     .platform-info { flex:1; min-width:0; }
-    .platform-name { font-size: 13px; font-weight: 700; color: var(--green); transition: color 0.4s; }
+    .platform-name { font-size: 13px; font-weight: 700; color: var(--green); }
     .platform-channel { font-size: 10px; color: var(--muted); }
 
     .info-box { border-radius: 4px; padding: 8px 10px; font-size: 11px; line-height: 1.6; }
@@ -303,48 +213,47 @@
     .info-red    { background: rgba(255,68,68,0.08); border:1px solid rgba(255,68,68,0.35); color: #fca5a5; }
     .info-yellow { background: rgba(255,170,0,0.08); border:1px solid rgba(255,170,0,0.35); color: #fde68a; }
 
-    .url-box {
-      background: rgba(0,30,20,0.5); border: 1px solid rgba(0,255,157,0.2);
-      border-radius: 4px; padding: 8px 10px; font-size: 10px;
-      font-family: monospace; color: #5eead4; word-break: break-all;
-      cursor: pointer; transition: all 0.2s; line-height: 1.4;
-    }
-    .url-box:hover { background: rgba(0,255,157,0.06); border-color: var(--green); box-shadow: var(--glow-sm); }
+    .url-box { background: rgba(0,30,20,0.5); border: 1px solid rgba(0,255,157,0.2); border-radius: 4px; padding: 8px 10px; font-size: 10px; font-family: monospace; color: #5eead4; word-break: break-all; cursor: pointer; transition: all 0.2s; line-height: 1.4; }
+    .url-box:hover { background: rgba(0,255,157,0.06); border-color: var(--green); }
 
-    .hint { font-size: 10px; color: rgba(0,255,157,0.4); line-height: 1.5; transition: color 0.4s; }
+    .hint { font-size: 10px; color: rgba(0,255,157,0.4); line-height: 1.5; }
 
     .tag { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; }
     .tag-connector { background: rgba(0,255,157,0.12); border:1px solid rgba(0,255,157,0.4); color: var(--green); }
     .tag-puppeteer { background: rgba(255,170,0,0.12); border:1px solid rgba(255,170,0,0.4); color: var(--yellow); }
 
     input[type=range] { width: 100%; accent-color: var(--green); cursor: pointer; }
-    input[type=color] {
-      width: 40px; height: 28px; border: 1px solid rgba(0,255,157,0.4);
-      border-radius: 4px; cursor: pointer; background: transparent; padding: 1px;
-    }
-    .value-display { color: var(--green); font-size: 10px; transition: color 0.4s; }
+    input[type=color] { width: 40px; height: 28px; border: 1px solid rgba(0,255,157,0.4); border-radius: 4px; cursor: pointer; background: transparent; padding: 1px; }
+    .value-display { color: var(--green); font-size: 10px; }
     .config-row { display: flex; align-items: center; gap: 8px; }
 
-    /* ══ MAIN / CHAT ══ */
+    /* ══ MAIN / CHAT — SCROLL ARREGLADO ══ */
     .main {
-      flex: 1; min-width: 0; display: flex; flex-direction: column;
+      flex: 1; min-width: 0;
+      display: flex; flex-direction: column;
       overflow: hidden; position: relative;
     }
 
+    /* ★ FIX SCROLL: el panel de chat ocupa el espacio disponible y scrollea normalmente */
     .chat-panel {
-      flex: 1; overflow-y: auto; padding: 14px;
-      display: flex; flex-direction: column; gap: 8px;
+      flex: 1;
+      overflow-y: auto;  /* ← SCROLL NATIVO */
+      overflow-x: hidden;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      /* ★ IMPORTANTE: no usar transform/GSAP para el scroll, solo scroll nativo */
     }
     .chat-panel::-webkit-scrollbar { width: 8px; }
     .chat-panel::-webkit-scrollbar-track { background: rgba(0,20,10,0.5); }
     .chat-panel::-webkit-scrollbar-thumb { background: rgba(0,255,157,0.3); border-radius: 4px; }
     .chat-panel::-webkit-scrollbar-thumb:hover { background: rgba(0,255,157,0.6); }
 
-    #chat-placeholder {
-      text-align: center; color: var(--muted); margin: auto;
-      font-family: var(--font-title); font-size: 18px;
-      text-shadow: var(--glow-sm); transition: color 0.4s;
-    }
+    /* Espaciador para empujar mensajes hacia abajo al inicio */
+    .chat-spacer { flex: 1; min-height: 0; }
+
+    #chat-placeholder { text-align: center; color: var(--muted); font-family: var(--font-title); font-size: 18px; text-shadow: var(--glow-sm); padding: 40px 20px; }
 
     /* ── MSG NORMAL ── */
     .msg-item {
@@ -353,86 +262,37 @@
       background: rgba(0, 20, 20, 0.6);
       border-left: 3px solid rgba(0,255,157,0.4);
       border-radius: 4px; cursor: pointer;
-      animation: msgAppear 0.4s ease-out; overflow: hidden;
+      animation: msgAppear 0.4s ease-out;
       transition: background 0.2s, border-left-color 0.2s, transform 0.2s;
+      flex-shrink: 0; /* ← no comprimir los mensajes */
     }
-    @keyframes msgAppear {
-      from { opacity:0; transform:translateX(-15px); filter:blur(3px); }
-      to   { opacity:1; transform:translateX(0); filter:blur(0); }
-    }
-    .msg-item::before {
-      content: ''; position: absolute; top:0; left:-100%; width:100%; height:100%;
-      background: linear-gradient(90deg, transparent, rgba(0,255,157,0.06), transparent);
-      animation: specSweep 4s ease-in-out infinite;
-    }
-    @keyframes specSweep { 0%{ left:-100%; } 50%{ left:100%; } 100%{ left:100%; } }
-    .msg-item:hover { background: rgba(0,255,157,0.08); border-left-color: var(--green); transform: translateX(3px); box-shadow: 0 2px 12px rgba(0,255,157,0.1); }
+    @keyframes msgAppear { from { opacity:0; transform:translateX(-15px); filter:blur(3px); } to { opacity:1; transform:translateX(0); filter:blur(0); } }
+    .msg-item:hover { background: rgba(0,255,157,0.08); border-left-color: var(--green); transform: translateX(3px); }
     .msg-item.twitch  { border-left-color: var(--twitch); }
     .msg-item.kick    { border-left-color: var(--kick); }
     .msg-item.tiktok  { border-left-color: var(--tiktok); }
     .msg-item.youtube { border-left-color: var(--youtube); }
     .msg-item.custom  { border-left-color: var(--custom); }
     .msg-item.system  { border-left-color: var(--yellow); }
-    .msg-item.highlighted {
-      background: rgba(0,255,157,0.12); border-left-color: var(--green) !important;
-      box-shadow: 0 0 15px rgba(0,255,157,0.2), inset 0 0 20px rgba(0,255,157,0.04);
-      animation: msgAppear 0.4s ease-out, hlPulse 2s ease-in-out infinite;
-    }
-    @keyframes hlPulse {
-      0%,100%{ box-shadow: 0 0 15px rgba(0,255,157,0.2); }
-      50%    { box-shadow: 0 0 25px rgba(0,255,157,0.4); }
-    }
+    .msg-item.highlighted { background: rgba(0,255,157,0.12); border-left-color: var(--green) !important; animation: msgAppear 0.4s ease-out, hlPulse 2s ease-in-out infinite; }
+    @keyframes hlPulse { 0%,100%{ box-shadow: 0 0 15px rgba(0,255,157,0.2); } 50%{ box-shadow: 0 0 25px rgba(0,255,157,0.4); } }
 
-    /* ── MODO LÍNEA ÚNICA ─────────────────────── */
-    .chat-panel.single-line .msg-item {
-      align-items: center;
-      padding: 5px 12px;
-      gap: 7px;
-    }
-    .chat-panel.single-line .msg-avatar {
-      width: 24px !important; height: 24px !important; min-width: 24px; flex-shrink: 0;
-    }
-    .chat-panel.single-line .msg-avatar-fallback { font-size: 10px; }
-    .chat-panel.single-line .msg-body {
-      display: flex; align-items: center; gap: 5px;
-      flex: 1; min-width: 0; overflow: hidden;
-    }
-    .chat-panel.single-line .msg-header {
-      display: contents; /* aplana los hijos al flex padre */
-    }
+    /* Modo línea única */
+    .chat-panel.single-line .msg-item { align-items: center; padding: 5px 12px; gap: 7px; }
+    .chat-panel.single-line .msg-avatar { width: 24px !important; height: 24px !important; min-width: 24px; flex-shrink: 0; }
+    .chat-panel.single-line .msg-body { display: flex; align-items: center; gap: 5px; flex: 1; min-width: 0; overflow: hidden; }
+    .chat-panel.single-line .msg-header { display: contents; }
     .chat-panel.single-line .msg-time { display: none; }
-    .chat-panel.single-line .msg-text {
-      flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
-    .chat-panel.single-line .msg-highlight-btn { flex-shrink: 0; }
-    /* ─────────────────────────────────────────── */
+    .chat-panel.single-line .msg-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-    .msg-avatar {
-      width: 40px; height: 40px; border-radius: 50%;
-      border: 2px solid rgba(0,255,157,0.5); flex-shrink: 0;
-      overflow: hidden; background: rgba(0,30,20,0.8);
-      box-shadow: 0 0 10px rgba(0,255,157,0.2);
-      transition: width 0.2s, height 0.2s;
-    }
+    .msg-avatar { width: 40px; height: 40px; border-radius: 50%; border: 2px solid rgba(0,255,157,0.5); flex-shrink: 0; overflow: hidden; background: rgba(0,30,20,0.8); box-shadow: 0 0 10px rgba(0,255,157,0.2); }
     .msg-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
-    .msg-avatar-fallback {
-      width: 100%; height: 100%; display: flex; align-items: center;
-      justify-content: center; font-size: 16px; opacity: 0.6;
-    }
+    .msg-avatar-fallback { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 16px; opacity: 0.6; }
 
     .msg-body { flex:1; min-width:0; position:relative; z-index:1; }
     .msg-header { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; flex-wrap: wrap; }
-    .msg-user {
-      font-family: var(--font-title); font-size: 15px;
-      color: var(--green); text-shadow: var(--glow-sm);
-      letter-spacing: 0.5px; white-space: nowrap;
-      transition: color 0.4s, text-shadow 0.4s;
-    }
-    .msg-platform {
-      display: inline-flex; align-items: center; gap: 3px;
-      font-size: 9px; padding: 2px 6px; border-radius: 3px;
-      font-weight: 700; letter-spacing: 0.5px; border: 1px solid; white-space: nowrap;
-    }
+    .msg-user { font-family: var(--font-title); font-size: 15px; color: var(--green); text-shadow: var(--glow-sm); letter-spacing: 0.5px; white-space: nowrap; }
+    .msg-platform { display: inline-flex; align-items: center; gap: 3px; font-size: 9px; padding: 2px 6px; border-radius: 3px; font-weight: 700; letter-spacing: 0.5px; border: 1px solid; white-space: nowrap; }
     .msg-platform.twitch  { background:rgba(145,70,255,0.15); border-color:rgba(145,70,255,0.5); color:var(--twitch); }
     .msg-platform.kick    { background:rgba(83,252,24,0.1);   border-color:rgba(83,252,24,0.4);  color:var(--kick); }
     .msg-platform.tiktok  { background:rgba(255,0,80,0.1);    border-color:rgba(255,0,80,0.4);   color:var(--tiktok); }
@@ -440,72 +300,46 @@
     .msg-platform.custom  { background:rgba(255,107,157,0.1); border-color:rgba(255,107,157,0.4);color:var(--custom); }
     .msg-platform.system  { background:rgba(255,170,0,0.1);   border-color:rgba(255,170,0,0.4);  color:var(--yellow); }
     .msg-platform svg { width: 10px; height: 10px; flex-shrink:0; }
-
     .msg-badge { height: 16px; width: auto; vertical-align: middle; filter: drop-shadow(0 0 4px var(--green)); }
     .msg-time { font-size: 9px; color: var(--muted); margin-left: auto; white-space: nowrap; }
-    .msg-text { font-size: 12px; color: var(--text); line-height: 1.5; word-break: break-word; text-shadow: 0 0 3px rgba(0,255,157,0.1); }
-    .msg-text img.emote { height: 24px; width: auto; vertical-align: middle; margin: 0 2px; image-rendering: -webkit-optimize-contrast; }
 
-    .msg-highlight-btn {
-      margin-left: auto; padding: 3px 8px; font-size: 10px;
-      border-radius: 3px; border: 1px solid rgba(0,255,157,0.4);
-      background: rgba(0,255,157,0.08); color: var(--green);
-      cursor: pointer; white-space: nowrap; display: none;
-      font-family: var(--font-body); font-weight: 700; letter-spacing: 0.5px;
-      transition: all 0.2s;
+    .msg-text { font-size: 12px; color: var(--text); line-height: 1.5; word-break: break-word; }
+    /* ★ FIX EMOTES — imágenes inline en el dashboard */
+    .msg-text img.emote {
+      height: var(--ov-emote-size, 24px);
+      width: auto;
+      vertical-align: middle;
+      margin: 0 2px;
+      image-rendering: -webkit-optimize-contrast;
+      display: inline-block;
     }
-    .msg-item:hover .msg-highlight-btn,
-    .msg-item.highlighted .msg-highlight-btn { display: inline-block; }
-    .msg-item.highlighted .msg-highlight-btn { background: rgba(0,255,157,0.2); box-shadow: 0 0 8px rgba(0,255,157,0.3); }
-    .msg-highlight-btn:hover { background: rgba(0,255,157,0.25); box-shadow: 0 0 10px rgba(0,255,157,0.4); }
 
-    #hl-bar {
-      padding: 8px 14px; background: rgba(0,255,157,0.07);
-      border-top: 1px solid rgba(0,255,157,0.3);
-      display: none; align-items: center; gap: 10px; font-size: 11px;
-      color: var(--green); font-family: var(--font-title); letter-spacing: 0.5px; transition: color 0.4s;
-    }
+    .msg-highlight-btn { margin-left: auto; padding: 3px 8px; font-size: 10px; border-radius: 3px; border: 1px solid rgba(0,255,157,0.4); background: rgba(0,255,157,0.08); color: var(--green); cursor: pointer; white-space: nowrap; display: none; font-family: var(--font-body); font-weight: 700; letter-spacing: 0.5px; }
+    .msg-item:hover .msg-highlight-btn, .msg-item.highlighted .msg-highlight-btn { display: inline-block; }
+
+    #hl-bar { padding: 8px 14px; background: rgba(0,255,157,0.07); border-top: 1px solid rgba(0,255,157,0.3); display: none; align-items: center; gap: 10px; font-size: 11px; color: var(--green); font-family: var(--font-title); letter-spacing: 0.5px; }
     #hl-bar.active { display: flex; }
     #hl-bar strong { color: var(--text); max-width: 400px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family: var(--font-body); font-size: 11px; }
 
-    .input-bar {
-      padding: 10px 14px; border-top: 1px solid rgba(0,255,157,0.3);
-      background: rgba(0,10,10,0.95); display: flex; gap: 8px;
-    }
+    .input-bar { padding: 10px 14px; border-top: 1px solid rgba(0,255,157,0.3); background: rgba(0,10,10,0.95); display: flex; gap: 8px; }
 
-    .modal-overlay {
-      display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
-      z-index: 500; align-items: center; justify-content: center; backdrop-filter: blur(4px);
-    }
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 500; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
     .modal-overlay.open { display: flex; }
-    .modal-box {
-      background: rgba(0,20,15,0.98); border: 2px solid var(--green);
-      border-radius: 8px; padding: 28px; max-width: 480px; width: 90%;
-      position: relative; box-shadow: 0 0 40px rgba(0,255,157,0.3);
-    }
-    .modal-title { font-family: var(--font-title); font-size: 20px; color: var(--green); text-shadow: var(--glow); margin-bottom: 16px; transition: color 0.4s; }
+    .modal-box { background: rgba(0,20,15,0.98); border: 2px solid var(--green); border-radius: 8px; padding: 28px; max-width: 480px; width: 90%; position: relative; box-shadow: 0 0 40px rgba(0,255,157,0.3); }
+    .modal-title { font-family: var(--font-title); font-size: 20px; color: var(--green); text-shadow: var(--glow); margin-bottom: 16px; }
     .modal-close { position: absolute; top: 12px; right: 14px; background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; }
     .modal-close:hover { color: var(--green); }
     .modal-box ol { padding-left: 18px; line-height: 2.2; font-size: 12px; color: var(--muted); }
     .modal-box ol strong { color: var(--text); }
     .modal-box code { background: rgba(0,255,157,0.08); border: 1px solid rgba(0,255,157,0.3); padding: 3px 8px; border-radius: 3px; font-size: 11px; color: var(--green); }
 
-    #toast {
-      position: fixed; bottom: 20px; left: 50%;
-      transform: translateX(-50%) translateY(60px);
-      background: rgba(0,20,15,0.98); border: 1px solid var(--green);
-      box-shadow: var(--glow); color: var(--text);
-      padding: 10px 20px; border-radius: 4px; font-size: 12px; z-index: 999;
-      opacity: 0; transition: all 0.35s cubic-bezier(0.68,-0.55,0.27,1.55);
-      pointer-events: none; white-space: nowrap; font-family: var(--font-body);
-    }
+    #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(60px); background: rgba(0,20,15,0.98); border: 1px solid var(--green); box-shadow: var(--glow); color: var(--text); padding: 10px 20px; border-radius: 4px; font-size: 12px; z-index: 999; opacity: 0; transition: all 0.35s cubic-bezier(0.68,-0.55,0.27,1.55); pointer-events: none; white-space: nowrap; font-family: var(--font-body); }
     #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
     @media (max-width: 800px) { .sidebar { display: none; } }
   </style>
 </head>
 <body>
-
 <div class="abyss-bg"></div>
 <div class="particles" id="particles"></div>
 <div class="fog"></div>
@@ -525,7 +359,6 @@
 
   <div class="sidebar">
 
-    <!-- Servidor -->
     <div class="card">
       <div class="card-header"><span class="card-title-text">🔌 Servidor</span></div>
       <div class="card-body">
@@ -538,7 +371,6 @@
       </div>
     </div>
 
-    <!-- Estado Conexiones -->
     <div class="card">
       <div class="card-header"><span class="card-title-text">📡 Estado Conexiones</span></div>
       <div class="card-body">
@@ -566,7 +398,6 @@
       </div>
     </div>
 
-    <!-- Kick -->
     <div class="card">
       <div class="card-header"><span class="card-title-text">🟢 Kick — Chatroom</span></div>
       <div class="card-body">
@@ -586,7 +417,6 @@
       </div>
     </div>
 
-    <!-- TikTok -->
     <div class="card">
       <div class="card-header"><span class="card-title-text">🎵 TikTok — Control</span></div>
       <div class="card-body">
@@ -594,13 +424,10 @@
           <button class="btn btn-secondary btn-full" onclick="restartTikTok()">🔄 Reconectar</button>
           <button class="btn btn-secondary btn-full" onclick="openTikTokLive()">📺 Live</button>
         </div>
-        <div class="info-box info-red">
-          Si falla con 403: <a href="#" onclick="openModal('tiktok-modal');return false;" style="color:var(--green);">Usar SESSION_ID</a>
-        </div>
+        <div class="info-box info-red">Si falla con 403: <a href="#" onclick="openModal('tiktok-modal');return false;" style="color:var(--green);">Usar SESSION_ID</a></div>
       </div>
     </div>
 
-    <!-- YouTube -->
     <div class="card">
       <div class="card-header"><span class="card-title-text">▶️ YouTube — Control</span></div>
       <div class="card-body">
@@ -613,7 +440,6 @@
       </div>
     </div>
 
-    <!-- URLs OBS -->
     <div class="card">
       <div class="card-header"><span class="card-title-text">📺 URLs para OBS</span></div>
       <div class="card-body">
@@ -642,12 +468,9 @@
       </div>
     </div>
 
-    <!-- ⚙️ CONFIGURACIÓN VISUAL -->
     <div class="card">
       <div class="card-header"><span class="card-title-text">⚙️ Configuración Visual</span></div>
       <div class="card-body">
-
-        <!-- ★ NUEVA: FUENTE -->
         <label>🔤 Fuente del dashboard:</label>
         <select id="fontSelector" onchange="applyFont(this.value)">
           <option value="'Special Elite', monospace">Special Elite (por defecto)</option>
@@ -662,7 +485,6 @@
         </select>
         <div class="font-preview" id="font-preview">El Abismo de Krona — Preview 123</div>
 
-        <!-- ★ BRILLO NEÓN -->
         <div class="toggle-row" style="margin-top:4px;">
           <span class="toggle-label">💡 Brillo neón (glow)</span>
           <label class="toggle-switch">
@@ -672,7 +494,6 @@
         </div>
         <div class="hint" id="glow-hint">Activa/desactiva el efecto de luz verde</div>
 
-        <!-- ★ NUEVA: LÍNEA ÚNICA -->
         <div class="toggle-row">
           <span class="toggle-label">↔️ Modo línea única</span>
           <label class="toggle-switch">
@@ -684,17 +505,11 @@
 
         <div class="separator"></div>
 
-        <label>Tamaño nombre: <span class="value-display" id="val-fontName">11px</span></label>
-        <input type="range" id="fontNameSize" min="8" max="22" value="11" oninput="setCfgVar('--ov-font-name',this.value+'px','val-fontName')">
-
-        <label>Tamaño mensaje: <span class="value-display" id="val-fontMsg">11px</span></label>
-        <input type="range" id="fontMsgSize" min="8" max="22" value="11" oninput="setCfgVar('--ov-font-msg',this.value+'px','val-fontMsg')">
-
         <label>Tamaño emotes: <span class="value-display" id="val-emote">24px</span></label>
         <input type="range" id="emoteSize" min="16" max="60" value="24" oninput="setCfgVar('--ov-emote-size',this.value+'px','val-emote')">
 
-        <label>Tamaño avatar: <span class="value-display" id="val-avatar">40px</span></label>
-        <input type="range" id="avatarSize" min="24" max="70" value="40" oninput="setCfgVar('--ov-avatar-size',this.value+'px','val-avatar')">
+        <label>Tamaño nombre: <span class="value-display" id="val-fontName">15px</span></label>
+        <input type="range" id="fontNameSize" min="8" max="22" value="15" oninput="setCfgVar('--ov-font-name',this.value+'px','val-fontName')">
 
         <label>Máx. mensajes: <span class="value-display" id="val-maxMsg">200</span></label>
         <input type="range" id="maxMsgRange" min="20" max="1000" value="200" step="10" oninput="document.getElementById('val-maxMsg').textContent=this.value;MAX_MESSAGES=parseInt(this.value);">
@@ -702,17 +517,7 @@
         <label>Color primario (neon):</label>
         <div class="config-row">
           <input type="color" id="colorPrimary" value="#00ff9d" oninput="applyColorPrimary(this.value)">
-          <span class="hint">Desactiva RGB para color fijo</span>
-        </div>
-
-        <label>Color nombre:</label>
-        <div class="config-row">
-          <input type="color" id="colorName" value="#00ff9d" oninput="applyColorName(this.value)">
-        </div>
-
-        <label>Color mensaje:</label>
-        <div class="config-row">
-          <input type="color" id="colorMsg" value="#e0e0e0" oninput="applyColorMsg(this.value)">
+          <span class="hint">Color del borde y texto</span>
         </div>
 
         <button class="btn btn-danger btn-full" onclick="clearChat()">🗑️ Limpiar chat</button>
@@ -723,7 +528,10 @@
   </div><!-- /sidebar -->
 
   <div class="main">
+    <!-- ★ FIX SCROLL: chat-panel con overflow-y:auto, mensajes apilados normalmente -->
     <div class="chat-panel" id="chat-panel">
+      <!-- Espaciador que empuja los mensajes al fondo -->
+      <div class="chat-spacer" id="chat-spacer"></div>
       <div id="chat-placeholder">🌊 Los mensajes del abismo aparecerán aquí...</div>
     </div>
     <div id="hl-bar">
@@ -737,7 +545,7 @@
     </div>
   </div>
 
-</div><!-- /layout -->
+</div>
 
 <div id="tiktok-modal" class="modal-overlay">
   <div class="modal-box">
@@ -778,11 +586,12 @@ var store={
   set:function(k,v){try{localStorage.setItem(k,v);}catch(e){}}
 };
 
-// ═══════════════ ESTADO GLOBAL ═══════════════
+// ═══════════════ ESTADO ═══════════════
 var ws=null,retryDelay=1000,isConnected=false,autoKickDone=false;
 var currentChannels={twitch:'',kick:'',tiktok:'',youtube:''};
 var MAX_MESSAGES=200, messages=[], currentHighlightMid=null;
-
+// ★ FIX SCROLL: controla si el scroll está al fondo
+var autoScroll=true;
 
 var PLATFORM_LOGOS={
   twitch:'<svg viewBox="0 0 24 28" fill="currentColor"><path d="M2.149 0L.537 4.119v19.63h6.72V28l4.123-4.25h3.29L22.463 14V0H2.149zm18.24 13.18l-3.29 3.387h-3.948l-2.886 2.973v-2.973H6.584V2.387h13.805v10.793zM17.07 5.367h-2.148v6.42h2.148V5.367zm-5.907 0h-2.15v6.42h2.15V5.367z"/></svg>',
@@ -792,6 +601,48 @@ var PLATFORM_LOGOS={
   custom:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>',
   system:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>'
 };
+
+// ═══════════════════════════════════════
+// ★ PARSEO DE EMOTES
+// ═══════════════════════════════════════
+function esc(str){return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// Twitch: chatemotes [{text,url,start,end}]
+function processTwitchEmotes(text, emotes) {
+  if (!emotes || !emotes.length) return esc(text);
+  var sorted = emotes.slice().sort(function(a,b){ return a.start - b.start; });
+  var result = '';
+  var cursor = 0;
+  for (var i = 0; i < sorted.length; i++) {
+    var e = sorted[i];
+    if (e.start > cursor) result += esc(text.slice(cursor, e.start));
+    result += '<img class="emote" src="' + esc(e.url) + '" alt="' + esc(e.text) + '" title="' + esc(e.text) + '" onerror="this.style.display=\'none\'">';
+    cursor = e.end + 1;
+  }
+  if (cursor < text.length) result += esc(text.slice(cursor));
+  return result;
+}
+
+// Kick: [emote:ID:nombre] → img
+function parseKickEmotesFromText(text) {
+  return esc(text).replace(/\[emote:(\d+):([^\]]+)\]/g, function(match, id, name) {
+    var url = 'https://files.kick.com/emotes/' + id + '/fullsize';
+    return '<img class="emote" src="' + url + '" alt="' + name + '" title="' + name + '" onerror="this.style.display=\'none\'">';
+  });
+}
+
+// Función principal
+function processMessageHTML(data) {
+  var text = data.chatmessage || '';
+  var platform = data.platform || data.type || '';
+  if (platform === 'twitch' && data.chatemotes && data.chatemotes.length > 0) {
+    return processTwitchEmotes(text, data.chatemotes);
+  }
+  if (platform === 'kick') {
+    return parseKickEmotesFromText(text);
+  }
+  return esc(text);
+}
 
 // ═══════════════ SIDEBAR ═══════════════
 function toggleSidebar(){
@@ -813,69 +664,23 @@ document.addEventListener('DOMContentLoaded',function(){
     document.getElementById('sidebar-toggle').classList.add('collapsed');
   }
 
-  // Restaurar fuente
   var savedFont=store.get('chatFont');
-  if(savedFont){
-    var sel=document.getElementById('fontSelector');
-    sel.value=savedFont;
-    applyFont(savedFont,true);
-  }
+  if(savedFont){ var sel=document.getElementById('fontSelector'); sel.value=savedFont; applyFont(savedFont,true); }
+  if(store.get('glowOff')==='1'){ document.getElementById('glowToggle').checked=false; toggleGlow(false,true); }
+  if(store.get('singleLine')==='1'){ document.getElementById('singleLineToggle').checked=true; toggleSingleLine(true,true); }
 
-  // Restaurar brillo
-  if(store.get('glowOff')==='1'){
-    document.getElementById('glowToggle').checked=false;
-    toggleGlow(false,true);
-  }
-
-  // Restaurar línea única
-  if(store.get('singleLine')==='1'){
-    document.getElementById('singleLineToggle').checked=true;
-    toggleSingleLine(true,true);
-  }
+  // ★ FIX SCROLL: detectar si el usuario scrollea hacia arriba (pause auto-scroll)
+  var panel = document.getElementById('chat-panel');
+  panel.addEventListener('scroll', function() {
+    var threshold = 80;
+    autoScroll = (panel.scrollHeight - panel.scrollTop - panel.clientHeight) < threshold;
+  });
 });
 
-// ═══════════════════════════════════════
-// ★ NUEVA FUNCIÓN: SELECTOR DE FUENTE
-// ═══════════════════════════════════════
-function applyFont(fontValue, silent){
-  document.documentElement.style.setProperty('--font-body', fontValue);
-  var preview=document.getElementById('font-preview');
-  preview.style.fontFamily=fontValue;
-  store.set('chatFont',fontValue);
-  if(!silent) toast('🔤 Fuente cambiada');
-}
-
-// ═══════════════════════════════════════
-// ★ NUEVA FUNCIÓN: TOGGLE BRILLO NEÓN
-// ═══════════════════════════════════════
-function toggleGlow(enabled, silent){
-  store.set('glowOff', enabled ? '0' : '1');
-  var hint=document.getElementById('glow-hint');
-  if(enabled){
-    document.body.classList.remove('no-glow');
-    hint.textContent='✅ Brillo neón activo';
-    if(!silent) toast('💡 Brillo activado');
-  } else {
-    document.body.classList.add('no-glow');
-    hint.textContent='🌑 Brillo desactivado — modo apagado';
-    if(!silent) toast('💡 Brillo desactivado');
-  }
-}
-
-// ═══════════════════════════════════════
-// ★ NUEVA FUNCIÓN: MODO LÍNEA ÚNICA
-// ═══════════════════════════════════════
-function toggleSingleLine(enabled, silent){
-  store.set('singleLine',enabled?'1':'0');
-  var panel=document.getElementById('chat-panel');
-  if(enabled){
-    panel.classList.add('single-line');
-    if(!silent) toast('↔️ Modo línea única activado');
-  } else {
-    panel.classList.remove('single-line');
-    if(!silent) toast('↕️ Modo normal activado');
-  }
-}
+// ═══════════════ FONT / GLOW / SINGLE LINE ═══════════════
+function applyFont(fontValue, silent){ document.documentElement.style.setProperty('--font-body', fontValue); var preview=document.getElementById('font-preview'); preview.style.fontFamily=fontValue; store.set('chatFont',fontValue); if(!silent) toast('🔤 Fuente cambiada'); }
+function toggleGlow(enabled, silent){ store.set('glowOff', enabled ? '0' : '1'); var hint=document.getElementById('glow-hint'); if(enabled){ document.body.classList.remove('no-glow'); hint.textContent='✅ Brillo neón activo'; if(!silent) toast('💡 Brillo activado'); } else { document.body.classList.add('no-glow'); hint.textContent='🌑 Brillo desactivado'; if(!silent) toast('💡 Brillo desactivado'); } }
+function toggleSingleLine(enabled, silent){ store.set('singleLine',enabled?'1':'0'); var panel=document.getElementById('chat-panel'); if(enabled){ panel.classList.add('single-line'); if(!silent) toast('↔️ Modo línea única activado'); } else { panel.classList.remove('single-line'); if(!silent) toast('↕️ Modo normal activado'); } }
 
 // ═══════════════ WEBSOCKET ═══════════════
 function connectWS(url){
@@ -889,10 +694,7 @@ function connectWS(url){
   ws.onerror=function(){ws.close();};
 }
 function scheduleRetry(url){retryDelay=Math.min(retryDelay*2,30000);setTimeout(function(){connectWS(url);},retryDelay);}
-function setStatus(ok){
-  var dot=document.getElementById('ws-dot'),lbl=document.getElementById('ws-label');
-  dot.className=ok?'ok':''; lbl.textContent=ok?'Conectado':'Desconectado';
-}
+function setStatus(ok){ var dot=document.getElementById('ws-dot'),lbl=document.getElementById('ws-label'); dot.className=ok?'ok':''; lbl.textContent=ok?'Conectado':'Desconectado'; }
 
 function handleStatus(data){
   setPlatformStatus('twitch',data.twitch,(data.channels&&data.channels.twitch)||'—');
@@ -914,68 +716,60 @@ function handleStatus(data){
     else if(!savedId&&!autoKickDone&&data.channels&&data.channels.kick){autoKickDone=true;setTimeout(resolveKickId,1500);}
   }
 }
-function setPlatformStatus(p,c,ch){
-  var dot=document.getElementById('dot-'+p),el=document.getElementById('ch-'+p);
-  if(dot) dot.className='platform-dot'+(c?' ok':'');
-  if(el) el.textContent=ch||'—';
-}
+function setPlatformStatus(p,c,ch){ var dot=document.getElementById('dot-'+p),el=document.getElementById('ch-'+p); if(dot) dot.className='platform-dot'+(c?' ok':''); if(el) el.textContent=ch||'—'; }
 
-// ═══════════════ EMOTES ═══════════════
-function processEmotes(text,emotes){
-  if(!emotes||!emotes.length) return esc(text);
-  var sorted=[].concat(emotes).sort(function(a,b){
-    var pA=a.start!==undefined?a.start:(a.positions&&a.positions[0]?parseInt(a.positions[0].split('-')[0]):9999);
-    var pB=b.start!==undefined?b.start:(b.positions&&b.positions[0]?parseInt(b.positions[0].split('-')[0]):9999);
-    return pB-pA;
-  });
-  var r=esc(text);
-  sorted.forEach(function(e){
-    if(e.text&&e.url){
-      var ex=e.text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-      r=r.replace(new RegExp(ex,'g'),'<img class="emote" src="'+esc(e.url)+'" alt="'+esc(e.text)+'" title="'+esc(e.text)+'" style="height:var(--ov-emote-size,24px);vertical-align:middle;margin:0 2px;">');
-    }
-  });
-  return r;
-}
-function processMessageHTML(data){
-  var text=data.chatmessage||'';
-  if(data.chatemotes&&data.chatemotes.length) return processEmotes(text,data.chatemotes);
-  return esc(text);
-}
-
-// ═══════════════ APPEND MESSAGE ═══════════════
+// ═══════════════ APPEND MESSAGE — SCROLL ARREGLADO ═══════════════
 function appendMessage(data){
   if(!data.chatname&&!data.chatmessage) return;
   var panel=document.getElementById('chat-panel');
   var ph=document.getElementById('chat-placeholder');
   if(ph) ph.remove();
+
   var platform=data.platform||data.type||'custom';
   var logo=PLATFORM_LOGOS[platform]||PLATFORM_LOGOS.custom;
   var time=new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
   var el=document.createElement('div');
   el.className='msg-item '+platform;
   el.dataset.mid=data.mid||'';
+
   var avatarHTML=data.chatimg
     ?'<div class="msg-avatar"><img src="'+esc(data.chatimg)+'" onerror="this.style.display=\'none\'"></div>'
     :'<div class="msg-avatar"><div class="msg-avatar-fallback" style="color:rgba(0,255,157,0.5);width:18px;height:18px;">'+logo+'</div></div>';
+
   var platformBadge='<span class="msg-platform '+platform+'"><span style="width:10px;height:10px;display:inline-flex;">'+logo+'</span>'+platform.charAt(0).toUpperCase()+platform.slice(1)+'</span>';
+
   var badgesHTML='';
   if(data.roles&&data.roles.length) data.roles.forEach(function(r){badgesHTML+='<span style="font-size:9px;padding:1px 5px;background:rgba(0,255,157,0.08);border:1px solid rgba(0,255,157,0.3);border-radius:3px;color:#5eead4;">'+esc(r.label||r.type)+'</span>';});
   if(data.chatbadges&&data.chatbadges.length) data.chatbadges.forEach(function(b){if(typeof b==='string')badgesHTML+='<img class="msg-badge" src="'+esc(b)+'">';else if(b.src)badgesHTML+='<img class="msg-badge" src="'+esc(b.src)+'">';});
+
   var nameStyle=data.nameColor?'color:'+data.nameColor+';text-shadow:0 0 8px '+data.nameColor+';':'';
+
+  // ★ EMOTES ARREGLADOS
   var msgHTML=processMessageHTML(data);
+
   var donHTML='';
   if(data.type==='donation'&&(data.amount||data.donationType)){
     var dl=data.donationType==='bits'?'💎 '+data.amount+' Bits':data.donationType==='sub'?'🌟 ¡Nuevo Sub!':data.donationType==='resub'?'🔄 '+data.months+' meses':data.donationType==='subgift'?'🎁 Sub regalada':data.donationType==='superchat'?'💰 '+(data.amountDisplay||data.amount):data.donationType==='member'?'⭐ ¡Nuevo Miembro!':data.donationType==='gift'?'🎁 Regalo TikTok':data.amount?'💰 '+data.amount:'';
-    if(dl) donHTML='<div style="margin-top:5px;padding:5px 10px;background:rgba(0,255,157,0.1);border:1px solid rgba(0,255,157,0.4);border-radius:3px;font-size:11px;font-weight:700;color:var(--green);text-shadow:var(--glow-sm);text-align:center;">'+dl+'</div>';
+    if(dl) donHTML='<div style="margin-top:5px;padding:5px 10px;background:rgba(0,255,157,0.1);border:1px solid rgba(0,255,157,0.4);border-radius:3px;font-size:11px;font-weight:700;color:var(--green);text-align:center;">'+dl+'</div>';
   }
+
   el.innerHTML=avatarHTML+'<div class="msg-body"><div class="msg-header"><span class="msg-user" style="'+nameStyle+'">'+esc(data.chatname||'?')+'</span>'+platformBadge+badgesHTML+'<span class="msg-time">'+time+'</span><button class="msg-highlight-btn" onclick="event.stopPropagation();sendHighlight(this.closest(\'.msg-item\'))">📌 Destacar</button></div><div class="msg-text">'+msgHTML+'</div>'+donHTML+'</div>';
   el._msgData=data;
   el.addEventListener('click',function(){sendHighlight(el);});
+
   panel.appendChild(el);
   messages.push({el:el,data:data});
-  if(messages.length>MAX_MESSAGES){var old=messages.shift();if(old.el.parentNode)old.el.parentNode.removeChild(old.el);}
-  panel.scrollTop=panel.scrollHeight;
+
+  // ★ FIX: eliminar mensajes viejos
+  if(messages.length>MAX_MESSAGES){
+    var old=messages.shift();
+    if(old.el.parentNode) old.el.parentNode.removeChild(old.el);
+  }
+
+  // ★ FIX SCROLL: solo auto-scroll si estamos al fondo
+  if(autoScroll){
+    requestAnimationFrame(function(){ panel.scrollTop = panel.scrollHeight; });
+  }
 }
 
 // ═══════════════ HIGHLIGHT ═══════════════
@@ -986,7 +780,7 @@ function sendHighlight(el){
   el.classList.add('highlighted'); currentHighlightMid=el.dataset.mid;
   document.getElementById('hl-bar').classList.add('active');
   document.getElementById('hl-bar-text').textContent=(data.chatname||'?')+': '+(data.chatmessage||'');
-  ws.send(JSON.stringify({type:'highlight',platform:data.platform||data.type||'custom',chatname:data.chatname||'',chatmessage:data.chatmessage||'',chatimg:data.chatimg||null,nameColor:data.nameColor||null,roles:data.roles||[],mid:data.mid||''}));
+  ws.send(JSON.stringify({type:'highlight',platform:data.platform||data.type||'custom',chatname:data.chatname||'',chatmessage:data.chatmessage||'',chatimg:data.chatimg||null,nameColor:data.nameColor||null,roles:data.roles||[],chatemotes:data.chatemotes||[],mid:data.mid||''}));
   toast('📌 Mensaje destacado');
 }
 function clearHighlight(){
@@ -1025,6 +819,9 @@ function tryKickUrl(channelId,urls,idx){
       badges.forEach(function(b){var bt=(b.type||'').toLowerCase();if(bt==='broadcaster'||bt==='owner')kickRoles.push({type:'broadcaster',label:'Owner'});else if(bt==='moderator'||bt==='mod')kickRoles.push({type:'moderator',label:'Mod'});else if(bt==='vip')kickRoles.push({type:'vip',label:'VIP'});else if(bt==='subscriber'||bt==='sub')kickRoles.push({type:'subscriber',label:'Sub'});else kickRoles.push({type:bt,label:b.type});});
       var username=(d.sender&&d.sender.username)||'Unknown';
       var nameColor=(d.sender&&d.sender.identity&&d.sender.identity.color)||'#53FC18';
+
+      // ★ Kick emotes: d.content puede tener [emote:ID:nombre]
+      // Los pasamos como ya están — parseKickEmotesFromText los procesará en el render
       getKickAvatarBrowser(username,function(avatar){
         var cm={type:'kick_message',platform:'kick',chatname:username,chatmessage:d.content,nameColor:nameColor,chatimg:avatar||null,roles:kickRoles,mid:d.id||('kick-'+Date.now())};
         if(ws&&ws.readyState===1) ws.send(JSON.stringify(cm));
@@ -1064,12 +861,7 @@ function getKickAvatarBrowser(username,cb){
 }
 
 // ═══════════════ ACCIONES ═══════════════
-function saveAndConnect(){
-  var url=document.getElementById('serverUrl').value.trim();
-  if(!url) return toast('Introduce la URL del servidor');
-  store.set('serverUrl',url); retryDelay=1000; autoKickDone=false;
-  connectWS(url); updateOverlayUrls(); toast('Conectando...');
-}
+function saveAndConnect(){ var url=document.getElementById('serverUrl').value.trim(); if(!url) return toast('Introduce la URL del servidor'); store.set('serverUrl',url); retryDelay=1000; autoKickDone=false; connectWS(url); updateOverlayUrls(); toast('Conectando...'); }
 function toggleKickManual(){var el=document.getElementById('kick-manual-wrap');el.style.display=el.style.display==='none'?'block':'none';}
 
 async function resolveKickId(){
@@ -1101,30 +893,14 @@ async function sendKickId(idParam){
     else toast('❌ El servidor rechazó el ID');
   }catch(e){toast('❌ '+e.message);}
 }
-async function restartTikTok(){
-  var su=store.get('serverUrl');if(!su) return toast('Configura la URL del servidor primero');
-  var hu=su.replace(/^wss?/,'https').replace(/\/$/,'');
-  try{var r=await fetch(hu+'/api/tiktok/restart',{method:'POST'});var d=await r.json();toast(d.ok?'🔄 TikTok reconectando...':'❌ Error');}
-  catch(e){toast('❌ No se pudo contactar el servidor');}
-}
-async function restartYouTube(){
-  var su=store.get('serverUrl');if(!su) return toast('Configura la URL del servidor primero');
-  var hu=su.replace(/^wss?/,'https').replace(/\/$/,'');
-  var ytBox=document.getElementById('youtube-status-box');if(ytBox){ytBox.className='info-box info-yellow';ytBox.innerHTML='⏳ Buscando live activo...';}
-  try{var r=await fetch(hu+'/api/youtube/restart',{method:'POST'});var d=await r.json();toast(d.ok?'🔄 YouTube reconectando...':'❌ Error');}
-  catch(e){toast('❌ No se pudo contactar el servidor');}
-}
-function openTikTokLive(){var u=currentChannels.tiktok||'';if(!u) return toast('TikTok no configurado');window.open('https://www.tiktok.com/@'+u+'/live','_blank','noopener');}
-function openYouTubeLive(){var c=currentChannels.youtube||'';if(!c) return toast('YouTube no configurado');var h=c.startsWith('@')?c:'@'+c;window.open('https://www.youtube.com/'+h+'/live','_blank','noopener');}
-function sendCustomMessage(){var input=document.getElementById('custom-msg-input'),text=input.value.trim();if(!text) return;if(!isConnected||!ws) return toast('⚠️ No hay conexión');ws.send(JSON.stringify({type:'custom_message',user:'Tú (dashboard)',text:text}));input.value='';}
+async function restartTikTok(){ var su=store.get('serverUrl');if(!su) return toast('Configura la URL del servidor primero'); var hu=su.replace(/^wss?/,'https').replace(/\/$/,''); try{var r=await fetch(hu+'/api/tiktok/restart',{method:'POST'});var d=await r.json();toast(d.ok?'🔄 TikTok reconectando...':'❌ Error');}catch(e){toast('❌ No se pudo contactar el servidor');} }
+async function restartYouTube(){ var su=store.get('serverUrl');if(!su) return toast('Configura la URL del servidor primero'); var hu=su.replace(/^wss?/,'https').replace(/\/$/,''); var ytBox=document.getElementById('youtube-status-box');if(ytBox){ytBox.className='info-box info-yellow';ytBox.innerHTML='⏳ Buscando live activo...';} try{var r=await fetch(hu+'/api/youtube/restart',{method:'POST'});var d=await r.json();toast(d.ok?'🔄 YouTube reconectando...':'❌ Error');}catch(e){toast('❌ No se pudo contactar el servidor');} }
+function openTikTokLive(){ var u=currentChannels.tiktok||''; if(!u) return toast('TikTok no configurado'); window.open('https://www.tiktok.com/@'+u+'/live','_blank','noopener'); }
+function openYouTubeLive(){ var c=currentChannels.youtube||''; if(!c) return toast('YouTube no configurado'); var h=c.startsWith('@')?c:'@'+c; window.open('https://www.youtube.com/'+h+'/live','_blank','noopener'); }
+function sendCustomMessage(){ var input=document.getElementById('custom-msg-input'),text=input.value.trim(); if(!text) return; if(!isConnected||!ws) return toast('⚠️ No hay conexión'); ws.send(JSON.stringify({type:'custom_message',user:'Tú (dashboard)',text:text})); input.value=''; }
 
 // ═══════════════ OVERLAY URLs ═══════════════
-function getBaseOverlayDir(){
-  var href=window.location.href.split('?')[0].replace(/\/+$/,'');
-  var base=href.replace(/\/dashboard(\/[^?]*)?$/,'/overlay');
-  if(base===href) base=href.replace(/\/[^/]+$/,'/overlay');
-  return base;
-}
+function getBaseOverlayDir(){ var href=window.location.href.split('?')[0].replace(/\/+$/,''); var base=href.replace(/\/dashboard(\/[^?]*)?$/,'/overlay'); if(base===href) base=href.replace(/\/[^/]+$/,'/overlay'); return base; }
 function updateOverlayUrls(){
   var serverUrl=store.get('serverUrl');
   var showtime=(parseInt(document.getElementById('showtime-input').value)||12)*1000;
@@ -1138,25 +914,17 @@ function updateOverlayUrls(){
     box.textContent=url;box.dataset.url=url;
   });
 }
-function copyUrl(id){var url=document.getElementById(id).dataset.url;if(!url) return toast('Configura el servidor primero');navigator.clipboard.writeText(url).then(function(){toast('✅ URL copiada');});}
-function openUrl(id){var url=document.getElementById(id).dataset.url;if(!url) return toast('Configura el servidor primero');window.open(url,'_blank');}
+function copyUrl(id){ var url=document.getElementById(id).dataset.url; if(!url) return toast('Configura el servidor primero'); navigator.clipboard.writeText(url).then(function(){toast('✅ URL copiada');}); }
+function openUrl(id){ var url=document.getElementById(id).dataset.url; if(!url) return toast('Configura el servidor primero'); window.open(url,'_blank'); }
 
 // ═══════════════ CONFIG VISUAL ═══════════════
-function setCfgVar(cssVar,val,displayId){document.documentElement.style.setProperty(cssVar,val);if(displayId)document.getElementById(displayId).textContent=val;}
-
-function applyColorPrimary(val){
-
-  document.documentElement.style.setProperty('--green',val);
-  document.documentElement.style.setProperty('--border',val);
-  document.documentElement.style.setProperty('--muted',val+'88');
-}
-function applyColorName(val){document.documentElement.style.setProperty('--ov-name-color',val);}
-function applyColorMsg(val){document.documentElement.style.setProperty('--ov-msg-color',val);}
+function setCfgVar(cssVar,val,displayId){ document.documentElement.style.setProperty(cssVar,val); if(displayId) document.getElementById(displayId).textContent=val; }
+function applyColorPrimary(val){ document.documentElement.style.setProperty('--green',val); document.documentElement.style.setProperty('--border',val); document.documentElement.style.setProperty('--muted',val+'88'); }
 
 function clearChat(){
   if(!confirm('¿Limpiar todos los mensajes del dashboard?')) return;
   var panel=document.getElementById('chat-panel');
-  panel.innerHTML='<div id="chat-placeholder" style="text-align:center;color:var(--muted);margin:auto;font-family:var(--font-title);font-size:18px;text-shadow:var(--glow-sm);">🌊 Los mensajes del abismo aparecerán aquí...</div>';
+  panel.innerHTML='<div class="chat-spacer" id="chat-spacer"></div><div id="chat-placeholder">🌊 Los mensajes del abismo aparecerán aquí...</div>';
   messages=[]; toast('🗑️ Chat limpiado');
 }
 function exportMessages(){
@@ -1167,13 +935,32 @@ function exportMessages(){
   URL.revokeObjectURL(url);toast('💾 Mensajes exportados');
 }
 
-function esc(str){return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 
 function injectTestMessage(){
-  appendMessage({type:'custom',platform:'custom',chatname:'Test local',chatmessage:'✅ El chat del dashboard funciona correctamente — El Abismo de Krona',nameColor:'#00ff9d',mid:'test-'+Date.now()});
-  toast('Mensaje de prueba inyectado');
+  // Emotes de prueba: un Twitch emote (Kappa)
+  appendMessage({
+    type:'custom',platform:'twitch',
+    chatname:'Test Twitch',
+    chatmessage:'Hola Kappa que tal PogChamp',
+    nameColor:'#9146FF',
+    chatemotes:[
+      {text:'Kappa',url:'https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/1.0',start:5,end:9},
+      {text:'PogChamp',url:'https://static-cdn.jtvnw.net/emoticons/v2/305954156/default/dark/1.0',start:15,end:22}
+    ],
+    mid:'test-tw-'+Date.now()
+  });
+  setTimeout(function(){
+    appendMessage({
+      type:'kick',platform:'kick',
+      chatname:'Test Kick',
+      chatmessage:'Hola [emote:1:GreenBalloon] como están [emote:2:MonkaS]',
+      nameColor:'#53FC18',
+      mid:'test-kick-'+Date.now()
+    });
+  }, 500);
+  toast('Mensajes de prueba inyectados');
 }
 function toast(msg){var el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(function(){el.classList.remove('show');},3000);}
 </script>
