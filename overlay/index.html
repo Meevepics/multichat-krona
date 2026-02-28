@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meeve Chat Overlay</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      background: transparent;
+      min-height: 100vh;
+      padding: 20px;
+      font-family: 'Comic Sans MS', 'Segoe Print', cursive;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* ── PARTÍCULAS ── */
+    .bg-particles { position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:0; overflow:hidden; }
+    .particle { position:absolute; width:4px; height:4px; background:#FF6B9D; border-radius:50%; opacity:0.6; animation:float 3s infinite ease-in-out; }
+    @keyframes float { 0%,100%{transform:translateY(0) translateX(0);} 50%{transform:translateY(-20px) translateX(10px);} }
+
+    /* ── CHAT CONTAINER ── */
+    #chat-container {
+      position:absolute; bottom:30px; left:50%;
+      transform:translateX(-50%);
+      width:100%; max-width:680px;
+      height:calc(100vh - 50px);
+      overflow:hidden; padding:0 20px; z-index:10;
+    }
+    #spacer { width:100%; height:0px; }
+
+    /* ── BURBUJA ── */
+    .message-bubble { position:relative; margin-bottom:18px; opacity:0; filter:drop-shadow(0 4px 8px rgba(0,0,0,0.3)); }
+    .message-bubble.visible { opacity:1; }
+    .bubble-left   { margin-left:0; margin-right:auto; width:82%; }
+    .bubble-right  { margin-left:auto; margin-right:0; width:78%; }
+    .bubble-center { margin-left:auto; margin-right:auto; width:86%; }
+
+    .bubble-container {
+      position:relative;
+      background:#FFFFFF;
+      border:4px solid #000000;
+      border-radius:28px;
+      padding:14px 18px;
+      box-shadow:8px 8px 0 rgba(0,0,0,0.9);
+      overflow:visible;
+    }
+    .bubble-container::before {
+      content:''; position:absolute; top:0; left:0; width:100%; height:100%;
+      background-image:url('https://media1.tenor.com/m/FlIAx4vYBJQAAAAC/as-you-like-it-eve.gif');
+      background-size:cover; background-position:center;
+      opacity:0.18; z-index:0; border-radius:inherit; pointer-events:none; mix-blend-mode:multiply;
+    }
+    .bubble-container > * { position:relative; z-index:1; }
+
+    /* Colores pastel */
+    .pastel-yellow   { background:linear-gradient(135deg,#FFE66D,#FFDB4D,#FFC93D); }
+    .pastel-pink     { background:linear-gradient(135deg,#FF9ECD,#FF6BB3,#FF4D9E); }
+    .pastel-blue     { background:linear-gradient(135deg,#89D4FF,#5EC5FF,#3BB5FF); }
+    .pastel-lavender { background:linear-gradient(135deg,#D4BBFF,#B794FF,#A67CFF); }
+    .pastel-peach    { background:linear-gradient(135deg,#FFB088,#FF9666,#FF7F4D); }
+    .pastel-mint     { background:linear-gradient(135deg,#7FFFD4,#5FFFB3,#3FFF9E); }
+
+    /* Colas */
+    .bubble-tail-left { position:absolute; bottom:14px; left:-14px; width:0; height:0; border-style:solid; border-width:0 18px 24px 0; border-color:transparent #000 transparent transparent; filter:drop-shadow(2px 2px 0 rgba(0,0,0,0.3)); }
+    .bubble-tail-left::after  { content:''; position:absolute; top:3px; left:5px; width:0; height:0; border-style:solid; border-width:0 14px 19px 0; border-color:transparent #fff transparent transparent; }
+    .bubble-tail-right { position:absolute; bottom:14px; right:-14px; width:0; height:0; border-style:solid; border-width:0 0 24px 18px; border-color:transparent transparent transparent #000; filter:drop-shadow(-2px 2px 0 rgba(0,0,0,0.3)); }
+    .bubble-tail-right::after { content:''; position:absolute; top:3px; right:5px; width:0; height:0; border-style:solid; border-width:0 0 19px 14px; border-color:transparent transparent transparent #fff; }
+
+    /* ── HEADER: avatar + badges + nombre ── */
+    .message-header { display:flex; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+
+    .avatar-box {
+      width:52px; height:52px; border-radius:50%;
+      border:4px solid #000; overflow:hidden;
+      background:#eee; flex-shrink:0;
+      box-shadow:4px 4px 0 rgba(0,0,0,0.45);
+      transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    .avatar-box:hover { transform:scale(1.1) rotate(5deg); }
+    .avatar-img { width:100%; height:100%; object-fit:cover; display:block; }
+    .avatar-fallback { width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:22px; }
+
+    .user-info { flex:1; display:flex; flex-direction:column; gap:4px; min-width:0; }
+
+    /* Badges de rol */
+    .badges-row { display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
+    .role-badge {
+      display:inline-flex; align-items:center; gap:3px;
+      padding:2px 7px; border-radius:999px;
+      font-size:10px; font-weight:900;
+      border:2px solid #000;
+      box-shadow:2px 2px 0 rgba(0,0,0,0.4);
+      white-space:nowrap;
+      animation:badge-pop 0.4s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @keyframes badge-pop { 0%{transform:scale(0) rotate(-15deg);} 100%{transform:scale(1) rotate(0);} }
+
+    .badge-broadcaster { background:#FF4500; color:#fff; }
+    .badge-moderator   { background:#00AD03; color:#fff; }
+    .badge-vip         { background:#E005B9; color:#fff; }
+    .badge-subscriber  { background:#9146FF; color:#fff; }
+    .badge-founder     { background:#AA4A00; color:#fff; }
+    .badge-og          { background:#FFD700; color:#000; }
+    .badge-bits        { background:#F0A500; color:#000; }
+    .badge-default     { background:#555;    color:#fff; }
+
+    /* ── BADGE DE PLATAFORMA con logo ── */
+    .name-row { display:flex; align-items:center; gap:6px; }
+
+    .platform-badge {
+      display:inline-flex; align-items:center; gap:4px;
+      padding:3px 8px 3px 5px;
+      border-radius:999px;
+      border:2.5px solid #000;
+      font-size:10px; font-weight:900;
+      box-shadow:2px 2px 0 rgba(0,0,0,0.35);
+      flex-shrink:0;
+      white-space:nowrap;
+    }
+    .platform-badge svg {
+      width:13px; height:13px; flex-shrink:0;
+    }
+    .platform-badge.twitch  { background:#9146FF; color:#fff; }
+    .platform-badge.kick    { background:#53FC18; color:#000; }
+    .platform-badge.tiktok  { background:#000000; color:#fff; }
+    .platform-badge.youtube { background:#FF0000; color:#fff; }
+    .platform-badge.custom  { background:#FF6B9D; color:#fff; }
+
+    .username {
+      font-weight:900; font-size:20px; color:#000;
+      text-shadow:2px 2px 0 rgba(255,255,255,0.6);
+      letter-spacing:0.3px;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      animation:text-pop 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @keyframes text-pop { 0%{transform:scale(0.8);} 100%{transform:scale(1);} }
+
+    /* Mensaje */
+    .message-content {
+      background:rgba(255,255,255,0.78);
+      border:3px solid #000; border-radius:16px;
+      padding:12px 16px; font-size:22px;
+      line-height:1.5; color:#000; font-weight:700;
+      word-wrap:break-word;
+      box-shadow:inset 3px 3px 6px rgba(0,0,0,0.12);
+      animation:content-appear 0.4s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @keyframes content-appear { 0%{transform:scale(0.95);opacity:0;} 100%{transform:scale(1);opacity:1;} }
+
+    /* Decos */
+    .spinning-gif { position:absolute; width:56px; height:56px; top:-28px; right:-28px; pointer-events:none; z-index:10; }
+    .spinning-gif img { width:100%; height:100%; object-fit:contain; filter:drop-shadow(3px 3px 0 rgba(0,0,0,0.5)); }
+    .deco-sparkle { position:absolute; top:-14px; right:28px; z-index:10; }
+    .deco-sparkle::before,.deco-sparkle::after { content:'✦'; position:absolute; font-size:20px; color:#FF6B9D; text-shadow:2px 2px 0 #000; animation:twinkle 1.5s ease-in-out infinite; }
+    .deco-sparkle::after { left:17px; animation-delay:0.75s; color:#FFD700; }
+    @keyframes twinkle { 0%,100%{opacity:1;transform:scale(1) rotate(0);} 50%{opacity:0.3;transform:scale(0.6) rotate(180deg);} }
+    .deco-heart { position:absolute; bottom:-14px; left:28px; font-size:22px; text-shadow:2px 2px 0 #000; animation:pulse-heart 1.2s ease-in-out infinite; z-index:10; }
+    @keyframes pulse-heart { 0%,100%{transform:scale(1) rotate(0);} 25%{transform:scale(1.15) rotate(-5deg);} 75%{transform:scale(1.15) rotate(5deg);} }
+
+    /* Glitch */
+    .bubble-container.glitch::after {
+      content:''; position:absolute; top:-2px; left:-2px; right:-2px; bottom:-2px;
+      background:inherit; border-radius:inherit; z-index:-1;
+      animation:glitch 0.3s;
+    }
+    @keyframes glitch {
+      0%{transform:translate(0);} 20%{transform:translate(-2px,2px);filter:hue-rotate(90deg);}
+      40%{transform:translate(2px,-2px);filter:hue-rotate(180deg);}
+      60%{transform:translate(-2px,-2px);filter:hue-rotate(270deg);}
+      80%{transform:translate(2px,2px);filter:hue-rotate(360deg);}
+      100%{transform:translate(0);}
+    }
+
+    /* Indicador conexión */
+    #connection-dot { position:fixed; top:10px; right:10px; width:10px; height:10px; border-radius:50%; background:#ef4444; z-index:999; box-shadow:0 0 6px currentColor; transition:background 0.3s; }
+    #connection-dot.connected { background:#22c55e; }
+  </style>
+</head>
+<body>
+  <div class="bg-particles" id="particles"></div>
+  <div id="connection-dot"></div>
+  <div id="chat-container">
+    <div id="message-list-wrapper">
+      <div id="spacer"></div>
+    </div>
+  </div>
+
+  <script>
+    // ── CONFIG ──────────────────────────────────────────────
+    var urlParams  = new URLSearchParams(window.location.search);
+    var SERVER_URL = urlParams.get('server') || 'wss://localhost:3000';
+    var MAX_MESSAGES = urlParams.has('limit') ? parseInt(urlParams.get('limit')) : 50;
+    var MAX_SPACER   = 5000;
+
+    // ── LOGOS SVG DE PLATAFORMAS ─────────────────────────────
+    var PLATFORM_LOGOS = {
+      twitch:  '<svg viewBox="0 0 24 28" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M2.149 0L.537 4.119v19.63h6.72V28l4.123-4.25h3.29L22.463 14V0H2.149zm18.24 13.18l-3.29 3.387h-3.948l-2.886 2.973v-2.973H6.584V2.387h13.805v10.793zM17.07 5.367h-2.148v6.42h2.148V5.367zm-5.907 0h-2.15v6.42h2.15V5.367z"/></svg>',
+      kick:    '<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M4 3h4v7l4.5-7H17L12 12l5.5 9H13L8.5 14v7H4V3z"/></svg>',
+      tiktok:  '<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V9.05a8.16 8.16 0 0 0 4.77 1.52V7.12a4.85 4.85 0 0 1-1-.43z"/></svg>',
+      youtube: '<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M23.495 6.205a3.007 3.007 0 0 0-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 0 0 .527 6.205a31.247 31.247 0 0 0-.522 5.805 31.247 31.247 0 0 0 .522 5.783 3.007 3.007 0 0 0 2.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 0 0 2.088-2.088 31.247 31.247 0 0 0 .5-5.783 31.247 31.247 0 0 0-.5-5.805zM9.609 15.601V8.408l6.264 3.602z"/></svg>',
+      custom:  '<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>'
+    };
+
+    var PLATFORM_LABELS = {
+      twitch: 'Twitch', kick: 'Kick', tiktok: 'TikTok', youtube: 'YouTube', custom: 'Chat'
+    };
+
+    // ── PARTÍCULAS ──────────────────────────────────────────
+    var pColors = ['#FF6B9D','#FFD700','#89D4FF','#D4BBFF','#7FFF7F'];
+    var pc = document.getElementById('particles');
+    for (var i = 0; i < 15; i++) {
+      var p = document.createElement('div');
+      p.className = 'particle';
+      p.style.left = Math.random()*100+'%';
+      p.style.top  = Math.random()*100+'%';
+      p.style.background = pColors[Math.floor(Math.random()*pColors.length)];
+      p.style.animationDelay    = Math.random()*3+'s';
+      p.style.animationDuration = (Math.random()*2+2)+'s';
+      pc.appendChild(p);
+    }
+
+    // ── ESTADO ──────────────────────────────────────────────
+    var chatContainer      = document.getElementById('chat-container');
+    var messageListWrapper = document.getElementById('message-list-wrapper');
+    var topSpacer          = document.getElementById('spacer');
+    var connectionDot      = document.getElementById('connection-dot');
+
+    var pastelColors    = ['pastel-yellow','pastel-pink','pastel-blue','pastel-lavender','pastel-peach','pastel-mint'];
+    var bubblePositions = ['bubble-left','bubble-right','bubble-center'];
+    var decorations     = ['💫','⭐','✨','🌟','💖','💕','🌸','🎀','🌈','⚡'];
+
+    var colorIdx = 0, posIdx = 0;
+    function nextColor() { var c=pastelColors[colorIdx]; colorIdx=(colorIdx+1)%pastelColors.length; return c; }
+    function nextPos()   { var p=bubblePositions[posIdx]; posIdx=(posIdx+1)%bubblePositions.length; return p; }
+    function randDeco()  { return decorations[Math.floor(Math.random()*decorations.length)]; }
+
+    // ── BADGES ──────────────────────────────────────────────
+    var BADGE_ICONS = {
+      broadcaster: '👑', moderator: '⚔️', vip: '💎',
+      subscriber: '⭐', founder: '🏆', og: '🔥', bits: '💎',
+    };
+    var BADGE_LABELS = {
+      broadcaster: 'Owner', moderator: 'Mod', vip: 'VIP',
+      subscriber: 'Sub', founder: 'Founder', og: 'OG', bits: 'Bits',
+    };
+
+    function buildBadgesHTML(roles) {
+      if (!roles || !roles.length) return '';
+      var html = '<div class="badges-row">';
+      for (var i = 0; i < roles.length; i++) {
+        var r    = roles[i];
+        var type = (r.type || '').toLowerCase();
+        var cls  = 'badge-' + (BADGE_ICONS[type] ? type : 'default');
+        var icon = BADGE_ICONS[type] || '•';
+        var lbl  = BADGE_LABELS[type] || r.label || r.type;
+        html += '<span class="role-badge ' + cls + '">' + icon + ' ' + lbl + '</span>';
+      }
+      html += '</div>';
+      return html;
+    }
+
+    // ── BADGE DE PLATAFORMA ──────────────────────────────────
+    function buildPlatformBadge(platform) {
+      var logo  = PLATFORM_LOGOS[platform] || PLATFORM_LOGOS.custom;
+      var label = PLATFORM_LABELS[platform] || platform;
+      return '<span class="platform-badge ' + platform + '">' + logo + label + '</span>';
+    }
+
+    // ── AGREGAR MENSAJE ─────────────────────────────────────
+    function addMessage(data) {
+      if (!data.chatname && !data.chatmessage) return;
+
+      var msgDiv = document.createElement('div');
+      msgDiv.id  = data.mid || ('msg-'+Date.now());
+      var pos    = nextPos();
+      msgDiv.classList.add('message-bubble', pos);
+
+      var color    = nextColor();
+      var tailCls  = msgDiv.classList.contains('bubble-right') ? 'bubble-tail-right' : 'bubble-tail-left';
+      var platform = data.platform || data.type || 'custom';
+
+      // Avatar
+      var avatarHTML = '';
+      if (data.chatimg) {
+        avatarHTML = '<div class="avatar-box">' +
+          '<img class="avatar-img" src="' + data.chatimg + '" onerror="this.style.display=\'none\'">' +
+          '</div>';
+      } else {
+        var logo = PLATFORM_LOGOS[platform] || PLATFORM_LOGOS.custom;
+        avatarHTML = '<div class="avatar-box" style="background:#eee;display:flex;align-items:center;justify-content:center;padding:10px;">' +
+          '<div style="width:100%;height:100%;color:#999;">' + logo + '</div>' +
+          '</div>';
+      }
+
+      // Badges de rol
+      var badgesHTML = buildBadgesHTML(data.roles);
+
+      // Badge de plataforma
+      var platformBadgeHTML = buildPlatformBadge(platform);
+
+      // Nombre con color
+      var nameStyle = data.nameColor ? 'color:' + data.nameColor + ';' : '';
+      var nameHTML  = '<span class="username" style="' + nameStyle + '">' + escHtml(data.chatname || '') + '</span>';
+
+      msgDiv.innerHTML =
+        '<div class="bubble-container ' + color + '">' +
+          '<div class="' + tailCls + '"></div>' +
+          '<div class="spinning-gif"><img src="https://media1.tenor.com/m/7exwykqMlE0AAAAC/kurukuru-eve-kurukuru.gif" alt=""></div>' +
+          '<div class="deco-sparkle"></div>' +
+          '<div class="deco-heart">' + randDeco() + '</div>' +
+          '<div class="message-header">' +
+            avatarHTML +
+            '<div class="user-info">' +
+              (badgesHTML ? '<div class="badges-row-wrap">' + badgesHTML + '</div>' : '') +
+              '<div class="name-row">' +
+                platformBadgeHTML +
+                nameHTML +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="message-content">' + escHtml(data.chatmessage || '') + '</div>' +
+        '</div>';
+
+      messageListWrapper.appendChild(msgDiv);
+
+      // Animación entrada
+      gsap.set(msgDiv, { opacity:0, y:50, scale:0.85, rotation: Math.random()>0.5 ? -8 : 8 });
+      gsap.to(msgDiv, {
+        opacity:1, y:0, scale:1, rotation:0,
+        duration:0.6, ease:'back.out(1.7)',
+        onStart: function() { msgDiv.classList.add('visible'); },
+        onComplete: function() {
+          var c = msgDiv.querySelector('.bubble-container');
+          if (Math.random()>0.7) { c.classList.add('glitch'); setTimeout(function(){ c.classList.remove('glitch'); },300); }
+          if (Math.random()>0.7) gsap.to(c,{x:[0,-2,2,-2,2,0],duration:0.3,ease:'power2.inOut'});
+          var ab = msgDiv.querySelector('.avatar-box');
+          if (ab && Math.random()>0.8) gsap.to(ab,{scale:1.15,duration:0.2,ease:'power2.out',yoyo:true,repeat:1});
+        }
+      });
+
+      // Limpiar mensajes viejos
+      var msgs = Array.from(messageListWrapper.children).filter(function(c){ return c.classList.contains('message-bubble'); });
+      if (msgs.length > MAX_MESSAGES) {
+        var old = msgs[0];
+        var oldH = old.offsetHeight + (parseFloat(getComputedStyle(old).marginBottom)||0);
+        var newH = (parseFloat(topSpacer.style.height)||0) + oldH;
+        topSpacer.style.height = (newH > MAX_SPACER ? 0 : newH) + 'px';
+        gsap.killTweensOf(old);
+        gsap.to(old, { opacity:0, scale:0.8, duration:0.3, onComplete:function(){
+          messageListWrapper.removeChild(old);
+          setTimeout(adjustScroll, 50);
+        }});
+      }
+      setTimeout(adjustScroll, 100);
+    }
+
+    function adjustScroll() {
+      requestAnimationFrame(function(){
+        var sh = messageListWrapper.scrollHeight;
+        var ch = chatContainer.clientHeight;
+        var ty = Math.min(0, sh > ch ? -(sh-ch) : 0);
+        gsap.killTweensOf(messageListWrapper);
+        gsap.to(messageListWrapper, { y:ty, duration:0.5, ease:'power2.out' });
+      });
+    }
+
+    function escHtml(str) {
+      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // ── WEBSOCKET ────────────────────────────────────────────
+    var ws, retryDelay = 1000;
+
+    function connect() {
+      try { ws = new WebSocket(SERVER_URL); } catch(e) {
+        connectionDot.classList.remove('connected');
+        setTimeout(connect, retryDelay);
+        return;
+      }
+
+      ws.onopen = function() {
+        connectionDot.classList.add('connected');
+        retryDelay = 1000;
+      };
+
+      ws.onmessage = function(e) {
+        try {
+          var data = JSON.parse(e.data);
+          if (data.type === 'status') return;
+          addMessage(data);
+        } catch(err) {}
+      };
+
+      ws.onclose = function() {
+        connectionDot.classList.remove('connected');
+        retryDelay = Math.min(retryDelay*2, 30000);
+        setTimeout(connect, retryDelay);
+      };
+
+      ws.onerror = function() { ws.close(); };
+    }
+
+    connect();
+  </script>
+</body>
+</html>

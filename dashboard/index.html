@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meeve Multichat — Dashboard</title>
+  <style>
+    :root {
+      --bg:     #0f172a;
+      --panel:  #1e293b;
+      --border: #334155;
+      --text:   #f1f5f9;
+      --muted:  #94a3b8;
+      --green:  #22c55e;
+      --red:    #ef4444;
+      --yellow: #eab308;
+      --twitch: #9146FF;
+      --kick:   #53FC18;
+      --tiktok: #FF0050;
+      --youtube:#FF0000;
+      --custom: #FF6B9D;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; min-height:100vh; }
+
+    header {
+      background:var(--panel); border-bottom:1px solid var(--border);
+      padding:16px 24px; display:flex; align-items:center;
+      justify-content:space-between; gap:12px; flex-wrap:wrap;
+    }
+    header h1 {
+      font-size:20px; font-weight:700;
+      background:linear-gradient(135deg,#FF6B9D,#9146FF);
+      -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+    }
+    #ws-status { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); }
+    #ws-dot { width:10px; height:10px; border-radius:50%; background:var(--red); transition:background 0.3s; }
+    #ws-dot.ok { background:var(--green); }
+
+    .layout {
+      display:grid; grid-template-columns:340px 1fr;
+      height:calc(100vh - 57px); overflow:hidden;
+    }
+    .sidebar {
+      background:var(--panel); border-right:1px solid var(--border);
+      overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:14px;
+    }
+    .main { display:flex; flex-direction:column; overflow:hidden; }
+
+    .card { background:var(--bg); border:1px solid var(--border); border-radius:12px; padding:16px; }
+    .card-title {
+      font-size:11px; font-weight:700; letter-spacing:1px;
+      text-transform:uppercase; color:var(--muted); margin-bottom:12px;
+    }
+
+    .form-group { margin-bottom:10px; }
+    .form-group label { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+    .input-row { display:flex; gap:8px; }
+    input[type=text] {
+      flex:1; background:rgba(255,255,255,0.06); border:1px solid var(--border);
+      border-radius:8px; padding:8px 12px; color:var(--text); font-size:13px; outline:none;
+      transition:border-color 0.2s;
+    }
+    input[type=text]:focus { border-color:#FF6B9D; }
+    input[type=text]::placeholder { color:var(--muted); }
+
+    .btn {
+      padding:8px 16px; border-radius:8px; border:none; font-size:13px;
+      font-weight:600; cursor:pointer; transition:all 0.2s; white-space:nowrap;
+    }
+    .btn-primary { background:linear-gradient(135deg,#FF6B9D,#9146FF); color:#fff; }
+    .btn-primary:hover { opacity:0.85; transform:translateY(-1px); }
+    .btn-secondary { background:rgba(255,255,255,0.08); color:var(--text); border:1px solid var(--border); }
+    .btn-secondary:hover { background:rgba(255,255,255,0.14); }
+    .btn-tiktok { background:rgba(255,0,80,0.15); color:var(--tiktok); border:1px solid rgba(255,0,80,0.4); }
+    .btn-tiktok:hover { background:rgba(255,0,80,0.25); }
+    .btn-youtube { background:rgba(255,0,0,0.15); color:var(--youtube); border:1px solid rgba(255,0,0,0.4); }
+    .btn-youtube:hover { background:rgba(255,0,0,0.25); }
+    .btn-full { width:100%; }
+    .hint { font-size:11px; color:var(--muted); margin-top:5px; }
+
+    .platform-row {
+      display:flex; align-items:center; gap:10px;
+      padding:10px 12px; border-radius:8px;
+      background:rgba(255,255,255,0.04); margin-bottom:6px;
+    }
+    .platform-dot { width:10px; height:10px; border-radius:50%; background:var(--red); flex-shrink:0; transition:background 0.3s; }
+    .platform-dot.ok { background:var(--green); box-shadow:0 0 6px var(--green); }
+    .platform-icon { font-size:18px; }
+    .platform-name { font-weight:600; font-size:14px; flex:1; }
+    .platform-channel { font-size:12px; color:var(--muted); }
+
+    .tag { display:inline-block; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
+    .tag-connector { background:rgba(34,197,94,0.15); color:var(--green); }
+    .tag-puppeteer { background:rgba(234,179,8,0.15); color:var(--yellow); }
+
+    .info-box { border-radius:8px; padding:10px 12px; font-size:12px; line-height:1.7; }
+    .info-box.green { background:rgba(83,252,24,0.07); border:1px solid rgba(83,252,24,0.2); color:#a7f3a0; }
+    .info-box.red   { background:rgba(255,0,80,0.08); border:1px solid rgba(255,0,80,0.25); color:#ffaaaa; }
+    .info-box.warn  { background:rgba(234,179,8,0.08); border:1px solid rgba(234,179,8,0.25); color:#fde68a; }
+    .info-box.youtube { background:rgba(255,0,0,0.07); border:1px solid rgba(255,0,0,0.25); color:#fca5a5; }
+
+    .url-box {
+      background:rgba(255,255,255,0.04); border:1px solid var(--border);
+      border-radius:8px; padding:10px 12px; font-size:12px;
+      font-family:monospace; color:#7dd3fc; word-break:break-all;
+      cursor:pointer; transition:background 0.2s;
+    }
+    .url-box:hover { background:rgba(255,255,255,0.08); }
+
+    .chat-panel {
+      flex:1; overflow-y:auto; padding:16px;
+      display:flex; flex-direction:column; gap:8px; scroll-behavior:smooth;
+    }
+    .msg-item {
+      display:flex; gap:10px; align-items:flex-start;
+      padding:10px 12px; background:rgba(255,255,255,0.03);
+      border-radius:10px; border-left:3px solid transparent;
+      animation:fadeIn 0.3s ease;
+    }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+    .msg-item.twitch  { border-left-color:var(--twitch); }
+    .msg-item.kick    { border-left-color:var(--kick); }
+    .msg-item.tiktok  { border-left-color:var(--tiktok); }
+    .msg-item.youtube { border-left-color:var(--youtube); }
+    .msg-item.custom  { border-left-color:var(--custom); }
+    .msg-avatar {
+      width:36px; height:36px; border-radius:50%; background:var(--border);
+      background-size:cover; background-position:center; flex-shrink:0;
+      display:flex; align-items:center; justify-content:center; overflow:hidden;
+    }
+    .msg-item.twitch  .msg-avatar { background:rgba(145,70,255,0.3); }
+    .msg-item.kick    .msg-avatar { background:rgba(83,252,24,0.2); }
+    .msg-item.tiktok  .msg-avatar { background:rgba(20,20,20,0.8); }
+    .msg-item.youtube .msg-avatar { background:rgba(255,0,0,0.2); }
+    .msg-item.custom  .msg-avatar { background:rgba(255,107,157,0.2); }
+    .msg-body { flex:1; min-width:0; }
+    .msg-header { display:flex; align-items:center; gap:6px; margin-bottom:3px; flex-wrap:wrap; }
+    .msg-user { font-weight:700; font-size:13px; }
+    .msg-platform { font-size:10px; padding:2px 7px 2px 5px; border-radius:999px; font-weight:700; letter-spacing:0.3px; }
+    .msg-platform svg { width:11px; height:11px; }
+    .msg-platform.twitch  { background:rgba(145,70,255,0.2); color:var(--twitch); }
+    .msg-platform.kick    { background:rgba(83,252,24,0.15); color:var(--kick); }
+    .msg-platform.tiktok  { background:rgba(255,255,255,0.1); color:#fff; border:1px solid rgba(255,255,255,0.15); }
+    .msg-platform.youtube { background:rgba(255,0,0,0.15); color:var(--youtube); }
+    .msg-platform.custom  { background:rgba(255,107,157,0.15); color:var(--custom); }
+    .msg-time { font-size:10px; color:var(--muted); margin-left:auto; }
+    .msg-text { font-size:13px; color:var(--text); line-height:1.5; word-break:break-word; }
+
+    .input-bar {
+      padding:12px 16px; border-top:1px solid var(--border);
+      background:var(--panel); display:flex; gap:8px;
+    }
+    .input-bar input { flex:1; }
+
+    ::-webkit-scrollbar { width:6px; }
+    ::-webkit-scrollbar-track { background:transparent; }
+    ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+    /* ── HIGHLIGHT ── */
+    .msg-item {
+      cursor: pointer;
+    }
+    .msg-item:hover {
+      background: rgba(255,107,157,0.08);
+      border-left-color: #FF6B9D !important;
+      transition: background 0.15s, border-left-color 0.15s;
+    }
+    .msg-item.highlighted {
+      background: rgba(255,107,157,0.18);
+      border-left-color: #FF6B9D !important;
+      outline: 2px solid rgba(255,107,157,0.5);
+      animation: hl-pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes hl-pulse {
+      0%,100%{ outline-color: rgba(255,107,157,0.4); }
+      50%{ outline-color: rgba(255,107,157,0.9); }
+    }
+    .msg-highlight-btn {
+      margin-left: auto;
+      padding: 3px 8px; font-size: 11px; border-radius: 6px;
+      border: 1px solid rgba(255,107,157,0.5);
+      background: rgba(255,107,157,0.12); color: #FF6B9D;
+      cursor: pointer; white-space: nowrap; display: none;
+      font-weight:700;
+    }
+    .msg-item:hover .msg-highlight-btn { display: inline-block; }
+    .msg-item.highlighted .msg-highlight-btn { display: inline-block; background: rgba(255,107,157,0.35); }
+
+    #hl-bar {
+      padding:8px 16px; background: rgba(255,107,157,0.12);
+      border-top:1px solid rgba(255,107,157,0.3);
+      display:none; align-items:center; gap:10px; font-size:12px; color:#FF6B9D;
+    }
+    #hl-bar.active { display:flex; }
+    #hl-bar strong { color: var(--text); max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+    #toast {
+      position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+      background:#1e293b; border:1px solid #334155; color:var(--text);
+      padding:10px 20px; border-radius:8px; font-size:13px; z-index:999;
+      opacity:0; pointer-events:none; transition:opacity 0.3s; white-space:nowrap;
+    }
+    #toast.show { opacity:1; }
+
+    .modal-overlay {
+      display:none; position:fixed; inset:0;
+      background:rgba(0,0,0,0.7); z-index:200;
+      align-items:center; justify-content:center;
+    }
+    .modal-overlay.open { display:flex; }
+    .modal-box {
+      background:var(--panel); border:1px solid var(--border);
+      border-radius:16px; padding:28px; max-width:500px; width:90%; position:relative;
+    }
+    .modal-close {
+      position:absolute; top:14px; right:16px;
+      background:transparent; border:none; color:var(--muted); font-size:20px; cursor:pointer;
+    }
+    .modal-box ol { padding-left:20px; line-height:2.2; font-size:13px; color:var(--muted); }
+    .modal-box code { background:#0f172a; padding:4px 8px; border-radius:6px; font-size:12px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🎮 Meeve Multichat Dashboard</h1>
+  <div id="ws-status">
+    <span id="ws-dot"></span>
+    <span id="ws-label">Desconectado</span>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="sidebar">
+
+    <div class="card">
+      <div class="card-title">Servidor</div>
+      <div class="form-group">
+        <label>URL del servidor (Render / Railway)</label>
+        <div class="input-row">
+          <input id="serverUrl" type="text" placeholder="wss://tu-app.onrender.com" />
+          <button class="btn btn-primary" onclick="saveAndConnect()">Conectar</button>
+        </div>
+        <div class="hint">Se guarda en el navegador automáticamente</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Estado conexiones</div>
+      <div class="platform-row">
+        <span class="platform-dot" id="dot-twitch"></span>
+        <span class="platform-icon">🟣</span>
+        <div>
+          <div class="platform-name">Twitch</div>
+          <div class="platform-channel" id="ch-twitch">—</div>
+        </div>
+      </div>
+      <div class="platform-row">
+        <span class="platform-dot" id="dot-kick"></span>
+        <span class="platform-icon">🟢</span>
+        <div>
+          <div class="platform-name">Kick</div>
+          <div class="platform-channel" id="ch-kick">—</div>
+        </div>
+      </div>
+      <div class="platform-row">
+        <span class="platform-dot" id="dot-tiktok"></span>
+        <span class="platform-icon">🎵</span>
+        <div>
+          <div class="platform-name">TikTok</div>
+          <div class="platform-channel" id="ch-tiktok">—</div>
+        </div>
+        <span id="tiktok-mode-tag" class="tag tag-connector">connector</span>
+      </div>
+      <div class="platform-row">
+        <span class="platform-dot" id="dot-youtube"></span>
+        <span class="platform-icon">▶️</span>
+        <div>
+          <div class="platform-name">YouTube</div>
+          <div class="platform-channel" id="ch-youtube">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Kick — Resolver ID</div>
+      <div id="kick-status-box" class="info-box green" style="margin-bottom:10px;">
+        kick.com bloquea al servidor por IP. Pulsa el botón para que <strong>tu navegador</strong> resuelva el ID del chatroom.
+      </div>
+      <div style="display:flex; gap:8px; margin-bottom:8px;">
+        <button class="btn btn-secondary btn-full" onclick="resolveKickId()">🔍 Resolver automático</button>
+        <button class="btn btn-secondary btn-full" onclick="toggleKickManual()">✏️ Manual</button>
+      </div>
+      <div id="kick-manual-wrap" style="display:none;">
+        <div class="form-group" style="margin:0;">
+          <label>Kick Channel ID (número)</label>
+          <div class="input-row">
+            <input id="kickChannelId" type="text" placeholder="ej: 1234567" />
+            <button class="btn btn-primary" onclick="sendKickId()">Enviar</button>
+          </div>
+          <div class="hint">kick.com/tucanal → F12 → Network → busca "chatrooms.XXXXXX"</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">TikTok — Control</div>
+      <div style="display:flex; gap:8px; margin-bottom:10px;">
+        <button class="btn btn-tiktok btn-full" onclick="restartTikTok()">🔄 Reconectar</button>
+        <button class="btn btn-secondary btn-full" onclick="openTikTokLive()">📺 Abrir Live</button>
+      </div>
+      <div class="info-box red">
+        TikTok bloquea iframes — "Abrir Live" abre en nueva pestaña.<br>
+        Si falla con error 403:
+        <a href="#" onclick="openModal('tiktok-modal'); return false;" style="color:#FF6B9D;">¿Cómo usar TIKTOK_SESSION_ID?</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">YouTube — Control</div>
+      <div id="youtube-status-box" class="info-box youtube" style="margin-bottom:10px;">
+        ⏳ Esperando conexión con el servidor...
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-youtube btn-full" onclick="restartYouTube()">🔄 Reconectar ahora</button>
+        <button class="btn btn-secondary btn-full" onclick="openYouTubeLive()">📺 Abrir Live</button>
+      </div>
+      <div class="hint" style="margin-top:8px;">Úsalo cuando enciendas el directo en YouTube para conectar sin esperar.</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">URLs para OBS</div>
+      <div class="info-box warn" style="margin-bottom:12px; font-size:11px;">
+        Las URLs se generan automáticamente desde la ubicación del dashboard en GitHub Pages.<br>
+        Asegúrate de tener el servidor configurado arriba.
+      </div>
+
+      <!-- Overlay chat multichat -->
+      <div style="margin-bottom:12px;">
+        <div style="font-size:11px; font-weight:700; color:var(--muted); letter-spacing:0.5px; text-transform:uppercase; margin-bottom:5px;">
+          💬 Chat multichat (burbujas)
+        </div>
+        <div class="url-box" id="url-chat" onclick="copyUrl('url-chat')" title="Click para copiar" style="margin-bottom:5px; font-size:11px;">
+          Configura el servidor primero...
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button class="btn btn-secondary btn-full" style="font-size:11px; padding:5px 10px;" onclick="copyUrl('url-chat')">📋 Copiar</button>
+          <button class="btn btn-secondary btn-full" style="font-size:11px; padding:5px 10px;" onclick="openUrl('url-chat')">🔗 Abrir</button>
+        </div>
+      </div>
+
+      <!-- Chat un mensaje -->
+      <div style="margin-bottom:12px;">
+        <div style="font-size:11px; font-weight:700; color:var(--muted); letter-spacing:0.5px; text-transform:uppercase; margin-bottom:5px;">
+          🗨️ Chat un mensaje
+        </div>
+        <div class="url-box" id="url-chatuno" onclick="copyUrl('url-chatuno')" title="Click para copiar" style="margin-bottom:5px; font-size:11px;">
+          Configura el servidor primero...
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button class="btn btn-secondary btn-full" style="font-size:11px; padding:5px 10px;" onclick="copyUrl('url-chatuno')">📋 Copiar</button>
+          <button class="btn btn-secondary btn-full" style="font-size:11px; padding:5px 10px;" onclick="openUrl('url-chatuno')">🔗 Abrir</button>
+        </div>
+      </div>
+
+      <!-- Destacador -->
+      <div>
+        <div style="font-size:11px; font-weight:700; color:var(--muted); letter-spacing:0.5px; text-transform:uppercase; margin-bottom:5px;">
+          📌 Destacador de mensajes
+        </div>
+        <div class="url-box" id="url-destacador" onclick="copyUrl('url-destacador')" title="Click para copiar" style="margin-bottom:5px; font-size:11px;">
+          Configura el servidor primero...
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button class="btn btn-secondary btn-full" style="font-size:11px; padding:5px 10px;" onclick="copyUrl('url-destacador')">📋 Copiar</button>
+          <button class="btn btn-secondary btn-full" style="font-size:11px; padding:5px 10px;" onclick="openUrl('url-destacador')">🔗 Abrir</button>
+        </div>
+        <div class="hint" style="margin-top:5px;">Tiempo visible: <input id="showtime-input" type="number" style="width:60px;padding:2px 5px;font-size:11px;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:4px;color:var(--text);" value="12" min="1" max="120" onchange="updateOverlayUrls()"> seg</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="main">
+    <div class="chat-panel" id="chat-panel">
+      <div id="chat-placeholder" style="text-align:center; color:var(--muted); margin:auto; font-size:14px;">
+        Los mensajes aparecerán aquí cuando el servidor esté conectado ✨
+      </div>
+    </div>
+    <div id="hl-bar">
+      📌 Destacando: <strong id="hl-bar-text">—</strong>
+      <button class="btn btn-secondary" style="font-size:11px;padding:4px 10px;margin-left:auto;" onclick="clearHighlight()">✕ Quitar destacado</button>
+    </div>
+    <div class="input-bar">
+      <input id="custom-msg-input" type="text" placeholder="Escribe un mensaje personalizado y pulsa Enter…"
+             onkeydown="if(event.key==='Enter') sendCustomMessage()" />
+      <button class="btn btn-primary" onclick="sendCustomMessage()">Enviar ⭐</button>
+      <button class="btn btn-secondary" onclick="injectTestMessage()" title="Inyectar mensaje de prueba local">🧪</button>
+    </div>
+  </div>
+</div>
+
+<div id="tiktok-modal" class="modal-overlay">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeModal('tiktok-modal')">✕</button>
+    <h3 style="margin-bottom:16px; font-size:16px;">🔑 Obtener TIKTOK_SESSION_ID</h3>
+    <ol>
+      <li>Abre <strong style="color:var(--text)">tiktok.com</strong> en Chrome e inicia sesión</li>
+      <li>Pulsa <strong style="color:var(--text)">F12</strong> → pestaña <strong style="color:var(--text)">Application</strong></li>
+      <li>Panel izquierdo: <strong style="color:var(--text)">Cookies → https://www.tiktok.com</strong></li>
+      <li>Busca la cookie <strong style="color:#FF6B9D">sessionid</strong> y copia el valor</li>
+      <li>En Render/Railway → Variables de entorno:<br>
+        <code>TIKTOK_SESSION_ID = (el valor copiado)</code>
+      </li>
+      <li>Reinicia el servidor</li>
+    </ol>
+    <p style="margin-top:14px; font-size:12px; color:var(--muted);">⚠️ El sessionid caduca cada ~30 días.</p>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── STORAGE ──────────────────────────────────────────────────
+var store = {
+  get: function(k,d){ d=d||''; try{return localStorage.getItem(k)||d;}catch(e){return d;} },
+  set: function(k,v){ try{localStorage.setItem(k,v);}catch(e){} }
+};
+
+// ── ESTADO ───────────────────────────────────────────────────
+var ws=null, retryDelay=1000, isConnected=false, autoKickDone=false;
+var currentChannels={twitch:'',kick:'',tiktok:'',youtube:''};
+var platformLogos = {
+  twitch:  '<svg viewBox="0 0 24 28" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M2.149 0L.537 4.119v19.63h6.72V28l4.123-4.25h3.29L22.463 14V0H2.149zm18.24 13.18l-3.29 3.387h-3.948l-2.886 2.973v-2.973H6.584V2.387h13.805v10.793zM17.07 5.367h-2.148v6.42h2.148V5.367zm-5.907 0h-2.15v6.42h2.15V5.367z"/></svg>',
+  kick:    '<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M4 3h4v7l4.5-7H17L12 12l5.5 9H13L8.5 14v7H4V3z"/></svg>',
+  tiktok:  '<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V9.05a8.16 8.16 0 0 0 4.77 1.52V7.12a4.85 4.85 0 0 1-1-.43z"/></svg>',
+  youtube: '<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M23.495 6.205a3.007 3.007 0 0 0-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 0 0 .527 6.205a31.247 31.247 0 0 0-.522 5.805 31.247 31.247 0 0 0 .522 5.783 3.007 3.007 0 0 0 2.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 0 0 2.088-2.088 31.247 31.247 0 0 0 .5-5.783 31.247 31.247 0 0 0-.5-5.805zM9.609 15.601V8.408l6.264 3.602z"/></svg>',
+  custom:  '<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>'
+};
+
+var platformColors = {
+  twitch: '#9146FF',
+  kick: '#53FC18',
+  tiktok: '#000000',
+  youtube: '#FF0000',
+  custom: '#FF6B9D'
+};
+
+// ── KICK WEBSOCKET ───────────────────────────────────────────
+var kickWs=null, kickRetryDelay=3000, kickRetryTimeout=null;
+
+function connectKickBrowser(channelId) {
+  if (!channelId) return;
+  if (kickWs) {
+    try { kickWs.onmessage=null; kickWs.onclose=null; kickWs.onerror=null; kickWs.close(); } catch(e){}
+    kickWs = null;
+  }
+  if (kickRetryTimeout) { clearTimeout(kickRetryTimeout); kickRetryTimeout=null; }
+
+  var box = document.getElementById('kick-status-box');
+  if (box) { box.className='info-box warn'; box.innerHTML='⏳ Conectando a Kick desde el navegador...'; }
+
+  var urls = [
+    'wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0-rc2&flash=false',
+    'wss://ws-us2.pusher.com/app/eb1d5f283081a78b932c?protocol=7&client=js&version=7.6.0&flash=false',
+  ];
+  var urlIdx = parseInt(localStorage.getItem('kickWsUrlIndex')||'0');
+  tryKickUrl(channelId, urls, urlIdx);
+}
+
+function tryKickUrl(channelId, urls, idx) {
+  if (idx >= urls.length) idx = 0;
+  console.log('[Kick Browser] Conectando a Pusher, chatroom:', channelId);
+
+  try { kickWs = new WebSocket(urls[idx]); } catch(e) {
+    console.error('[Kick Browser] Error creando WS:', e.message);
+    kickRetryTimeout = setTimeout(function(){ tryKickUrl(channelId, urls, (idx+1)%urls.length); }, 5000);
+    return;
+  }
+
+  kickWs.onopen = function() {
+    kickRetryDelay = 3000;
+    localStorage.setItem('kickWsUrlIndex', idx);
+    var sub = JSON.stringify({ event:'pusher:subscribe', data:{ auth:'', channel:'chatrooms.'+channelId+'.v2' } });
+    kickWs.send(sub);
+    console.log('[Kick Browser] Suscrito a chatrooms.'+channelId+'.v2');
+  };
+
+  kickWs.onmessage = function(e) {
+    try {
+      var msg   = JSON.parse(e.data);
+      var event = msg.event || '';
+
+      if (event === 'pusher:connection_established' || event === 'pusher:pong') return;
+
+      if (event === 'pusher_internal:subscription_succeeded') {
+        console.log('[Kick Browser] ✅ Suscripción confirmada');
+        var box = document.getElementById('kick-status-box');
+        if (box) { box.className='info-box green'; box.innerHTML='✅ Kick conectado (chatroom '+channelId+')'; }
+        if (ws && ws.readyState===1) ws.send(JSON.stringify({type:'kick_connected'}));
+        return;
+      }
+
+      if (event === 'pusher:error') {
+        var ed = typeof msg.data==='string' ? JSON.parse(msg.data) : (msg.data||{});
+        console.warn('[Kick Browser] Error Pusher:', ed.message);
+        if (ed.message && ed.message.indexOf('Existing subscription') !== -1) return;
+        kickWs.close();
+        return;
+      }
+
+      var isChatEvent = event==='App\Events\ChatMessageEvent'
+                     || event==='App\\Events\\ChatMessageEvent'
+                     || event.indexOf('ChatMessageEvent') !== -1;
+      if (!isChatEvent) return;
+
+      var d = typeof msg.data==='string' ? JSON.parse(msg.data) : msg.data;
+      console.log('[Kick Browser] 💬 Mensaje de', d.sender && d.sender.username, ':', d.content);
+
+      var kickRoles = [];
+      var badges = (d.sender && d.sender.identity && d.sender.identity.badges) || [];
+      for (var bi=0; bi<badges.length; bi++) {
+        var b=badges[bi], btype=(b.type||'').toLowerCase();
+        if      (btype==='broadcaster'||btype==='owner') kickRoles.push({type:'broadcaster',label:'Owner'});
+        else if (btype==='moderator'||btype==='mod')     kickRoles.push({type:'moderator',label:'Mod'});
+        else if (btype==='vip')                          kickRoles.push({type:'vip',label:'VIP'});
+        else if (btype==='subscriber'||btype==='sub')    kickRoles.push({type:'subscriber',label:'Sub'});
+        else if (btype==='og')                           kickRoles.push({type:'og',label:'OG'});
+        else if (b.type)                                 kickRoles.push({type:btype,label:b.type});
+      }
+
+      var username = (d.sender && d.sender.username) || 'Unknown';
+      var nameColor = (d.sender && d.sender.identity && d.sender.identity.color) || '#53FC18';
+      var msgId = d.id || ('kick-'+Date.now());
+
+      // Resolver avatar desde el navegador (el servidor no puede acceder a kick.com)
+      getKickAvatarBrowser(username, function(avatar) {
+        var chatMsg = {
+          type:        'kick_message',
+          platform:    'kick',
+          chatname:    username,
+          chatmessage: d.content,
+          nameColor:   nameColor,
+          chatimg:     avatar || null,
+          roles:       kickRoles,
+          mid:         msgId
+        };
+
+        if (ws && ws.readyState===1) {
+          ws.send(JSON.stringify(chatMsg));
+          console.log('[Kick Browser] ✉️ Enviado al servidor');
+        } else {
+          console.warn('[Kick Browser] ⚠️ No hay conexión con el servidor, mostrando local');
+          appendMessage(chatMsg);
+        }
+      });
+
+    } catch(err) { console.error('[Kick Browser] Error parseando:', err.message); }
+  };
+
+  kickWs.onclose = function(e) {
+    console.log('[Kick Browser] Desconectado (code:', e.code, '). Reintentando en', kickRetryDelay/1000, 's...');
+    var box = document.getElementById('kick-status-box');
+    if (box) { box.className='info-box warn'; box.innerHTML='🔄 Kick desconectado, reintentando...'; }
+    if (ws && ws.readyState===1) ws.send(JSON.stringify({type:'kick_disconnected'}));
+    var nextIdx = e.code===4001 ? (idx+1)%urls.length : idx;
+    kickRetryDelay = Math.min(kickRetryDelay*1.5, 30000);
+    kickRetryTimeout = setTimeout(function(){ tryKickUrl(channelId, urls, nextIdx); }, kickRetryDelay);
+  };
+
+  kickWs.onerror = function(e) { console.error('[Kick Browser] WS error'); };
+
+  var pingInt = setInterval(function(){
+    if (kickWs && kickWs.readyState===1) {
+      kickWs.send(JSON.stringify({event:'pusher:ping',data:{}}));
+    } else {
+      clearInterval(pingInt);
+    }
+  }, 25000);
+}
+
+// ── KICK AVATAR CACHE (browser-side) ────────────────────────
+var kickAvatarCacheBrowser = {};
+var kickAvatarPendingBrowser = {};
+
+function getKickAvatarBrowser(username, callback) {
+  if (!username) return callback(null);
+  var slug = username.toLowerCase();
+  if (kickAvatarCacheBrowser[slug]) return callback(kickAvatarCacheBrowser[slug]);
+  if (kickAvatarPendingBrowser[slug]) { kickAvatarPendingBrowser[slug].push(callback); return; }
+  kickAvatarPendingBrowser[slug] = [callback];
+
+  fetch('https://kick.com/api/v2/channels/' + slug, { headers: { 'Accept': 'application/json' } })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var avatar = (data.user && (data.user.profile_pic || data.user.profilePic))
+                 || data.profile_pic || null;
+      if (avatar) {
+        kickAvatarCacheBrowser[slug] = avatar;
+        console.log('[Kick Avatar Browser] ✅', slug, '→', avatar.substring(0,50));
+      }
+      var cbs = kickAvatarPendingBrowser[slug] || [];
+      delete kickAvatarPendingBrowser[slug];
+      cbs.forEach(function(cb){ cb(avatar); });
+    })
+    .catch(function() {
+      var cbs = kickAvatarPendingBrowser[slug] || [];
+      delete kickAvatarPendingBrowser[slug];
+      cbs.forEach(function(cb){ cb(null); });
+    });
+}
+
+// ── INIT ─────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', function() {
+  var saved = store.get('serverUrl');
+  document.getElementById('serverUrl').value = saved;
+  updateOverlayUrls();
+  if (saved) connectWS(saved);
+});
+
+// ── WEBSOCKET SERVIDOR ───────────────────────────────────────
+function connectWS(url) {
+  if (!url) return;
+  if (ws) { try{ws.close();}catch(e){} }
+  var wsUrl = url.replace(/^https?/,'ws').replace(/\/$/,'');
+  try { ws = new WebSocket(wsUrl); } catch(e) { setStatus(false); scheduleRetry(url); return; }
+
+  ws.onopen = function() {
+    isConnected=true; retryDelay=1000; setStatus(true);
+    console.log('[WS] Conectado al servidor');
+    var savedKickId = store.get('kickChannelId');
+    if (savedKickId) {
+      console.log('[WS] Iniciando Kick con ID:', savedKickId);
+      connectKickBrowser(savedKickId);
+    }
+  };
+
+  ws.onmessage = function(e) {
+    try {
+      var data = JSON.parse(e.data);
+      if (data.type==='status') handleStatus(data);
+      else appendMessage(data);
+    } catch(err) { console.error('[WS] Error:', err.message); }
+  };
+
+  ws.onclose = function() { isConnected=false; setStatus(false); scheduleRetry(url); };
+  ws.onerror = function() { ws.close(); };
+}
+
+function scheduleRetry(url) {
+  retryDelay = Math.min(retryDelay*2, 30000);
+  setTimeout(function(){ connectWS(url); }, retryDelay);
+}
+
+function setStatus(ok) {
+  document.getElementById('ws-dot').className = ok?'ok':'';
+  document.getElementById('ws-label').textContent = ok?'Conectado':'Desconectado';
+}
+
+// ── STATUS ───────────────────────────────────────────────────
+function handleStatus(data) {
+  setPlatformStatus('twitch',   data.twitch,   (data.channels&&data.channels.twitch)  ||'—');
+  setPlatformStatus('kick',     data.kick,     (data.channels&&data.channels.kick)    ||'—');
+  setPlatformStatus('tiktok',   data.tiktok,   (data.channels&&data.channels.tiktok)  ||'—');
+  setPlatformStatus('youtube',  data.youtube,  (data.channels&&data.channels.youtube) ||'—');
+  if (data.channels) currentChannels = data.channels;
+
+  var modeTag = document.getElementById('tiktok-mode-tag');
+  if (modeTag) {
+    modeTag.textContent = data.tiktokMode||'connector';
+    modeTag.className = 'tag '+(data.tiktokMode==='puppeteer'?'tag-puppeteer':'tag-connector');
+  }
+
+  // Actualizar caja de estado YouTube
+  var ytBox = document.getElementById('youtube-status-box');
+  if (ytBox) {
+    if (data.youtube) {
+      ytBox.className='info-box green';
+      ytBox.innerHTML='✅ Conectado al chat en vivo';
+    } else if (data.channels && data.channels.youtube) {
+      ytBox.className='info-box youtube';
+      ytBox.innerHTML='⏳ Canal configurado (<strong>'+esc(data.channels.youtube)+'</strong>)<br>Sin live activo — pulsa Reconectar cuando estés en vivo.';
+    } else {
+      ytBox.className='info-box warn';
+      ytBox.innerHTML='⚠️ Configura <strong>YOUTUBE_HANDLE</strong> en las variables del servidor.';
+    }
+  }
+
+  if (!data.kick) {
+    var savedId = store.get('kickChannelId');
+    if (savedId && (!kickWs || kickWs.readyState > 1)) {
+      connectKickBrowser(savedId);
+    } else if (!savedId && !autoKickDone && data.channels && data.channels.kick) {
+      autoKickDone = true;
+      setTimeout(resolveKickId, 1500);
+    }
+  }
+}
+
+function setPlatformStatus(platform, connected, channel) {
+  var dot=document.getElementById('dot-'+platform);
+  var ch =document.getElementById('ch-' +platform);
+  if (dot) dot.className='platform-dot'+(connected?' ok':'');
+  if (ch)  ch.textContent=channel||'—';
+}
+
+// ── MENSAJES ─────────────────────────────────────────────────
+var currentHighlightMid = null;
+
+function appendMessage(data) {
+  var panel = document.getElementById('chat-panel');
+  var ph = document.getElementById('chat-placeholder');
+  if (ph) ph.remove();
+
+  var platform = data.platform||data.type||'custom';
+  var logo = platformLogos[platform] || platformLogos.custom;
+  var color = platformColors[platform] || '#FF6B9D';
+  var time = new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
+  var el = document.createElement('div');
+  el.className = 'msg-item '+platform;
+  el.dataset.mid = data.mid || '';
+
+  var avatarStyle   = data.chatimg ? "background-image:url('"+data.chatimg+"');background-size:cover;background-position:center;" : '';
+  var avatarContent = data.chatimg ? '' : '<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:6px;box-sizing:border-box;">'+logo+'</div>';
+  var nameStyle     = data.nameColor ? 'color:'+data.nameColor : '';
+
+  var platformLabel = platform.charAt(0).toUpperCase() + platform.slice(1);
+  var platformBadge =
+    '<span class="msg-platform '+platform+'" style="display:inline-flex;align-items:center;gap:4px;">' +
+      '<span style="width:11px;height:11px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">'+logo+'</span>' +
+      platformLabel +
+    '</span>';
+
+  el.innerHTML =
+    '<div class="msg-avatar" style="'+avatarStyle+'">'+avatarContent+'</div>'+
+    '<div class="msg-body">'+
+      '<div class="msg-header">'+
+        '<span class="msg-user" style="'+nameStyle+'">'+esc(data.chatname||'?')+'</span>'+
+        platformBadge+
+        '<span class="msg-time">'+time+'</span>'+
+        '<button class="msg-highlight-btn" onclick="event.stopPropagation();sendHighlight(this.closest(\'.msg-item\'))">📌 Destacar</button>'+
+      '</div>'+
+      '<div class="msg-text">'+esc(data.chatmessage||'')+'</div>'+
+    '</div>';
+
+  // Guardar data para poder enviarla al destacar
+  el._msgData = data;
+
+  // Click en el mensaje → destacar
+  el.addEventListener('click', function() {
+    sendHighlight(el);
+  });
+
+  panel.appendChild(el);
+  var msgs = panel.querySelectorAll('.msg-item');
+  if (msgs.length > 200) msgs[0].remove();
+  panel.scrollTop = panel.scrollHeight;
+}
+
+function sendHighlight(el) {
+  if (!isConnected || !ws) return toast('⚠️ No hay conexión con el servidor');
+  var data = el._msgData;
+  if (!data) return;
+
+  // Quitar highlight anterior
+  document.querySelectorAll('.msg-item.highlighted').forEach(function(m){ m.classList.remove('highlighted'); });
+
+  // Marcar nuevo
+  el.classList.add('highlighted');
+  currentHighlightMid = el.dataset.mid;
+
+  // Barra de estado
+  var bar = document.getElementById('hl-bar');
+  var txt = document.getElementById('hl-bar-text');
+  bar.classList.add('active');
+  txt.textContent = (data.chatname||'?') + ': ' + (data.chatmessage||'');
+
+  ws.send(JSON.stringify({
+    type:        'highlight',
+    platform:    data.platform || data.type || 'custom',
+    chatname:    data.chatname || '',
+    chatmessage: data.chatmessage || '',
+    chatimg:     data.chatimg || null,
+    nameColor:   data.nameColor || null,
+    roles:       data.roles || [],
+    mid:         data.mid || '',
+  }));
+  toast('📌 Mensaje destacado');
+}
+
+function clearHighlight() {
+  if (!isConnected || !ws) return;
+  ws.send(JSON.stringify({ type: 'highlight_clear' }));
+  document.querySelectorAll('.msg-item.highlighted').forEach(function(m){ m.classList.remove('highlighted'); });
+  currentHighlightMid = null;
+  document.getElementById('hl-bar').classList.remove('active');
+  toast('🧹 Destacado quitado');
+}
+
+function esc(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── ACCIONES ─────────────────────────────────────────────────
+function saveAndConnect() {
+  var url = document.getElementById('serverUrl').value.trim();
+  if (!url) return toast('Introduce la URL del servidor');
+  store.set('serverUrl', url); retryDelay=1000; autoKickDone=false;
+  connectWS(url); updateOverlayUrl(); toast('Conectando a '+url);
+}
+
+function toggleKickManual() {
+  var el=document.getElementById('kick-manual-wrap');
+  el.style.display = el.style.display==='none'?'block':'none';
+}
+
+async function resolveKickId() {
+  var channel = currentChannels.kick || store.get('kickChannel') || '';
+  var box = document.getElementById('kick-status-box');
+  if (!channel) {
+    box.className='info-box warn';
+    box.innerHTML='⚠️ El servidor no tiene <strong>KICK_CHANNEL</strong> configurado.';
+    return;
+  }
+  box.className='info-box warn'; box.innerHTML='⏳ Resolviendo ID de kick.com/'+channel+'...';
+  try {
+    var r = await fetch('https://kick.com/api/v2/channels/'+channel,{headers:{'Accept':'application/json'}});
+    if (!r.ok) throw new Error('HTTP '+r.status);
+    var d = await r.json();
+    var id = String((d.chatroom&&d.chatroom.id)||d.id||'');
+    if (!id) throw new Error('No se encontró chatroom.id');
+    box.className='info-box green';
+    box.innerHTML='✅ ID encontrado: <strong>'+id+'</strong>';
+    document.getElementById('kickChannelId').value = id;
+    await sendKickId(id);
+  } catch(e) {
+    box.className='info-box red';
+    box.innerHTML='❌ <strong>'+e.message+'</strong><br>Usa el botón Manual.';
+    document.getElementById('kick-manual-wrap').style.display='block';
+  }
+}
+
+async function sendKickId(idParam) {
+  var id = idParam || document.getElementById('kickChannelId').value.trim();
+  if (!id) return toast('Introduce el Channel ID');
+  var serverUrl = store.get('serverUrl');
+  if (!serverUrl) return toast('Conecta al servidor primero');
+  var httpUrl = serverUrl.replace(/^wss?/,'https').replace(/\/$/,'');
+  try {
+    var r = await fetch(httpUrl+'/api/kick/channel-id',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({channelId:id})
+    });
+    var d = await r.json();
+    if (d.ok) {
+      store.set('kickChannelId', String(id));
+      toast('✅ Kick conectando con ID '+id);
+      connectKickBrowser(String(id));
+      var box=document.getElementById('kick-status-box');
+      box.className='info-box green';
+      box.innerHTML='✅ Kick conectando con chatroom ID: <strong>'+id+'</strong>';
+    } else { toast('❌ El servidor rechazó el ID'); }
+  } catch(e) { toast('❌ Error: '+e.message); }
+}
+
+async function restartTikTok() {
+  var serverUrl=store.get('serverUrl');
+  if (!serverUrl) return toast('Configura la URL del servidor primero');
+  var httpUrl=serverUrl.replace(/^wss?/,'https').replace(/\/$/,'');
+  try {
+    var r=await fetch(httpUrl+'/api/tiktok/restart',{method:'POST'});
+    var d=await r.json();
+    toast(d.ok?'🔄 TikTok reconectando... (#'+d.restarts+')':'❌ Error');
+  } catch(e){ toast('❌ No se pudo contactar el servidor'); }
+}
+
+async function restartYouTube() {
+  var serverUrl=store.get('serverUrl');
+  if (!serverUrl) return toast('Configura la URL del servidor primero');
+  var httpUrl=serverUrl.replace(/^wss?/,'https').replace(/\/$/,'');
+  var ytBox=document.getElementById('youtube-status-box');
+  if (ytBox) { ytBox.className='info-box warn'; ytBox.innerHTML='⏳ Buscando live activo...'; }
+  try {
+    var r=await fetch(httpUrl+'/api/youtube/restart',{method:'POST'});
+    var d=await r.json();
+    if (d.ok) {
+      toast('🔄 YouTube reconectando...');
+    } else {
+      toast('❌ Error al reconectar YouTube');
+      if (ytBox) { ytBox.className='info-box youtube'; ytBox.innerHTML='❌ Error al reconectar. ¿Estás en vivo?'; }
+    }
+  } catch(e){
+    toast('❌ No se pudo contactar el servidor');
+    if (ytBox) { ytBox.className='info-box youtube'; ytBox.innerHTML='❌ No se pudo contactar el servidor.'; }
+  }
+}
+
+function openTikTokLive() {
+  var user=currentChannels.tiktok||'';
+  if (!user) return toast('TikTok no configurado');
+  window.open('https://www.tiktok.com/@'+user+'/live','_blank','noopener');
+}
+
+function openYouTubeLive() {
+  var channel=currentChannels.youtube||'';
+  if (!channel) return toast('YouTube no configurado');
+  var handle=channel.startsWith('@')?channel:'@'+channel;
+  window.open('https://www.youtube.com/'+handle+'/live','_blank','noopener');
+}
+
+function sendCustomMessage() {
+  var input=document.getElementById('custom-msg-input');
+  var text=input.value.trim();
+  if (!text) return;
+  if (!isConnected||!ws) return toast('⚠️ No hay conexión con el servidor');
+  ws.send(JSON.stringify({type:'custom_message',user:'Tú (dashboard)',text:text}));
+  input.value='';
+}
+
+function getBaseOverlayDir() {
+  // Calcula la URL base de la carpeta overlay/ partiendo de donde está el dashboard
+  var href = window.location.href.split('?')[0].replace(/\/+$/, '');
+  // Si estamos en dashboard/index.html → subir un nivel y entrar a overlay/
+  var base = href.replace(/\/dashboard(\/[^?]*)?$/, '/overlay');
+  if (base === href) {
+    // Fallback: subir un nivel desde el archivo actual
+    base = href.replace(/\/[^/]+$/, '/overlay');
+  }
+  return base;
+}
+
+function updateOverlayUrls() {
+  var serverUrl = store.get('serverUrl');
+  var showtime  = (parseInt(document.getElementById('showtime-input').value) || 12) * 1000;
+  var base      = (window.location.protocol !== 'file:') ? getBaseOverlayDir() : '';
+
+  var ids = {
+    'url-chat':        { file: 'index.html',      params: '' },
+    'url-chatuno':     { file: 'chat_uno.html',    params: '' },
+    'url-destacador':  { file: 'destacador.html',  params: '&showtime=' + showtime },
+  };
+
+  Object.keys(ids).forEach(function(id) {
+    var box = document.getElementById(id);
+    if (!box) return;
+    if (!serverUrl) { box.textContent = 'Configura el servidor primero...'; box.dataset.url = ''; return; }
+    if (!base)      { box.textContent = 'No disponible en local (usa GitHub Pages)'; box.dataset.url = ''; return; }
+    var url = base + '/' + ids[id].file + '?server=' + encodeURIComponent(serverUrl) + ids[id].params;
+    box.textContent = url;
+    box.dataset.url = url;
+  });
+}
+
+// Mantener updateOverlayUrl como alias para compatibilidad con saveAndConnect()
+function updateOverlayUrl() { updateOverlayUrls(); }
+
+function copyUrl(id) {
+  var url = document.getElementById(id).dataset.url;
+  if (!url) return toast('Configura el servidor primero');
+  navigator.clipboard.writeText(url).then(function() { toast('✅ URL copiada'); });
+}
+
+function openUrl(id) {
+  var url = document.getElementById(id).dataset.url;
+  if (!url) return toast('Configura el servidor primero');
+  window.open(url, '_blank');
+}
+
+// Mantener compatibilidad si algo llama a las funciones viejas
+function copyOverlayUrl() { copyUrl('url-chat'); }
+function openOverlay()    { openUrl('url-chat'); }
+
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+function injectTestMessage() {
+  appendMessage({type:'custom',platform:'custom',chatname:'Test local',
+    chatmessage:'✅ El chat del dashboard funciona correctamente',
+    nameColor:'#FF6B9D',mid:'test-'+Date.now()});
+  toast('Mensaje de prueba inyectado');
+}
+
+function toast(msg, duration) {
+  duration=duration||3000;
+  var el=document.getElementById('toast');
+  el.textContent=msg; el.classList.add('show');
+  setTimeout(function(){ el.classList.remove('show'); }, duration);
+}
+</script>
+</body>
+</html>

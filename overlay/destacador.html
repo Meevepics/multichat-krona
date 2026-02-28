@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meeve — Mensaje Destacado</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Comic Sans MS', 'Segoe Print', cursive;
+      background: transparent;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    /* ── PARTÍCULAS ── */
+    .bg-particles {
+      position: fixed; top:0; left:0; width:100%; height:100%;
+      pointer-events:none; z-index:0; overflow:hidden;
+      opacity:0; transition:opacity 0.5s ease-in-out;
+    }
+    .bg-particles.active { opacity:1; }
+    .particle {
+      position:absolute; width:6px; height:6px;
+      background:#FF6B9D; border-radius:50%; opacity:0.7;
+      animation:float-crazy 2.5s infinite ease-in-out;
+    }
+    @keyframes float-crazy {
+      0%,100%{ transform:translateY(0) translateX(0) rotate(0); }
+      25%    { transform:translateY(-30px) translateX(20px) rotate(90deg); }
+      50%    { transform:translateY(-10px) translateX(-20px) rotate(180deg); }
+      75%    { transform:translateY(-40px) translateX(10px) rotate(270deg); }
+    }
+
+    /* ── RAYOS DE LUZ ── */
+    #light-rays {
+      position:fixed; top:0; left:0; width:100%; height:100%;
+      pointer-events:none; z-index:0; opacity:0; transition:opacity 0.5s;
+    }
+    #light-rays.active { opacity:1; }
+    .light-ray {
+      position:fixed; width:4px; height:200%;
+      background:linear-gradient(180deg,transparent,rgba(255,107,157,0.3),transparent);
+      top:-50%; opacity:0; animation:ray-sweep 3s infinite;
+    }
+    @keyframes ray-sweep {
+      0%  { opacity:0; transform:translateX(-100vw) rotate(15deg); }
+      50% { opacity:1; }
+      100%{ opacity:0; transform:translateX(100vw) rotate(15deg); }
+    }
+
+    /* ── ESTRELLAS ── */
+    .star {
+      position:fixed; font-size:30px; opacity:0;
+      pointer-events:none; z-index:100;
+      animation:star-burst 1.5s ease-out forwards;
+    }
+    @keyframes star-burst {
+      0%  { opacity:1; transform:scale(0) rotate(0); }
+      50% { opacity:1; transform:scale(1.5) rotate(180deg); }
+      100%{ opacity:0; transform:scale(0.5) rotate(360deg); }
+    }
+
+    /* ── CONFETTI ── */
+    .confetti {
+      position:fixed; width:12px; height:12px; background:#FF6B9D;
+      border-radius:50%; opacity:0; z-index:1000; box-shadow:0 0 10px currentColor;
+    }
+    @keyframes confetti-explosion {
+      0%  { opacity:1; transform:translate(0,0) rotate(0) scale(1); }
+      100%{ opacity:0; transform:translate(var(--x),var(--y)) rotate(var(--r)) scale(0.2); }
+    }
+
+    /* ── OUTPUT ── */
+    #output {
+      width:90%; max-width:900px; position:relative; min-height:100px; z-index:10;
+    }
+
+    .message-container {
+      position:relative; margin:20px 0; width:100%; overflow:visible; opacity:0;
+    }
+
+    /* ── BURBUJA GRANDE ── */
+    .bubble-container {
+      position:relative;
+      background:#fff;
+      border:6px solid #000;
+      border-radius:40px;
+      padding:35px 45px;
+      box-shadow:12px 12px 0 rgba(0,0,0,0.9), 0 0 40px rgba(255,107,157,0.5);
+      overflow:visible;
+      transition:all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    .bubble-container::before {
+      content:'';
+      position:absolute; top:0; left:0; width:100%; height:100%;
+      background-image:url('https://media1.tenor.com/m/FlIAx4vYBJQAAAAC/as-you-like-it-eve.gif');
+      background-size:cover; background-position:center;
+      opacity:0.15; z-index:0; border-radius:40px;
+      pointer-events:none; mix-blend-mode:multiply; clip-path:inset(0 round 40px);
+    }
+    /* Borde arcoíris animado */
+    .bubble-container::after {
+      content:'';
+      position:absolute; top:-8px; left:-8px; right:-8px; bottom:-8px;
+      background:linear-gradient(45deg,#FF6B9D,#FFD700,#89D4FF,#D4BBFF,#7FFF7F,#FF6B9D,#FFD700,#89D4FF);
+      background-size:400% 400%; border-radius:inherit;
+      z-index:-1; opacity:0.6; animation:rainbow-border 3s ease infinite; filter:blur(8px);
+    }
+    @keyframes rainbow-border {
+      0%  { background-position:0% 50%; }
+      50% { background-position:100% 50%; }
+      100%{ background-position:0% 50%; }
+    }
+    .bubble-container > * { position:relative; z-index:1; }
+
+    /* Colores pastel */
+    .pastel-yellow  { background:linear-gradient(135deg,#FFE66D,#FFDB4D,#FFC93D); }
+    .pastel-pink    { background:linear-gradient(135deg,#FF9ECD,#FF6BB3,#FF4D9E); }
+    .pastel-blue    { background:linear-gradient(135deg,#89D4FF,#5EC5FF,#3BB5FF); }
+    .pastel-lavender{ background:linear-gradient(135deg,#D4BBFF,#B794FF,#A67CFF); }
+    .pastel-peach   { background:linear-gradient(135deg,#FFB088,#FF9666,#FF7F4D); }
+    .pastel-mint    { background:linear-gradient(135deg,#7FFFD4,#5FFFB3,#3FFF9E); }
+
+    /* ── DECORACIONES ── */
+    .deco-sparkle { position:absolute; width:30px; height:30px; top:-20px; right:40px; z-index:10; }
+    .deco-sparkle::before,.deco-sparkle::after { content:'✦'; position:absolute; font-size:32px; color:#FF6B9D; text-shadow:3px 3px 0 #000,0 0 20px #FF6B9D; animation:twinkle-mega 1.2s ease-in-out infinite; }
+    .deco-sparkle::after { left:25px; animation-delay:0.6s; color:#FFD700; text-shadow:3px 3px 0 #000,0 0 20px #FFD700; }
+    @keyframes twinkle-mega { 0%,100%{opacity:1;transform:scale(1) rotate(0);} 50%{opacity:0.3;transform:scale(0.4) rotate(180deg);} }
+    .deco-heart { position:absolute; bottom:-20px; left:40px; font-size:32px; text-shadow:3px 3px 0 #000; animation:pulse-heart-mega 1s ease-in-out infinite; z-index:10; }
+    @keyframes pulse-heart-mega { 0%,100%{transform:scale(1) rotate(0);} 25%{transform:scale(1.3) rotate(-8deg);} 75%{transform:scale(1.3) rotate(8deg);} }
+    .spinning-gif { position:absolute; width:90px; height:90px; top:-45px; right:-45px; pointer-events:none; z-index:10; }
+    .spinning-gif img { width:100%; height:100%; object-fit:contain; filter:drop-shadow(5px 5px 0 rgba(0,0,0,0.7)); }
+    .glow-pulse {
+      position:absolute; top:-10px; left:-10px; right:-10px; bottom:-10px;
+      border-radius:inherit; background:radial-gradient(circle,rgba(255,107,157,0.4),transparent);
+      animation:glow-pulse-anim 2s ease-in-out infinite; pointer-events:none; z-index:-2;
+    }
+    @keyframes glow-pulse-anim { 0%,100%{transform:scale(1);opacity:0.5;} 50%{transform:scale(1.1);opacity:0.8;} }
+
+    /* ── MENSAJE ── */
+    .message { display:flex; align-items:flex-start; gap:20px; }
+
+    .avatar-box {
+      width:90px; height:90px; border-radius:50%;
+      border:6px solid #000; overflow:hidden; background:#fff;
+      flex-shrink:0; box-shadow:6px 6px 0 rgba(0,0,0,0.5),0 0 25px rgba(255,107,157,0.6);
+      transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    .avatar-box:hover { transform:scale(1.15) rotate(10deg); }
+    .avatar { width:100%; height:100%; object-fit:cover; display:block; }
+
+    .content { flex:1; display:flex; flex-direction:column; gap:12px; min-width:0; }
+    .header  { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+
+    .username {
+      font-weight:900; font-size:40px; color:#000;
+      text-shadow:5px 5px 0 rgba(255,255,255,0.8),-2px -2px 0 rgba(255,255,255,0.5),0 0 20px rgba(255,107,157,0.5);
+      letter-spacing:1px;
+      animation:text-pop-mega 0.5s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @keyframes text-pop-mega {
+      0%  { transform:scale(0.5) rotate(-10deg); opacity:0; }
+      60% { transform:scale(1.1) rotate(5deg); }
+      100%{ transform:scale(1) rotate(0); opacity:1; }
+    }
+
+    /* Badge de plataforma */
+    .platform-badge {
+      display:inline-flex; align-items:center; gap:5px;
+      padding:5px 12px 5px 8px; border-radius:999px;
+      border:3px solid #000; font-size:13px; font-weight:900;
+      box-shadow:3px 3px 0 rgba(0,0,0,0.4);
+    }
+    .platform-badge svg { width:17px; height:17px; flex-shrink:0; }
+    .platform-badge.twitch  { background:#9146FF; color:#fff; }
+    .platform-badge.kick    { background:#53FC18; color:#000; }
+    .platform-badge.tiktok  { background:#000; color:#fff; }
+    .platform-badge.youtube { background:#FF0000; color:#fff; }
+    .platform-badge.custom  { background:#FF6B9D; color:#fff; }
+
+    /* Badges de rol */
+    .role-badge {
+      display:inline-flex; align-items:center; gap:4px;
+      padding:3px 10px; border-radius:999px;
+      font-size:12px; font-weight:900;
+      border:2px solid #000; box-shadow:2px 2px 0 rgba(0,0,0,0.4);
+    }
+    .badge-broadcaster { background:#FF4500; color:#fff; }
+    .badge-moderator   { background:#00AD03; color:#fff; }
+    .badge-vip         { background:#E005B9; color:#fff; }
+    .badge-subscriber  { background:#9146FF; color:#fff; }
+    .badge-founder     { background:#AA4A00; color:#fff; }
+    .badge-og          { background:#FFD700; color:#000; }
+    .badge-default     { background:#555;    color:#fff; }
+
+    /* Texto */
+    .text {
+      background:rgba(255,255,255,0.85);
+      border:5px solid #000; border-radius:25px;
+      padding:20px 28px; font-size:34px;
+      line-height:1.6; color:#000; font-weight:800;
+      word-wrap:break-word;
+      box-shadow:inset 4px 4px 8px rgba(0,0,0,0.15),0 0 15px rgba(255,107,157,0.3);
+      animation:content-appear-mega 0.6s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @keyframes content-appear-mega {
+      0%  { transform:scale(0.85) translateY(20px); opacity:0; }
+      100%{ transform:scale(1) translateY(0); opacity:1; }
+    }
+
+    /* Donación */
+    .donation-tag {
+      background:linear-gradient(135deg,#7FFF7F,#5FFF5F,#3FFF3F);
+      border:6px solid #000; border-radius:25px;
+      padding:18px 28px; font-size:32px; font-weight:900; color:#000;
+      text-align:center;
+      box-shadow:6px 6px 0 rgba(0,0,0,0.7),0 0 30px rgba(127,255,127,0.6);
+      animation:donation-mega 0.8s cubic-bezier(0.34,1.56,0.64,1);
+      position:relative; overflow:hidden;
+    }
+    .donation-tag::before {
+      content:''; position:absolute; top:-50%; left:-50%; width:200%; height:200%;
+      background:linear-gradient(45deg,transparent,rgba(255,255,255,0.7),transparent);
+      animation:shine-mega 2s infinite;
+    }
+    @keyframes donation-mega { 0%{transform:scale(0.7) rotate(-10deg);} 50%{transform:scale(1.15) rotate(5deg);} 100%{transform:scale(1) rotate(0);} }
+    @keyframes shine-mega { 0%{transform:translateX(-100%) translateY(-100%) rotate(45deg);} 100%{transform:translateX(150%) translateY(150%) rotate(45deg);} }
+
+    /* ── INDICADOR CONEXIÓN ── */
+    #connection-dot { position:fixed; top:10px; right:10px; width:10px; height:10px; border-radius:50%; background:#ef4444; z-index:999; box-shadow:0 0 6px currentColor; transition:background 0.3s; }
+    #connection-dot.connected { background:#22c55e; }
+  </style>
+</head>
+<body>
+  <div class="bg-particles" id="particles"></div>
+  <div id="light-rays"></div>
+  <div id="connection-dot"></div>
+  <div id="output"></div>
+
+  <script>
+    // ── CONFIG ───────────────────────────────────────────────────
+    var urlParams  = new URLSearchParams(window.location.search);
+    var SERVER_URL = urlParams.get('server') || 'wss://localhost:3000';
+    var SHOWTIME   = parseInt(urlParams.get('showtime') || '12000'); // ms que se muestra
+
+    // ── LOGOS SVG ────────────────────────────────────────────────
+    var PLATFORM_LOGOS = {
+      twitch:  '<svg viewBox="0 0 24 28" fill="currentColor"><path d="M2.149 0L.537 4.119v19.63h6.72V28l4.123-4.25h3.29L22.463 14V0H2.149zm18.24 13.18l-3.29 3.387h-3.948l-2.886 2.973v-2.973H6.584V2.387h13.805v10.793zM17.07 5.367h-2.148v6.42h2.148V5.367zm-5.907 0h-2.15v6.42h2.15V5.367z"/></svg>',
+      kick:    '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 3h4v7l4.5-7H17L12 12l5.5 9H13L8.5 14v7H4V3z"/></svg>',
+      tiktok:  '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V9.05a8.16 8.16 0 0 0 4.77 1.52V7.12a4.85 4.85 0 0 1-1-.43z"/></svg>',
+      youtube: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.495 6.205a3.007 3.007 0 0 0-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 0 0 .527 6.205a31.247 31.247 0 0 0-.522 5.805 31.247 31.247 0 0 0 .522 5.783 3.007 3.007 0 0 0 2.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 0 0 2.088-2.088 31.247 31.247 0 0 0 .5-5.783 31.247 31.247 0 0 0-.5-5.805zM9.609 15.601V8.408l6.264 3.602z"/></svg>',
+      custom:  '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>'
+    };
+    var PLATFORM_LABELS = { twitch:'Twitch', kick:'Kick', tiktok:'TikTok', youtube:'YouTube', custom:'Chat' };
+
+    var BADGE_ICONS  = { broadcaster:'👑', moderator:'⚔️', vip:'💎', subscriber:'⭐', founder:'🏆', og:'🔥' };
+    var BADGE_LABELS = { broadcaster:'Owner', moderator:'Mod', vip:'VIP', subscriber:'Sub', founder:'Founder', og:'OG' };
+
+    // ── PARTÍCULAS ───────────────────────────────────────────────
+    var particlesContainer = document.getElementById('particles');
+    var lightRaysContainer = document.getElementById('light-rays');
+    var connectionDot      = document.getElementById('connection-dot');
+    var outputDiv          = document.getElementById('output');
+
+    var pColors = ['#FF6B9D','#FFD700','#89D4FF','#D4BBFF','#7FFF7F','#FF9ECD'];
+    for (var i=0; i<30; i++) {
+      var p = document.createElement('div');
+      p.className = 'particle';
+      p.style.left = Math.random()*100+'%';
+      p.style.top  = Math.random()*100+'%';
+      p.style.background = pColors[Math.floor(Math.random()*pColors.length)];
+      p.style.animationDelay    = Math.random()*2+'s';
+      p.style.animationDuration = (Math.random()*1.5+1.5)+'s';
+      particlesContainer.appendChild(p);
+    }
+    for (var j=0; j<5; j++) {
+      var ray = document.createElement('div');
+      ray.className = 'light-ray';
+      ray.style.left = Math.random()*100+'%';
+      ray.style.animationDelay = Math.random()*3+'s';
+      lightRaysContainer.appendChild(ray);
+    }
+
+    // ── ESTADO ───────────────────────────────────────────────────
+    var pastelColors = ['pastel-yellow','pastel-pink','pastel-blue','pastel-lavender','pastel-peach','pastel-mint'];
+    var decorations  = ['💫','⭐','✨','🌟','💖','💕','🌸','🎀','🌈','⚡','🎵','🎶'];
+    var colorIdx     = 0;
+    var currentMsg   = null;
+    var msgTimer     = null;
+
+    function nextColor() { var c=pastelColors[colorIdx]; colorIdx=(colorIdx+1)%pastelColors.length; return c; }
+    function randDeco()  { return decorations[Math.floor(Math.random()*decorations.length)]; }
+
+    function escHtml(str) {
+      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function createStarBurst(x, y) {
+      var stars = ['✨','⭐','💫','🌟'];
+      for (var i=0; i<8; i++) {
+        var star = document.createElement('div');
+        star.className = 'star';
+        star.textContent = stars[Math.floor(Math.random()*stars.length)];
+        star.style.left = x+'px'; star.style.top = y+'px';
+        var angle = (Math.PI*2*i)/8;
+        var dist  = 100+Math.random()*50;
+        star.style.setProperty('--tx', Math.cos(angle)*dist+'px');
+        star.style.setProperty('--ty', Math.sin(angle)*dist+'px');
+        document.body.appendChild(star);
+        setTimeout(function(){ star.remove(); }, 1500);
+      }
+    }
+
+    function createConfetti(x, y) {
+      var cols = ['#FF6B9D','#FFD700','#89D4FF','#7FFF7F','#D4BBFF','#FF9ECD'];
+      for (var i=0; i<30; i++) {
+        var c = document.createElement('div');
+        c.className = 'confetti';
+        c.style.background = cols[Math.floor(Math.random()*cols.length)];
+        c.style.left = x+'px'; c.style.top = y+'px';
+        var angle = (Math.PI*2*i)/30;
+        var dist  = 150+Math.random()*100;
+        c.style.setProperty('--x', Math.cos(angle)*dist+'px');
+        c.style.setProperty('--y', Math.sin(angle)*dist+'px');
+        c.style.setProperty('--r', (Math.random()*720-360)+'deg');
+        c.style.animation = 'confetti-explosion '+(1+Math.random()*0.5)+'s ease-out forwards';
+        document.body.appendChild(c);
+        setTimeout(function(){ c.remove(); }, 1500);
+      }
+    }
+
+    // ── MOSTRAR MENSAJE DESTACADO ────────────────────────────────
+    function showMessage(data) {
+      if (!data.chatmessage && !data.chatname) return;
+      clearMessage(function() {
+        particlesContainer.classList.add('active');
+        lightRaysContainer.classList.add('active');
+
+        var platform = data.platform || 'custom';
+
+        // Badge plataforma
+        var logo  = PLATFORM_LOGOS[platform] || PLATFORM_LOGOS.custom;
+        var label = PLATFORM_LABELS[platform] || platform;
+        var platBadge = '<span class="platform-badge '+platform+'">'+logo+label+'</span>';
+
+        // Roles
+        var rolesHTML = '';
+        if (data.roles && data.roles.length) {
+          for (var i=0; i<data.roles.length; i++) {
+            var r = data.roles[i];
+            var type = (r.type||'').toLowerCase();
+            var cls  = BADGE_ICONS[type] ? 'badge-'+type : 'badge-default';
+            var icon = BADGE_ICONS[type] || '•';
+            var lbl  = BADGE_LABELS[type] || r.label || r.type;
+            rolesHTML += '<span class="role-badge '+cls+'">'+icon+' '+lbl+'</span>';
+          }
+        }
+
+        // Avatar
+        var avatarHTML = '';
+        if (data.chatimg) {
+          avatarHTML = '<div class="avatar-box"><img class="avatar" src="'+data.chatimg+'" onerror="this.style.display=\'none\'"></div>';
+        }
+
+        // Username
+        var nameStyle = data.nameColor ? 'color:'+data.nameColor+';' : '';
+        var nameHTML = '<span class="username" style="'+nameStyle+'">'+escHtml(data.chatname||'')+'</span>';
+
+        // Texto del mensaje
+        var textHTML = data.chatmessage ? '<div class="text">'+escHtml(data.chatmessage)+'</div>' : '';
+
+        // Donación
+        var donationHTML = '';
+        if (data.type === 'donation' && data.amount) {
+          var dlabel = data.donationType === 'bits'     ? '💎 '+data.amount+' Bits'
+                     : data.donationType === 'sub'      ? '🌟 ¡Nuevo Sub!'
+                     : data.donationType === 'resub'    ? '🔄 '+data.months+' meses de sub'
+                     : data.donationType === 'subgift'  ? '🎁 Sub regalada'
+                     : data.donationType === 'superchat'? '💰 '+data.amountDisplay
+                     : data.donationType === 'member'   ? '⭐ ¡Nuevo Miembro!'
+                     : data.donationType === 'gift'     ? '🎁 Regalo TikTok'
+                     : '💰 '+data.amount;
+          donationHTML = '<div class="donation-tag">'+dlabel+'</div>';
+        }
+
+        var container = document.createElement('div');
+        container.className = 'message-container';
+
+        var color = nextColor();
+        container.innerHTML =
+          '<div class="bubble-container '+color+'">' +
+            '<div class="glow-pulse"></div>'+
+            '<div class="deco-sparkle"></div>'+
+            '<div class="deco-heart">'+randDeco()+'</div>'+
+            '<div class="spinning-gif"><img src="https://media1.tenor.com/m/7exwykqMlE0AAAAC/kurukuru-eve-kurukuru.gif" alt=""></div>'+
+            '<div class="message">'+
+              avatarHTML+
+              '<div class="content">'+
+                '<div class="header">'+nameHTML+platBadge+rolesHTML+'</div>'+
+                textHTML+
+                donationHTML+
+              '</div>'+
+            '</div>'+
+          '</div>';
+
+        outputDiv.appendChild(container);
+        currentMsg = container;
+
+        var bubble = container.querySelector('.bubble-container');
+
+        // Explosión al aparecer
+        setTimeout(function() {
+          var rect = bubble.getBoundingClientRect();
+          var cx = rect.left + rect.width/2;
+          var cy = rect.top  + rect.height/2;
+          createStarBurst(cx, cy);
+          createConfetti(cx, cy);
+        }, 200);
+
+        // Animación entrada
+        gsap.fromTo(container,
+          { opacity:0, y:100, scale:0.6, rotation:-20 },
+          {
+            opacity:1, y:0, scale:1, rotation:0,
+            duration:0.9, ease:'back.out(2.5)',
+            onComplete: function() {
+              gsap.to(bubble, { x:[-5,5,-5,5,0], duration:0.6, ease:'power2.inOut' });
+              var ab = container.querySelector('.avatar-box');
+              if (ab) gsap.to(ab, { scale:[1,1.3,1], rotation:[0,360], duration:0.9, ease:'back.out(2)' });
+              gsap.to(bubble, {
+                boxShadow:['12px 12px 0 rgba(0,0,0,0.9), 0 0 40px rgba(255,107,157,0.5)',
+                           '18px 18px 0 rgba(0,0,0,0.9), 0 0 60px rgba(255,107,157,0.8)',
+                           '12px 12px 0 rgba(0,0,0,0.9), 0 0 40px rgba(255,107,157,0.5)'],
+                duration:0.8, ease:'power2.inOut'
+              });
+            }
+          }
+        );
+
+        // Auto-hide
+        if (msgTimer) clearTimeout(msgTimer);
+        msgTimer = setTimeout(clearMessage, SHOWTIME);
+      });
+    }
+
+    // ── LIMPIAR MENSAJE ──────────────────────────────────────────
+    function clearMessage(callback) {
+      if (msgTimer) { clearTimeout(msgTimer); msgTimer = null; }
+      if (currentMsg) {
+        var toRemove = currentMsg;
+        currentMsg = null;
+        gsap.to(toRemove, {
+          opacity:0, scale:0, rotation:360, y:-100,
+          duration:0.8, ease:'power2.in',
+          onComplete: function() {
+            if (toRemove.parentNode) toRemove.parentNode.removeChild(toRemove);
+            particlesContainer.classList.remove('active');
+            lightRaysContainer.classList.remove('active');
+            if (callback) callback();
+          }
+        });
+      } else if (callback) {
+        callback();
+      }
+    }
+
+    // ── WEBSOCKET ────────────────────────────────────────────────
+    var ws, retryDelay = 1000;
+
+    function connect() {
+      try { ws = new WebSocket(SERVER_URL); } catch(e) {
+        connectionDot.classList.remove('connected');
+        setTimeout(connect, retryDelay);
+        return;
+      }
+      ws.onopen = function() { connectionDot.classList.add('connected'); retryDelay = 1000; };
+      ws.onmessage = function(e) {
+        try {
+          var data = JSON.parse(e.data);
+          if (data.type === 'highlight')       showMessage(data);
+          if (data.type === 'highlight_clear') clearMessage();
+          // Ignorar el resto (chat normal, status, etc.)
+        } catch(err) {}
+      };
+      ws.onclose = function() {
+        connectionDot.classList.remove('connected');
+        retryDelay = Math.min(retryDelay*2, 30000);
+        setTimeout(connect, retryDelay);
+      };
+      ws.onerror = function() { ws.close(); };
+    }
+
+    connect();
+  </script>
+</body>
+</html>

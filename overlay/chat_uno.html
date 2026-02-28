@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meeve Chat — Un Mensaje</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: transparent;
+      min-height: 100vh;
+      padding: 20px;
+      font-family: 'Comic Sans MS', 'Segoe Print', 'Quicksand', cursive;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    /* ── PARTÍCULAS ── */
+    .bg-particles { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; overflow: hidden; }
+    .particle { position: absolute; width: 4px; height: 4px; background: #FF6B9D; border-radius: 50%; opacity: 0.6; animation: float 3s infinite ease-in-out; }
+    @keyframes float { 0%, 100% { transform: translateY(0) translateX(0); } 50% { transform: translateY(-20px) translateX(10px); } }
+
+    /* ── LÍNEAS DECORATIVAS ── */
+    .deco-line { position: fixed; height: 3px; background: linear-gradient(90deg, transparent, #FF6B9D, transparent); opacity: 0; z-index: 1; pointer-events: none; }
+
+    /* ── CONTENEDOR ── */
+    #chat-container { width: 100%; max-width: 700px; padding: 0 20px; z-index: 10; position: relative; }
+
+    .message-bubble {
+      position: relative;
+      width: 90%;
+      margin: 0 auto;
+      opacity: 0;
+      transform: translateY(30px) scale(0.9) rotate(-2deg);
+      filter: drop-shadow(0 6px 12px rgba(0,0,0,0.4));
+    }
+    .message-bubble.visible { opacity: 1; transform: translateY(0) scale(1) rotate(0deg); }
+
+    .bubble-container {
+      position: relative;
+      background: #FFFFFF;
+      border: 5px solid #000;
+      border-radius: 35px;
+      padding: 22px 28px;
+      box-shadow: 10px 10px 0 rgba(0,0,0,0.9);
+      overflow: visible;
+      transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    .bubble-container::before {
+      content: '';
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background-image: url('https://media1.tenor.com/m/FlIAx4vYBJQAAAAC/as-you-like-it-eve.gif');
+      background-size: cover; background-position: center;
+      opacity: 0.2; z-index: 0; border-radius: inherit; pointer-events: none; mix-blend-mode: multiply;
+    }
+    .bubble-container::after {
+      content: ''; position: absolute; top: -3px; left: -3px; right: -3px; bottom: -3px;
+      background: inherit; border-radius: inherit; z-index: -1; opacity: 0; transition: opacity 0.3s;
+    }
+    .bubble-container.glitch::after { opacity: 0.5; animation: glitch 0.3s; }
+    @keyframes glitch {
+      0% { transform: translate(0); } 20% { transform: translate(-3px,3px); filter: hue-rotate(90deg); }
+      40% { transform: translate(3px,-3px); filter: hue-rotate(180deg); }
+      60% { transform: translate(-3px,-3px); filter: hue-rotate(270deg); }
+      80% { transform: translate(3px,3px); filter: hue-rotate(360deg); }
+      100% { transform: translate(0); }
+    }
+    .bubble-container > * { position: relative; z-index: 1; }
+
+    /* Colores pastel */
+    .pastel-yellow  { background: linear-gradient(135deg,#FFE66D,#FFDB4D,#FFC93D); }
+    .pastel-pink    { background: linear-gradient(135deg,#FF9ECD,#FF6BB3,#FF4D9E); }
+    .pastel-blue    { background: linear-gradient(135deg,#89D4FF,#5EC5FF,#3BB5FF); }
+    .pastel-lavender{ background: linear-gradient(135deg,#D4BBFF,#B794FF,#A67CFF); }
+    .pastel-peach   { background: linear-gradient(135deg,#FFB088,#FF9666,#FF7F4D); }
+    .pastel-mint    { background: linear-gradient(135deg,#7FFFD4,#5FFFB3,#3FFF9E); }
+
+    /* ── HEADER ── */
+    .message-header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+
+    .avatar-box {
+      width: 55px; height: 55px; border-radius: 50%;
+      border: 5px solid #000; overflow: hidden; background: #fff;
+      flex-shrink: 0; box-shadow: 5px 5px 0 rgba(0,0,0,0.5);
+      transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    .avatar-box:hover { transform: scale(1.15) rotate(5deg); }
+    .avatar-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+    .username-box { flex: 1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+    .username {
+      font-weight: 900; font-size: 26px; color: #000;
+      text-shadow: 4px 4px 0 rgba(255,255,255,0.8), -2px -2px 0 rgba(255,255,255,0.4);
+      letter-spacing: 1px;
+      animation: text-pop 0.4s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @keyframes text-pop { 0% { transform: scale(0.7); } 100% { transform: scale(1); } }
+
+    /* Badge de plataforma */
+    .platform-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px 4px 7px;
+      border-radius: 999px;
+      border: 3px solid #000;
+      font-size: 11px; font-weight: 900;
+      box-shadow: 2px 2px 0 rgba(0,0,0,0.4);
+      flex-shrink: 0;
+    }
+    .platform-badge svg { width: 14px; height: 14px; flex-shrink: 0; }
+    .platform-badge.twitch  { background:#9146FF; color:#fff; }
+    .platform-badge.kick    { background:#53FC18; color:#000; }
+    .platform-badge.tiktok  { background:#000; color:#fff; }
+    .platform-badge.youtube { background:#FF0000; color:#fff; }
+    .platform-badge.custom  { background:#FF6B9D; color:#fff; }
+    .platform-badge.donation{ background:#FFD700; color:#000; }
+
+    /* Badges de rol */
+    .role-badge {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 2px 7px; border-radius: 999px;
+      font-size: 10px; font-weight: 900;
+      border: 2px solid #000; box-shadow: 2px 2px 0 rgba(0,0,0,0.4);
+    }
+    .badge-broadcaster { background:#FF4500; color:#fff; }
+    .badge-moderator   { background:#00AD03; color:#fff; }
+    .badge-vip         { background:#E005B9; color:#fff; }
+    .badge-subscriber  { background:#9146FF; color:#fff; }
+    .badge-founder     { background:#AA4A00; color:#fff; }
+    .badge-og          { background:#FFD700; color:#000; }
+    .badge-default     { background:#555;    color:#fff; }
+
+    /* ── MENSAJE ── */
+    .message-content {
+      background: rgba(255,255,255,0.8);
+      border: 4px solid #000; border-radius: 22px;
+      padding: 18px 24px; font-size: 28px;
+      line-height: 1.6; color: #000; font-weight: 800;
+      word-wrap: break-word;
+      box-shadow: inset 4px 4px 8px rgba(0,0,0,0.15);
+      animation: content-appear 0.5s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @keyframes content-appear { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+    /* Donación */
+    .donation-box {
+      background: linear-gradient(135deg,#7FFF7F,#5FFF5F,#3FFF3F);
+      border: 5px solid #000; border-radius: 22px;
+      padding: 16px 20px; margin-top: 12px;
+      font-size: 24px; font-weight: 900; color: #000;
+      text-align: center; box-shadow: 6px 6px 0 rgba(0,0,0,0.6);
+      animation: donation-pulse 0.7s cubic-bezier(0.34,1.56,0.64,1);
+    }
+    @keyframes donation-pulse { 0% { transform: scale(0.8); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+
+    /* ── DECORACIONES ── */
+    .deco-sparkle { position: absolute; width: 24px; height: 24px; top: -18px; right: 35px; z-index: 10; }
+    .deco-sparkle::before,.deco-sparkle::after { content: '✦'; position: absolute; font-size: 28px; color: #FF6B9D; text-shadow: 3px 3px 0 #000; animation: twinkle 1.5s ease-in-out infinite; }
+    .deco-sparkle::after { left: 22px; animation-delay: 0.75s; color: #FFD700; }
+    @keyframes twinkle { 0%,100%{ opacity:1; transform: scale(1) rotate(0); } 50%{ opacity:0.3; transform: scale(0.5) rotate(180deg); } }
+    .deco-heart { position: absolute; bottom: -18px; left: 35px; font-size: 28px; text-shadow: 3px 3px 0 #000; animation: pulse-heart 1.2s ease-in-out infinite; z-index: 10; }
+    @keyframes pulse-heart { 0%,100%{ transform:scale(1) rotate(0); } 25%{ transform:scale(1.2) rotate(-6deg); } 75%{ transform:scale(1.2) rotate(6deg); } }
+    .spinning-gif { position: absolute; width: 70px; height: 70px; top: -35px; right: -35px; pointer-events: none; z-index: 10; }
+    .spinning-gif img { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(4px 4px 0 rgba(0,0,0,0.6)); }
+
+    /* ── CONFETTI ── */
+    .confetti { position: absolute; width: 10px; height: 10px; background: #FF6B9D; top: 50%; left: 50%; opacity: 0; border-radius: 50%; z-index: 100; }
+    @keyframes confetti-burst { 0% { opacity:1; transform: translate(0,0) rotate(0); } 100% { opacity:0; transform: translate(var(--x),var(--y)) rotate(720deg); } }
+
+    /* ── INDICADOR CONEXIÓN ── */
+    #connection-dot { position:fixed; top:10px; right:10px; width:10px; height:10px; border-radius:50%; background:#ef4444; z-index:999; box-shadow:0 0 6px currentColor; transition:background 0.3s; }
+    #connection-dot.connected { background:#22c55e; }
+  </style>
+</head>
+<body>
+  <div class="bg-particles" id="particles"></div>
+  <div id="connection-dot"></div>
+  <div id="chat-container"></div>
+
+  <script>
+    // ── CONFIG ──────────────────────────────────────────────────
+    var urlParams  = new URLSearchParams(window.location.search);
+    var SERVER_URL = urlParams.get('server') || 'wss://localhost:3000';
+
+    // ── LOGOS SVG ────────────────────────────────────────────────
+    var PLATFORM_LOGOS = {
+      twitch:  '<svg viewBox="0 0 24 28" fill="currentColor"><path d="M2.149 0L.537 4.119v19.63h6.72V28l4.123-4.25h3.29L22.463 14V0H2.149zm18.24 13.18l-3.29 3.387h-3.948l-2.886 2.973v-2.973H6.584V2.387h13.805v10.793zM17.07 5.367h-2.148v6.42h2.148V5.367zm-5.907 0h-2.15v6.42h2.15V5.367z"/></svg>',
+      kick:    '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 3h4v7l4.5-7H17L12 12l5.5 9H13L8.5 14v7H4V3z"/></svg>',
+      tiktok:  '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V9.05a8.16 8.16 0 0 0 4.77 1.52V7.12a4.85 4.85 0 0 1-1-.43z"/></svg>',
+      youtube: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M23.495 6.205a3.007 3.007 0 0 0-2.088-2.088c-1.87-.501-9.396-.501-9.396-.501s-7.507-.01-9.396.501A3.007 3.007 0 0 0 .527 6.205a31.247 31.247 0 0 0-.522 5.805 31.247 31.247 0 0 0 .522 5.783 3.007 3.007 0 0 0 2.088 2.088c1.868.502 9.396.502 9.396.502s7.506 0 9.396-.502a3.007 3.007 0 0 0 2.088-2.088 31.247 31.247 0 0 0 .5-5.783 31.247 31.247 0 0 0-.5-5.805zM9.609 15.601V8.408l6.264 3.602z"/></svg>',
+      custom:  '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>'
+    };
+    var PLATFORM_LABELS = { twitch:'Twitch', kick:'Kick', tiktok:'TikTok', youtube:'YouTube', custom:'Chat', donation:'Donación' };
+
+    var BADGE_ICONS  = { broadcaster:'👑', moderator:'⚔️', vip:'💎', subscriber:'⭐', founder:'🏆', og:'🔥' };
+    var BADGE_LABELS = { broadcaster:'Owner', moderator:'Mod', vip:'VIP', subscriber:'Sub', founder:'Founder', og:'OG' };
+
+    // ── PARTÍCULAS ───────────────────────────────────────────────
+    var pColors = ['#FF6B9D','#FFD700','#89D4FF','#D4BBFF','#7FFF7F'];
+    var pc = document.getElementById('particles');
+    for (var i = 0; i < 20; i++) {
+      var p = document.createElement('div');
+      p.className = 'particle';
+      p.style.left = Math.random()*100+'%';
+      p.style.top  = Math.random()*100+'%';
+      p.style.background = pColors[Math.floor(Math.random()*pColors.length)];
+      p.style.animationDelay    = Math.random()*3+'s';
+      p.style.animationDuration = (Math.random()*2+2)+'s';
+      pc.appendChild(p);
+    }
+
+    // ── LÍNEAS DECO ──────────────────────────────────────────────
+    function createDecoLine() {
+      var line = document.createElement('div');
+      line.className = 'deco-line';
+      line.style.width = (Math.random()*400+150)+'px';
+      line.style.top   = Math.random()*100+'%';
+      line.style.left  = Math.random()*100+'%';
+      document.body.appendChild(line);
+      gsap.to(line, { opacity:0.9, duration:0.4, onComplete: function(){
+        gsap.to(line, { opacity:0, duration:0.4, delay:0.6, onComplete: function(){ line.remove(); } });
+      }});
+    }
+    setInterval(function(){ if(Math.random()>0.7) createDecoLine(); }, 2000);
+
+    // ── ESTADO ───────────────────────────────────────────────────
+    var chatContainer   = document.getElementById('chat-container');
+    var connectionDot   = document.getElementById('connection-dot');
+    var pastelColors    = ['pastel-yellow','pastel-pink','pastel-blue','pastel-lavender','pastel-peach','pastel-mint'];
+    var decorations     = ['💫','⭐','✨','🌟','💖','💕','🌸','🎀','🌈','⚡'];
+    var colorIdx        = 0;
+    var processingMsg   = false;
+    var pendingMsg      = null;
+    var lastHash        = '';
+
+    function nextColor() { var c=pastelColors[colorIdx]; colorIdx=(colorIdx+1)%pastelColors.length; return c; }
+    function randDeco()  { return decorations[Math.floor(Math.random()*decorations.length)]; }
+    function msgHash(d)  { return (d.chatname||'')+'_'+(d.chatmessage||'')+'_'+(d.mid||''); }
+
+    function escHtml(str) {
+      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function buildPlatformBadge(platform) {
+      var logo  = PLATFORM_LOGOS[platform] || PLATFORM_LOGOS.custom;
+      var label = PLATFORM_LABELS[platform] || platform;
+      return '<span class="platform-badge '+(platform==='donation'?'donation':platform)+'">'+ logo + label +'</span>';
+    }
+
+    function buildRolesHTML(roles) {
+      if (!roles || !roles.length) return '';
+      var html = '';
+      for (var i=0; i<roles.length; i++) {
+        var r = roles[i];
+        var type = (r.type||'').toLowerCase();
+        var cls  = BADGE_ICONS[type] ? 'badge-'+type : 'badge-default';
+        var icon = BADGE_ICONS[type] || '•';
+        var lbl  = BADGE_LABELS[type] || r.label || r.type;
+        html += '<span class="role-badge '+cls+'">'+icon+' '+lbl+'</span>';
+      }
+      return html;
+    }
+
+    function createConfetti(el) {
+      var cols = ['#FF6B9D','#FFD700','#89D4FF','#7FFF7F','#D4BBFF'];
+      for (var i=0; i<20; i++) {
+        var c = document.createElement('div');
+        c.className = 'confetti';
+        c.style.background = cols[Math.floor(Math.random()*cols.length)];
+        var angle = (Math.PI*2*i)/20;
+        var dist  = 100+Math.random()*60;
+        c.style.setProperty('--x', Math.cos(angle)*dist+'px');
+        c.style.setProperty('--y', Math.sin(angle)*dist+'px');
+        c.style.animation = 'confetti-burst '+(0.9+Math.random()*0.5)+'s ease-out forwards';
+        el.appendChild(c);
+        setTimeout(function(){ c.remove(); }, 1400);
+      }
+    }
+
+    // ── MOSTRAR MENSAJE ──────────────────────────────────────────
+    function addMessage(data) {
+      if (!data.chatname && !data.chatmessage) return;
+
+      var hash = msgHash(data);
+      if (hash === lastHash) return;
+      lastHash = hash;
+
+      if (processingMsg) { pendingMsg = data; return; }
+      showMessage(data);
+    }
+
+    function showMessage(data) {
+      processingMsg = true;
+
+      // Eliminar mensaje actual
+      var old = chatContainer.querySelector('.message-bubble');
+      if (old) {
+        gsap.to(old, { opacity:0, scale:0.8, y:-30, duration:0.3, onComplete:function(){ old.remove(); render(data); } });
+      } else {
+        render(data);
+      }
+    }
+
+    function render(data) {
+      var platform = data.platform || data.type || 'custom';
+      var isDonation = data.type === 'donation';
+      if (isDonation) platform = 'donation';
+
+      var msgDiv = document.createElement('div');
+      msgDiv.className = 'message-bubble';
+
+      var color = nextColor();
+
+      // Avatar
+      var avatarHTML = '';
+      if (data.chatimg) {
+        avatarHTML = '<div class="avatar-box"><img class="avatar-img" src="'+data.chatimg+'" onerror="this.style.display=\'none\'"></div>';
+      }
+
+      // Roles
+      var rolesHTML = buildRolesHTML(data.roles);
+
+      // Badge plataforma
+      var platBadge = buildPlatformBadge(isDonation ? 'donation' : platform);
+
+      // Username
+      var nameStyle = data.nameColor ? 'color:'+data.nameColor+';' : '';
+      var nameHTML  = '<span class="username" style="'+nameStyle+'">'+escHtml(data.chatname||'')+'</span>';
+
+      // Contenido donación
+      var donationHTML = '';
+      if (isDonation && data.amount) {
+        var label = data.donationType === 'bits' ? '💎 '+data.amount+' Bits'
+                  : data.donationType === 'sub'  ? '🌟 ¡Nuevo Sub!'
+                  : data.donationType === 'resub' ? '🔄 '+data.months+' meses'
+                  : data.donationType === 'subgift'? '🎁 Sub regalada'
+                  : data.donationType === 'superchat'? '💰 '+data.amountDisplay
+                  : data.donationType === 'member'? '⭐ ¡Nuevo Miembro!'
+                  : data.donationType === 'gift' ? '🎁 Regalo TikTok'
+                  : '💰 '+data.amount;
+        donationHTML = '<div class="donation-box">'+label+'</div>';
+      }
+
+      msgDiv.innerHTML =
+        '<div class="bubble-container '+color+'">' +
+          '<div class="spinning-gif"><img src="https://media1.tenor.com/m/7exwykqMlE0AAAAC/kurukuru-eve-kurukuru.gif" alt=""></div>'+
+          '<div class="deco-sparkle"></div>'+
+          '<div class="deco-heart">'+randDeco()+'</div>'+
+          '<div class="message-header">'+
+            avatarHTML+
+            '<div class="username-box">'+
+              nameHTML+
+              platBadge+
+              rolesHTML+
+            '</div>'+
+          '</div>'+
+          '<div class="message-content">'+escHtml(data.chatmessage||'')+'</div>'+
+          donationHTML+
+        '</div>';
+
+      chatContainer.appendChild(msgDiv);
+
+      var container = msgDiv.querySelector('.bubble-container');
+      gsap.fromTo(msgDiv,
+        { opacity:0, y:60, scale:0.8, rotation: Math.random()>0.5?-10:10 },
+        {
+          opacity:1, y:0, scale:1, rotation:0,
+          duration:0.7, ease:'back.out(2.5)',
+          onComplete: function() {
+            msgDiv.classList.add('visible');
+
+            if (Math.random()>0.6) {
+              container.classList.add('glitch');
+              setTimeout(function(){ container.classList.remove('glitch'); }, 300);
+            }
+            if (isDonation) createConfetti(msgDiv);
+            if (Math.random()>0.5) {
+              gsap.to(container, { x:[0,-4,4,-4,4,0], duration:0.5, ease:'power2.inOut' });
+            }
+            var ab = msgDiv.querySelector('.avatar-box');
+            if (ab && Math.random()>0.6) {
+              gsap.to(ab, { scale:[1,1.25,1], rotation:[0,360], duration:0.7, ease:'back.out(2)' });
+            }
+
+            processingMsg = false;
+            if (pendingMsg) {
+              var next = pendingMsg;
+              pendingMsg = null;
+              setTimeout(function(){ showMessage(next); }, 100);
+            }
+          }
+        }
+      );
+    }
+
+    // ── WEBSOCKET ────────────────────────────────────────────────
+    var ws, retryDelay = 1000;
+
+    function connect() {
+      try { ws = new WebSocket(SERVER_URL); } catch(e) {
+        connectionDot.classList.remove('connected');
+        setTimeout(connect, retryDelay);
+        return;
+      }
+      ws.onopen = function() { connectionDot.classList.add('connected'); retryDelay = 1000; };
+      ws.onmessage = function(e) {
+        try {
+          var data = JSON.parse(e.data);
+          if (data.type === 'status' || data.type === 'highlight' || data.type === 'highlight_clear') return;
+          addMessage(data);
+        } catch(err) {}
+      };
+      ws.onclose = function() {
+        connectionDot.classList.remove('connected');
+        retryDelay = Math.min(retryDelay*2, 30000);
+        setTimeout(connect, retryDelay);
+      };
+      ws.onerror = function() { ws.close(); };
+    }
+
+    connect();
+  </script>
+</body>
+</html>
