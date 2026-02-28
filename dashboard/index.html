@@ -140,20 +140,39 @@
     .layout {
       position: fixed;
       top: 50px; left: 0; right: 0; bottom: 0;
-      display: grid;
-      grid-template-columns: 320px 1fr;
+      display: flex;
       z-index: 10;
+      overflow: hidden;
     }
 
     /* ── SIDEBAR ── */
     .sidebar {
+      width: 320px;
+      min-width: 320px;
       background: rgba(0,12,12,0.98);
       border-right: 2px solid rgba(0,255,157,0.4);
       overflow-y: auto;
+      overflow-x: hidden;
       padding: 12px;
       display: flex;
       flex-direction: column;
       gap: 10px;
+      /* Animación slide */
+      transition: transform 0.4s cubic-bezier(0.4,0,0.2,1),
+                  min-width 0.4s cubic-bezier(0.4,0,0.2,1),
+                  width 0.4s cubic-bezier(0.4,0,0.2,1),
+                  border-color 0.3s;
+      transform: translateX(0);
+      flex-shrink: 0;
+      position: relative;
+      z-index: 20;
+    }
+    .sidebar.collapsed {
+      transform: translateX(-320px);
+      min-width: 0;
+      width: 0;
+      border-color: transparent;
+      padding: 0;
     }
     .sidebar::-webkit-scrollbar { width: 6px; }
     .sidebar::-webkit-scrollbar-thumb {
@@ -161,51 +180,80 @@
       border-radius: 3px;
     }
 
-    /* ── CARDS ── */
+    /* ── BOTÓN TOGGLE SIDEBAR ── */
+    #sidebar-toggle {
+      position: fixed;
+      top: 50%;
+      left: 320px;
+      transform: translateY(-50%) translateX(-50%);
+      width: 22px;
+      height: 60px;
+      background: rgba(0,15,15,0.97);
+      border: 2px solid rgba(0,255,157,0.6);
+      border-left: none;
+      border-radius: 0 8px 8px 0;
+      cursor: pointer;
+      z-index: 300;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: left 0.4s cubic-bezier(0.4,0,0.2,1),
+                  background 0.2s,
+                  box-shadow 0.2s;
+      box-shadow: 4px 0 16px rgba(0,255,157,0.15);
+    }
+    #sidebar-toggle:hover {
+      background: rgba(0,255,157,0.12);
+      box-shadow: 4px 0 24px rgba(0,255,157,0.35);
+    }
+    #sidebar-toggle.collapsed {
+      left: 0;
+      border-left: 2px solid rgba(0,255,157,0.6);
+      border-right: none;
+      border-radius: 8px 0 0 8px;
+      box-shadow: -4px 0 16px rgba(0,255,157,0.15);
+    }
+    #sidebar-toggle.collapsed:hover {
+      box-shadow: -4px 0 24px rgba(0,255,157,0.35);
+    }
+    .toggle-arrow {
+      font-size: 13px;
+      color: var(--green);
+      text-shadow: var(--glow-sm);
+      transition: transform 0.4s cubic-bezier(0.4,0,0.2,1);
+      user-select: none;
+      line-height: 1;
+    }
+    #sidebar-toggle.collapsed .toggle-arrow {
+      transform: rotate(180deg);
+    }
+
+    /* ── SECCIONES DEL SIDEBAR ── */
     .card {
-      background: rgba(0,20,20,0.7);
-      border: 1px solid rgba(0,255,157,0.3);
-      border-radius: 6px;
-      overflow: hidden;
-      box-shadow: 0 2px 12px rgba(0,255,157,0.07);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
     }
 
     .card-header {
       display: flex; align-items: center;
-      justify-content: space-between;
-      padding: 10px 12px;
-      cursor: pointer;
-      user-select: none;
-      border-bottom: 1px solid rgba(0,255,157,0.15);
-      transition: background 0.2s;
+      gap: 7px;
+      padding: 4px 0 6px 0;
+      border-bottom: 1px solid rgba(0,255,157,0.2);
     }
-    .card-header:hover { background: rgba(0,255,157,0.07); }
 
     .card-title-text {
       font-family: var(--font-title);
-      font-size: 14px;
+      font-size: 13px;
       color: var(--green);
       text-shadow: var(--glow-sm);
       letter-spacing: 1px;
     }
-    .card-toggle {
-      color: var(--green);
-      font-size: 14px;
-      transition: transform 0.3s;
-    }
-    .card-toggle.collapsed { transform: rotate(-90deg); }
 
     .card-body {
-      padding: 10px 12px;
       display: flex;
       flex-direction: column;
       gap: 8px;
-      transition: all 0.3s ease;
-      overflow: hidden;
-    }
-    .card-body.hidden {
-      padding: 0;
-      max-height: 0;
     }
 
     /* ── INPUTS ── */
@@ -374,6 +422,8 @@
        MAIN — CHAT PANEL
     ══════════════════════════════════ */
     .main {
+      flex: 1;
+      min-width: 0;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -682,6 +732,11 @@
 
 <div class="layout">
 
+  <!-- Botón toggle sidebar -->
+  <button id="sidebar-toggle" onclick="toggleSidebar()" title="Mostrar/ocultar panel">
+    <span class="toggle-arrow">◀</span>
+  </button>
+
   <!-- ════════════════════════════════
        SIDEBAR
   ════════════════════════════════ -->
@@ -689,9 +744,8 @@
 
     <!-- Servidor -->
     <div class="card">
-      <div class="card-header" onclick="toggleCard(this)">
+      <div class="card-header">
         <span class="card-title-text">🔌 Servidor</span>
-        <span class="card-toggle">▼</span>
       </div>
       <div class="card-body">
         <label>URL del servidor (Render / Railway)</label>
@@ -705,9 +759,8 @@
 
     <!-- Estado Conexiones -->
     <div class="card">
-      <div class="card-header" onclick="toggleCard(this)">
+      <div class="card-header">
         <span class="card-title-text">📡 Estado Conexiones</span>
-        <span class="card-toggle">▼</span>
       </div>
       <div class="card-body">
         <div class="platform-row">
@@ -748,9 +801,8 @@
 
     <!-- Kick -->
     <div class="card">
-      <div class="card-header" onclick="toggleCard(this)">
+      <div class="card-header">
         <span class="card-title-text">🟢 Kick — Chatroom</span>
-        <span class="card-toggle">▼</span>
       </div>
       <div class="card-body">
         <div id="kick-status-box" class="info-box info-green">
@@ -773,9 +825,8 @@
 
     <!-- TikTok -->
     <div class="card">
-      <div class="card-header" onclick="toggleCard(this)">
+      <div class="card-header">
         <span class="card-title-text">🎵 TikTok — Control</span>
-        <span class="card-toggle">▼</span>
       </div>
       <div class="card-body">
         <div style="display:flex;gap:6px;">
@@ -790,9 +841,8 @@
 
     <!-- YouTube -->
     <div class="card">
-      <div class="card-header" onclick="toggleCard(this)">
+      <div class="card-header">
         <span class="card-title-text">▶️ YouTube — Control</span>
-        <span class="card-toggle">▼</span>
       </div>
       <div class="card-body">
         <div id="youtube-status-box" class="info-box info-yellow">⏳ Esperando conexión...</div>
@@ -806,9 +856,8 @@
 
     <!-- URLs OBS -->
     <div class="card">
-      <div class="card-header" onclick="toggleCard(this)">
+      <div class="card-header">
         <span class="card-title-text">📺 URLs para OBS</span>
-        <span class="card-toggle">▼</span>
       </div>
       <div class="card-body">
         <!-- Chat multichat -->
@@ -849,11 +898,10 @@
 
     <!-- ⚙️ CONFIGURACIÓN VISUAL (colapsable) -->
     <div class="card">
-      <div class="card-header" onclick="toggleCard(this)">
+      <div class="card-header">
         <span class="card-title-text">⚙️ Configuración Visual</span>
-        <span class="card-toggle collapsed">▼</span>
       </div>
-      <div class="card-body hidden">
+      <div class="card-body">
 
         <label>Tamaño nombre: <span class="value-display" id="val-fontName">11px</span></label>
         <input type="range" id="fontNameSize" min="8" max="22" value="11"
@@ -992,19 +1040,19 @@ var PLATFORM_LOGOS = {
 };
 
 // ═══════════════════════════════════════════════
-// CARDS COLAPSABLES
+// TOGGLE SIDEBAR
 // ═══════════════════════════════════════════════
-function toggleCard(header) {
-  var body   = header.nextElementSibling;
-  var toggle = header.querySelector('.card-toggle');
-  if (body.classList.contains('hidden')) {
-    body.classList.remove('hidden');
-    toggle.classList.remove('collapsed');
-  } else {
-    body.classList.add('hidden');
-    toggle.classList.add('collapsed');
-  }
+function toggleSidebar() {
+  var sidebar = document.querySelector('.sidebar');
+  var btn     = document.getElementById('sidebar-toggle');
+  var isCollapsed = sidebar.classList.toggle('collapsed');
+  btn.classList.toggle('collapsed', isCollapsed);
+  store.set('sidebarCollapsed', isCollapsed ? '1' : '0');
 }
+
+// ═══════════════════════════════════════════════
+// CARDS (sin colapsar — contenido siempre visible)
+// ═══════════════════════════════════════════════
 
 // ═══════════════════════════════════════════════
 // INIT
@@ -1014,6 +1062,12 @@ document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('serverUrl').value = saved;
   updateOverlayUrls();
   if (saved) connectWS(saved);
+
+  // Restaurar estado del sidebar
+  if (store.get('sidebarCollapsed') === '1') {
+    document.querySelector('.sidebar').classList.add('collapsed');
+    document.getElementById('sidebar-toggle').classList.add('collapsed');
+  }
 });
 
 // ═══════════════════════════════════════════════
