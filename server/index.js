@@ -921,10 +921,60 @@ app.post('/api/youtube/restart', (req, res) => {
   state.youtube.connected    = false;
   state.youtube.liveChatId   = null;
   state.youtube.nextPageToken = null;
-  state.youtube.channelId    = null;  // forzar re-resolución del canal
+  state.youtube.channelId    = null;
   broadcastStatus();
   connectYouTube();
   res.json({ ok: true });
+});
+
+// Conectar YouTube directamente por Video ID
+app.post('/api/youtube/connect-by-videoid', async (req, res) => {
+  const { videoId } = req.body;
+  if (!videoId) return res.status(400).json({ error: 'videoId requerido' });
+
+  clearTimeout(state.youtube.pollTimer);
+  state.youtube.connected    = false;
+  state.youtube.liveChatId   = null;
+  state.youtube.nextPageToken = null;
+  broadcastStatus();
+
+  try {
+    console.log('[YouTube] Conectando por Video ID:', videoId);
+
+    // Obtener datos del video: título, canal y liveChatId
+    const videoUrl = `https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails,snippet&id=${encodeURIComponent(videoId)}&key=${CONFIG.youtubeKey}`;
+    const videoData = await fetchJSON(videoUrl);
+
+    if (!videoData.items || videoData.items.length === 0) {
+      console.log('[YouTube] Video no encontrado:', videoId);
+      return res.status(404).json({ error: 'Video no encontrado' });
+    }
+
+    const item       = videoData.items[0];
+    const chatId     = item.liveStreamingDetails?.activeLiveChatId;
+    const channelName = item.snippet?.channelTitle || 'Canal desconocido';
+    const videoTitle  = item.snippet?.title || '';
+
+    if (!chatId) {
+      console.log('[YouTube] El video no tiene liveChatId activo:', videoId);
+      return res.status(400).json({ error: 'El video no tiene chat en vivo activo', channelName, videoTitle });
+    }
+
+    state.youtube.liveChatId    = chatId;
+    state.youtube.nextPageToken  = null;
+    state.youtube.connected      = true;
+    state.youtube.channelId      = item.snippet?.channelId || null;
+
+    console.log(`[YouTube] ✅ Conectado por Video ID — Canal: ${channelName} | Chat: ${chatId}`);
+    broadcastStatus();
+    youtubePollChat();
+
+    res.json({ ok: true, channelName, videoTitle, chatId });
+
+  } catch(e) {
+    console.error('[YouTube] Error conectando por Video ID:', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.get('/api/status', (req, res) => res.json({
