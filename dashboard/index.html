@@ -222,6 +222,7 @@
     .tag-connector { background: rgba(0,255,157,0.12); border:1px solid rgba(0,255,157,0.4); color: var(--green); }
     .tag-puppeteer { background: rgba(255,170,0,0.12); border:1px solid rgba(255,170,0,0.4); color: var(--yellow); }
     .tag-browser { background: rgba(255,0,0,0.12); border:1px solid rgba(255,0,0,0.4); color: #ff6666; }
+    .tag-server { background: rgba(0,255,157,0.12); border:1px solid rgba(0,255,157,0.4); color: var(--green); }
 
     input[type=range] { width: 100%; accent-color: var(--green); cursor: pointer; }
     input[type=color] { width: 40px; height: 28px; border: 1px solid rgba(0,255,157,0.4); border-radius: 4px; cursor: pointer; background: transparent; padding: 1px; }
@@ -433,7 +434,7 @@
           <span class="platform-dot" id="dot-youtube"></span>
           <span class="platform-icon">▶️</span>
           <div class="platform-info"><div class="platform-name">YouTube</div><div class="platform-channel" id="ch-youtube">—</div></div>
-          <span class="tag tag-browser">polling</span>
+          <span class="tag tag-server">server</span>
         </div>
       </div>
     </div>
@@ -470,25 +471,22 @@
       </div>
     </div>
 
-    <!-- ══ YOUTUBE POLLING (sin localhost) ══ -->
+    <!-- ══ YOUTUBE — Server Side via youtube-chat ══ -->
     <div class="card">
       <div class="card-header"><span class="card-title-text">▶️ YouTube — Chat al Multichat</span></div>
       <div class="card-body">
         <div id="yt-bridge-status" class="info-box info-yellow">
-          📋 Pegá el link del live y presioná Conectar. Los mensajes llegarán al multichat automáticamente.
+          📋 Pegá el link del live y presioná Conectar. El servidor se encarga de todo.
         </div>
         <label>Link o Video ID del live:</label>
         <div class="input-row">
           <input id="yt-video-url" type="text" placeholder="https://youtube.com/watch?v=..." onkeydown="if(event.key==='Enter')connectYouTube()" />
           <button class="btn btn-primary" onclick="connectYouTube()">▶ Conectar</button>
         </div>
-        <div class="hint">Los mensajes de YouTube aparecen en el multichat en tiempo real.</div>
+        <div class="hint">El servidor usa <strong>youtube-chat</strong> (sin API key, sin cuota).</div>
         <div style="display:flex;gap:6px;margin-top:2px;">
           <button class="btn btn-danger btn-full" onclick="disconnectYouTube()">⏹ Detener</button>
           <button class="btn btn-secondary btn-full" onclick="openYouTubeLive()">📺 Abrir Live</button>
-        </div>
-        <div id="yt-stats" style="display:none;font-size:10px;color:var(--muted);padding:4px 0;">
-          Mensajes recibidos: <span id="yt-msg-count">0</span> · Último poll: <span id="yt-last-poll">—</span>
         </div>
       </div>
     </div>
@@ -588,9 +586,9 @@
           <span id="visor-unavailable-msg">Canal no configurado</span>
           <span class="uv-sub" id="visor-unavailable-sub">Configurá el canal en el panel lateral para poder ver el chat aquí.</span>
           <div class="uv-status" id="visor-yt-status" style="display:none;">
-            ✅ Polling activo — los mensajes de YouTube llegan al multichat automáticamente.<br>
+            ✅ youtube-chat activo en el servidor — los mensajes llegan al multichat automáticamente.<br>
             YouTube bloquea iframes externos por seguridad.<br><br>
-            Mensajes recibidos: <span id="visor-yt-count">0</span>
+            Video ID: <span id="visor-yt-videoid">—</span>
           </div>
           <button class="uv-btn" id="visor-yt-open-btn" style="display:none;" onclick="openYouTubeLive()">📺 Abrir chat en nueva pestaña</button>
         </div>
@@ -675,6 +673,7 @@ var currentChannels={twitch:'',kick:'',tiktok:'',youtube:''};
 var MAX_MESSAGES=200, messages=[], currentHighlightMid=null;
 var autoScroll=true;
 var currentVisor=null;
+var ytVideoId=null;
 
 var PLATFORM_LOGOS={
   twitch:'<svg viewBox="0 0 24 28" fill="currentColor"><path d="M2.149 0L.537 4.119v19.63h6.72V28l4.123-4.25h3.29L22.463 14V0H2.149zm18.24 13.18l-3.29 3.387h-3.948l-2.886 2.973v-2.973H6.584V2.387h13.805v10.793zM17.07 5.367h-2.148v6.42h2.148V5.367zm-5.907 0h-2.15v6.42h2.15V5.367z"/></svg>',
@@ -737,9 +736,9 @@ var VISOR_CONFIG = {
   },
   youtube: {
     label: 'YouTube Live Chat', badge: 'YOUTUBE',
-    getUrl: function() { return null; }, // YouTube bloquea iframes siempre
-    noChMsg: 'YouTube bloquea iframes (ERR_BLOCKED_BY_RESPONSE)',
-    noChSub: 'YouTube rechaza toda conexión desde iframes externos. Los mensajes llegan igual al multichat vía polling. Usá "📺 Abrir Live" para ver el chat en una pestaña aparte.'
+    getUrl: function() { return null; },
+    noChMsg: 'YouTube bloquea iframes externos',
+    noChSub: 'Los mensajes llegan igual al multichat vía youtube-chat en el servidor.'
   },
   tiktok: {
     label: 'TikTok Live', badge: 'TIKTOK',
@@ -765,24 +764,25 @@ function openChatVisor(platform) {
   badge.className='chat-visor-badge '+platform; badge.textContent=cfg.badge;
   titleEl.textContent=cfg.label+(ch?' — '+ch:'');
 
-  // Ocultar elementos YouTube por defecto
   if(ytStatus) ytStatus.style.display='none';
   if(ytOpenBtn) ytOpenBtn.style.display='none';
 
   if(!url) {
     iframe.src='about:blank'; iframe.style.display='none'; unavail.style.display='flex';
-    if(platform === 'youtube' && ytState.active) {
-      // YouTube con polling activo: mostrar estado informativo
+    if(platform === 'youtube') {
       if(unavailIcon) unavailIcon.textContent='▶️';
-      unavailMsg.textContent='YouTube — Polling activo';
-      unavailSub.textContent='';
-      if(ytStatus) { ytStatus.style.display='block'; document.getElementById('visor-yt-count').textContent=ytState.msgCount; }
-      if(ytOpenBtn) ytOpenBtn.style.display='inline-block';
-    } else if(platform === 'youtube') {
-      // YouTube sin conectar
-      if(unavailIcon) unavailIcon.textContent='▶️';
-      unavailMsg.textContent='YouTube — Sin conectar';
-      unavailSub.textContent=cfg.noChSub;
+      if(ytVideoId) {
+        unavailMsg.textContent='YouTube — youtube-chat activo';
+        unavailSub.textContent='';
+        if(ytStatus) {
+          ytStatus.style.display='block';
+          document.getElementById('visor-yt-videoid').textContent = ytVideoId;
+        }
+        if(ytOpenBtn) ytOpenBtn.style.display='inline-block';
+      } else {
+        unavailMsg.textContent='YouTube — Sin conectar';
+        unavailSub.textContent=cfg.noChSub;
+      }
     } else {
       if(unavailIcon) unavailIcon.textContent='⚠';
       unavailMsg.textContent=cfg.noChMsg; unavailSub.textContent=cfg.noChSub;
@@ -842,6 +842,8 @@ function handleStatus(data){
   setPlatformStatus('twitch',data.twitch,(data.channels&&data.channels.twitch)||'—');
   setPlatformStatus('kick',data.kick,(data.channels&&data.channels.kick)||'—');
   setPlatformStatus('tiktok',data.tiktok,(data.channels&&data.channels.tiktok)||'—');
+  setPlatformStatus('youtube',data.youtube,data.youtubeVideoId||'—');
+  if(data.youtubeVideoId) ytVideoId=data.youtubeVideoId;
   if(data.channels) currentChannels=data.channels;
   var mt=document.getElementById('tiktok-mode-tag');
   if(mt){mt.textContent=data.tiktokMode||'connector';mt.className='tag '+(data.tiktokMode==='puppeteer'?'tag-puppeteer':'tag-connector');}
@@ -850,26 +852,14 @@ function handleStatus(data){
     if(savedId&&(!kickWs||kickWs.readyState>1)){connectKickBrowser(savedId);}
     else if(!savedId&&!autoKickDone&&data.channels&&data.channels.kick){autoKickDone=true;setTimeout(resolveKickId,1500);}
   }
+  // Actualizar estado YouTube en panel si está abierto
+  if(data.youtube && data.youtubeVideoId){
+    setYtBridgeStatus('green','✅ Conectado — <b>'+data.youtubeVideoId+'</b> · Los mensajes llegan al multichat.');
+  }
 }
 function setPlatformStatus(p,c,ch){var dot=document.getElementById('dot-'+p),el=document.getElementById('ch-'+p);if(dot)dot.className='platform-dot'+(c?' ok':'');if(el)el.textContent=ch||'—';}
 
-// ════════════════════════════════════════════════════════
-//  YOUTUBE POLLING — Sin localhost, todo via Render
-//  Usa /api/yt-proxy y /api/yt-chat del servidor configurado
-// ════════════════════════════════════════════════════════
-var ytState = {
-  videoId: null,
-  active: false,
-  apiKey: null,
-  continuation: null,
-  pollTimer: null,
-  msgCount: 0,
-  seenIds: new Set(),
-  errorCount: 0,
-  POLL_INTERVAL: 5000,   // ms entre polls normales
-  ERROR_BACKOFF:  15000, // ms cuando hay error
-};
-
+// ═══ YOUTUBE — servidor hace todo el trabajo ═══
 function extractVideoId(input) {
   if (!input) return null;
   input = input.trim();
@@ -884,300 +874,6 @@ function getHttpBase() {
   return u.replace(/^wss?/, 'https').replace(/\/$/, '');
 }
 
-// PASO 1: Obtener apiKey y continuation token via proxy del servidor
-async function fetchYtInitData(videoId) {
-  var base = getHttpBase();
-  if (!base) throw new Error('Servidor no configurado');
-
-  // Intentar con /watch primero, luego con /live como fallback
-  var urls = [
-    'https://www.youtube.com/watch?v=' + videoId,
-    'https://www.youtube.com/live/' + videoId,
-  ];
-
-  var html = null;
-  var lastErr = '';
-  for (var i = 0; i < urls.length; i++) {
-    try {
-      var proxyUrl = base + '/api/yt-proxy?url=' + encodeURIComponent(urls[i]);
-      var resp = await fetch(proxyUrl);
-      if (!resp.ok) { lastErr = 'HTTP ' + resp.status; continue; }
-      var text = await resp.text();
-      if (text.length < 500) { lastErr = 'Respuesta muy corta'; continue; }
-      html = text;
-      break;
-    } catch(e) { lastErr = e.message; }
-  }
-  if (!html) throw new Error('Proxy falló: ' + lastErr);
-
-  // ── Extraer INNERTUBE_API_KEY ──
-  var apiKey = null;
-  var patterns = [
-    /"INNERTUBE_API_KEY"\s*:\s*"([^"]{10,})"/,
-    /"innertubeApiKey"\s*:\s*"([^"]{10,})"/,
-    /["']INNERTUBE_API_KEY["']\s*:\s*["']([^"']{10,})["']/,
-    /ytcfg\.set\([^)]*"INNERTUBE_API_KEY"\s*:\s*"([^"]+)"/,
-  ];
-  for (var pi = 0; pi < patterns.length; pi++) {
-    var m = html.match(patterns[pi]);
-    if (m && m[1]) { apiKey = m[1]; break; }
-  }
-
-  // Si no encontramos apiKey, YouTube respondió con página sin datos (bot-check)
-  // En ese caso usamos la clave pública fija de YouTube Web (cambia raramente)
-  if (!apiKey) {
-    // Clave pública conocida de YouTube Web — funciona para live chat
-    apiKey = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
-    console.log('[YT] Usando apiKey pública de fallback');
-  }
-
-  // ── Extraer continuation token ──
-  var continuation = null;
-  var contPatterns = [
-    // Patrón más específico: dentro de liveChatRenderer
-    /"liveChatRenderer"[\s\S]{0,500}?"continuation"\s*:\s*"([A-Za-z0-9_%+/=-]{30,})"/,
-    // invalidationContinuationData (live activo)
-    /"invalidationContinuationData"\s*:\s*\{\s*"continuation"\s*:\s*"([^"]{30,})"/,
-    // timedContinuationData
-    /"timedContinuationData"\s*:\s*\{[^}]{0,100}"continuation"\s*:\s*"([^"]{30,})"/,
-    // reloadContinuationData
-    /"reloadContinuationData"\s*:\s*\{\s*"continuation"\s*:\s*"([^"]{30,})"/,
-    // Cualquier continuation larga cerca de "live"
-    /"continuation"\s*:\s*"(0ofMy[A-Za-z0-9_%+/=-]{20,})"/,
-    /"continuation"\s*:\s*"(Cgt[A-Za-z0-9_%+/=-]{20,})"/,
-    /"continuation"\s*:\s*"([A-Za-z0-9_%+/=-]{50,})"/,
-  ];
-  for (var ci = 0; ci < contPatterns.length; ci++) {
-    var cm = html.match(contPatterns[ci]);
-    if (cm && cm[1] && cm[1].length >= 30) { continuation = cm[1]; break; }
-  }
-
-  // Fallback: buscar dentro del bloque liveChatRenderer
-  if (!continuation) {
-    var lcIdx = html.indexOf('liveChatRenderer');
-    if (lcIdx !== -1) {
-      var chunk = html.slice(lcIdx, lcIdx + 5000);
-      var fm = chunk.match(/"continuation"\s*:\s*"([A-Za-z0-9_%+/=-]{30,})"/);
-      if (fm) continuation = fm[1];
-    }
-  }
-
-  if (!continuation) {
-    // Debug: mostrar fragmento del HTML para diagnóstico
-    var snippet = html.slice(0, 200) + '...' + html.slice(html.length - 200);
-    console.log('[YT] HTML snippet:', snippet);
-    throw new Error('No se encontró continuation token — ¿el video está en vivo con chat activo?');
-  }
-
-  return { apiKey, continuation };
-}
-
-// PASO 2: Llamar a /api/yt-chat con la continuation actual
-async function pollYtChat() {
-  if (!ytState.active) return;
-  var base = getHttpBase();
-  if (!base) return;
-
-  try {
-    var resp = await fetch(base + '/api/yt-chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ apiKey: ytState.apiKey, continuation: ytState.continuation })
-    });
-    if (!resp.ok) throw new Error('yt-chat HTTP ' + resp.status);
-    var data = await resp.json();
-    ytState.errorCount = 0;
-
-    // Extraer próxima continuation
-    var nextCont = null;
-    try {
-      var cr = data.continuationContents && data.continuationContents.liveChatContinuation;
-      if (cr && cr.continuations && cr.continuations[0]) {
-        var c0 = cr.continuations[0];
-        nextCont = (c0.invalidationContinuationData && c0.invalidationContinuationData.continuation) ||
-                   (c0.timedContinuationData && c0.timedContinuationData.continuation) ||
-                   (c0.reloadContinuationData && c0.reloadContinuationData.continuation) ||
-                   (c0.liveChatReplayContinuationData && c0.liveChatReplayContinuationData.continuation);
-      }
-    } catch(e) {}
-    if (nextCont) ytState.continuation = nextCont;
-
-    // Extraer mensajes
-    try {
-      var actions = data.continuationContents.liveChatContinuation.actions || [];
-      actions.forEach(function(action) {
-        var item = action.addChatItemAction && action.addChatItemAction.item;
-        if (!item) return;
-
-        // Mensaje normal
-        var lr = item.liveChatTextMessageRenderer;
-        // Superchat
-        var sc = item.liveChatPaidMessageRenderer;
-        // Membership
-        var mb = item.liveChatMembershipItemRenderer;
-
-        var renderer = lr || sc || mb;
-        if (!renderer) return;
-
-        var msgId = renderer.id;
-        if (!msgId || ytState.seenIds.has(msgId)) return;
-        ytState.seenIds.add(msgId);
-        if (ytState.seenIds.size > 500) {
-          // Limpiar IDs viejos
-          var arr = Array.from(ytState.seenIds);
-          ytState.seenIds = new Set(arr.slice(arr.length - 300));
-        }
-
-        // Nombre del autor
-        var authorName = '';
-        if (renderer.authorName) {
-          authorName = (renderer.authorName.simpleText) ||
-            (renderer.authorName.runs && renderer.authorName.runs.map(function(r){return r.text;}).join('')) || '';
-        }
-
-        // Avatar
-        var avatar = null;
-        if (renderer.authorPhoto && renderer.authorPhoto.thumbnails && renderer.authorPhoto.thumbnails.length) {
-          avatar = renderer.authorPhoto.thumbnails[0].url;
-        }
-
-        // Roles
-        var roles = [];
-        if (renderer.authorBadges) {
-          renderer.authorBadges.forEach(function(b) {
-            var icon = b.liveChatAuthorBadgeRenderer && b.liveChatAuthorBadgeRenderer.icon;
-            if (icon) {
-              var t = (icon.iconType || '').toLowerCase();
-              if (t === 'owner' || t === 'broadcaster') roles.push({ type: 'broadcaster', label: 'Streamer' });
-              else if (t === 'moderator') roles.push({ type: 'moderator', label: 'Mod' });
-              else if (t === 'verified') roles.push({ type: 'verified', label: '✓ Verificado' });
-            }
-            // Badge de miembro
-            var custom = b.liveChatAuthorBadgeRenderer && b.liveChatAuthorBadgeRenderer.customThumbnail;
-            if (custom) roles.push({ type: 'member', label: '⭐ Miembro' });
-          });
-        }
-
-        // Texto del mensaje
-        var messageText = '';
-        if (sc) {
-          // Superchat: puede tener mensaje opcional
-          if (sc.message && sc.message.runs) {
-            messageText = sc.message.runs.map(function(r){return r.text||'';}).join('');
-          }
-          // Monto
-          var amount = (sc.purchaseAmountText && (sc.purchaseAmountText.simpleText || '')) || '';
-          if (ws && ws.readyState === 1) {
-            ws.send(JSON.stringify({
-              type: 'youtube_donation',
-              donationType: 'superchat',
-              chatname: authorName || 'YouTuber',
-              chatmessage: messageText || ('¡Superchat de ' + amount + '!'),
-              chatimg: avatar,
-              amount: 0,
-              amountDisplay: amount,
-              roles: roles,
-              videoId: ytState.videoId,
-              mid: 'yt-sc-' + msgId
-            }));
-          }
-          ytState.msgCount++;
-          updateYtStats();
-          return; // superchat se manda como donation, no como mensaje normal
-        } else if (mb) {
-          // Mensaje de membresía
-          if (mb.headerSubtext && mb.headerSubtext.runs) {
-            messageText = mb.headerSubtext.runs.map(function(r){return r.text||'';}).join('');
-          } else {
-            messageText = '¡Nuevo miembro!';
-          }
-          if (ws && ws.readyState === 1) {
-            ws.send(JSON.stringify({
-              type: 'youtube_donation',
-              donationType: 'member',
-              chatname: authorName || 'YouTuber',
-              chatmessage: messageText,
-              chatimg: avatar,
-              amount: 0,
-              roles: roles,
-              videoId: ytState.videoId,
-              mid: 'yt-mb-' + msgId
-            }));
-          }
-          ytState.msgCount++;
-          updateYtStats();
-          return;
-        } else if (lr) {
-          // Mensaje normal
-          if (lr.message && lr.message.runs) {
-            messageText = lr.message.runs.map(function(r){return r.text||'';}).join('');
-          }
-        }
-
-        if (!messageText) return;
-
-        var msgPayload = {
-          type: 'youtube_message',
-          chatname: authorName || 'YouTuber',
-          chatmessage: messageText,
-          chatimg: avatar || null,
-          roles: roles,
-          videoId: ytState.videoId,
-          mid: 'yt-' + msgId
-        };
-
-        if (ws && ws.readyState === 1) {
-          ws.send(JSON.stringify(msgPayload));
-        } else {
-          // Si no hay WS, mostrar directo en el dashboard
-          appendMessage(Object.assign({ platform: 'youtube', nameColor: '#FF0000' }, msgPayload));
-        }
-        ytState.msgCount++;
-        updateYtStats();
-      });
-    } catch(e) {
-      console.warn('[YT] Error parseando mensajes:', e);
-    }
-
-    // Programar siguiente poll
-    if (ytState.active) {
-      var timeout = ytState.POLL_INTERVAL;
-      // Respetar timeoutMs del servidor si lo da
-      try {
-        var cr2 = data.continuationContents.liveChatContinuation.continuations[0];
-        var tms = (cr2.timedContinuationData && cr2.timedContinuationData.timeoutMs) ||
-                  (cr2.invalidationContinuationData && cr2.invalidationContinuationData.timeoutMs);
-        if (tms && tms > 500) timeout = Math.max(tms, 3000);
-      } catch(e) {}
-      ytState.pollTimer = setTimeout(pollYtChat, timeout);
-    }
-
-  } catch(e) {
-    console.warn('[YT] Error en poll:', e.message);
-    ytState.errorCount++;
-    setYtBridgeStatus('yellow', '⚠️ Error #' + ytState.errorCount + ': ' + e.message + ' — Reintentando...');
-    if (ytState.errorCount > 5) {
-      setYtBridgeStatus('red', '❌ Demasiados errores. El live puede haber terminado o YouTube bloqueó el polling. <button class="btn btn-secondary" style="font-size:10px;padding:2px 7px;margin-left:5px;" onclick="reconnectYouTube()">🔄 Reintentar</button>');
-      ytState.active = false;
-      setPlatformStatus('youtube', false, ytState.videoId || '—');
-      return;
-    }
-    if (ytState.active) ytState.pollTimer = setTimeout(pollYtChat, ytState.ERROR_BACKOFF);
-  }
-}
-
-function updateYtStats() {
-  var el = document.getElementById('yt-stats');
-  if (el) {
-    el.style.display = 'block';
-    document.getElementById('yt-msg-count').textContent = ytState.msgCount;
-    document.getElementById('yt-last-poll').textContent = new Date().toLocaleTimeString('es', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  }
-  // Actualizar contador en el visor si está abierto en YouTube
-  var visorCount = document.getElementById('visor-yt-count');
-  if (visorCount) visorCount.textContent = ytState.msgCount;
-}
-
 async function connectYouTube() {
   var input = document.getElementById('yt-video-url').value.trim();
   var videoId = extractVideoId(input);
@@ -1185,74 +881,44 @@ async function connectYouTube() {
     setYtBridgeStatus('red', '❌ URL inválida. Ej: https://youtube.com/watch?v=abc123');
     return;
   }
-  if (!getHttpBase()) {
+  var base = getHttpBase();
+  if (!base) {
     setYtBridgeStatus('red', '❌ Primero configurá y conectá el servidor (URL de Render).');
     return;
   }
-
-  // Detener polling anterior si había
-  disconnectYouTube(true);
-
   store.set('ytVideoUrl', input);
-  ytState.videoId    = videoId;
-  ytState.active     = true;
-  ytState.msgCount   = 0;
-  ytState.seenIds    = new Set();
-  ytState.errorCount = 0;
-
+  ytVideoId = videoId;
   setYtBridgeStatus('yellow', '⏳ Conectando al live de YouTube (' + videoId + ')...');
   setPlatformStatus('youtube', false, videoId);
-
   try {
-    var init = await fetchYtInitData(videoId);
-    ytState.apiKey       = init.apiKey;
-    ytState.continuation = init.continuation;
-
-    setYtBridgeStatus('green', '✅ Conectado — <b>' + videoId + '</b> · Los mensajes aparecen en el multichat.');
-    setPlatformStatus('youtube', true, videoId);
-    currentChannels.youtube = videoId;
-
-    if (ws && ws.readyState === 1) {
-      ws.send(JSON.stringify({ type: 'youtube_connected', videoId: videoId }));
+    var r = await fetch(base + '/api/youtube/connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videoId: videoId })
+    });
+    var d = await r.json();
+    if (d.ok) {
+      setYtBridgeStatus('green', '✅ Servidor conectando a <b>' + videoId + '</b> — los mensajes llegarán al multichat.');
+      toast('▶️ YouTube: el servidor está conectando...');
+    } else {
+      setYtBridgeStatus('red', '❌ Error: ' + (d.error || 'desconocido'));
     }
-
-    // Arrancar polling
-    ytState.pollTimer = setTimeout(pollYtChat, 1500);
-    // Abrir visor automáticamente
-    openChatVisor('youtube');
-    toast('▶️ YouTube conectado — mensajes llegando al multichat');
-
   } catch(e) {
-    ytState.active = false;
-    setYtBridgeStatus('red', '❌ ' + e.message);
-    setPlatformStatus('youtube', false, '—');
-    toast('❌ YouTube: ' + e.message);
+    setYtBridgeStatus('red', '❌ No se pudo contactar el servidor: ' + e.message);
   }
 }
 
-async function reconnectYouTube() {
-  ytState.errorCount = 0;
-  ytState.active = true;
-  try {
-    var init = await fetchYtInitData(ytState.videoId);
-    ytState.apiKey       = init.apiKey;
-    ytState.continuation = init.continuation;
-    setYtBridgeStatus('green', '✅ Reconectado — ' + ytState.videoId);
-    setPlatformStatus('youtube', true, ytState.videoId);
-    ytState.pollTimer = setTimeout(pollYtChat, 1000);
-  } catch(e) {
-    setYtBridgeStatus('red', '❌ Reconexión fallida: ' + e.message);
+async function disconnectYouTube(silent) {
+  var base = getHttpBase();
+  if (base) {
+    try {
+      await fetch(base + '/api/youtube/disconnect', { method: 'POST' });
+    } catch(e) {}
   }
-}
-
-function disconnectYouTube(silent) {
-  ytState.active = false;
-  if (ytState.pollTimer) { clearTimeout(ytState.pollTimer); ytState.pollTimer = null; }
+  ytVideoId = null;
+  setPlatformStatus('youtube', false, '—');
   if (!silent) {
-    setPlatformStatus('youtube', false, '—');
-    setYtBridgeStatus('yellow', '📋 Pegá el link del live y presioná Conectar.');
-    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'youtube_disconnected' }));
-    document.getElementById('yt-stats').style.display = 'none';
+    setYtBridgeStatus('yellow', '📋 Pegá el link del live y presioná Conectar. El servidor se encarga de todo.');
     toast('⏹ YouTube detenido');
   }
 }
@@ -1262,6 +928,12 @@ function setYtBridgeStatus(color, html) {
   if (!box) return;
   box.className = 'info-box info-' + color;
   box.innerHTML = html;
+}
+
+function openYouTubeLive(){
+  var vid=ytVideoId||'';
+  if(vid){window.open('https://www.youtube.com/watch?v='+vid,'_blank','noopener');}
+  else{toast('Pegá el link del live primero');}
 }
 
 // ═══ APPEND MESSAGE ═══
@@ -1408,7 +1080,6 @@ async function sendKickId(idParam){
 }
 async function restartTikTok(){var su=store.get('serverUrl');if(!su)return toast('Configura la URL del servidor primero');var hu=su.replace(/^wss?/,'https').replace(/\/$/,'');try{var r=await fetch(hu+'/api/tiktok/restart',{method:'POST'});var d=await r.json();toast(d.ok?'🔄 TikTok reconectando...':'❌ Error');}catch(e){toast('❌ No se pudo contactar el servidor');}}
 function openTikTokLive(){var u=currentChannels.tiktok||'';if(!u)return toast('TikTok no configurado');window.open('https://www.tiktok.com/@'+u+'/live','_blank','noopener');}
-function openYouTubeLive(){var vid=ytState.videoId||'';if(vid){window.open('https://www.youtube.com/watch?v='+vid,'_blank','noopener');}else{toast('Pegá el link del live primero');}}
 function sendCustomMessage(){var input=document.getElementById('custom-msg-input'),text=input.value.trim();if(!text)return;if(!isConnected||!ws)return toast('⚠️ No hay conexión');ws.send(JSON.stringify({type:'custom_message',user:'Tú (dashboard)',text:text}));input.value='';}
 
 // ═══ OVERLAY URLs ═══
