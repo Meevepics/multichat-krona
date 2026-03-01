@@ -18,7 +18,7 @@ try {
 
 let Masterchat, stringify_mc;
 try {
-  ({ Masterchat, stringify: stringify_mc } = require('masterchat'));
+  ({ Masterchat, stringify: stringify_mc } = require('@stu43005/masterchat'));
 } catch(e) { console.log('[YouTube] ⚠️  masterchat no instalado — corré: npm i masterchat'); }
 
 const app    = express();
