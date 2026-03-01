@@ -875,15 +875,20 @@ function setYtBridgeStatus(color, html) {
   box.innerHTML = html;
 }
 
+function getServerHttpUrl() {
+  var serverUrl = store.get('serverUrl') || '';
+  return serverUrl.replace(/^wss?/, 'https').replace(/\/$/, '');
+}
+
 async function fetchYtInitialPage(videoId) {
   if (!ytBridge.active) return;
+  var serverBase = getServerHttpUrl();
+  if (!serverBase) { setYtBridgeStatus('red', '❌ Conecta el servidor primero.'); return; }
   try {
-    // Usamos el proxy de allorigins para evitar CORS
-    var url = 'https://www.youtube.com/watch?v=' + videoId;
-    var proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
-    var r = await fetch(proxyUrl);
-    var data = await r.json();
-    var html = data.contents || '';
+    var ytUrl = 'https://www.youtube.com/watch?v=' + videoId;
+    var r = await fetch(serverBase + '/api/yt-proxy?url=' + encodeURIComponent(ytUrl));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    var html = await r.text();
 
     // Extraer API key (INNERTUBE_API_KEY)
     var keyMatch = html.match(/"INNERTUBE_API_KEY"\s*:\s*"([^"]+)"/);
@@ -927,9 +932,10 @@ async function fetchYtInitialPage(videoId) {
   } catch(err) {
     ytBridge.retryCount++;
     if (ytBridge.retryCount <= ytBridge.MAX_RETRY) {
+      setYtBridgeStatus('yellow', '⏳ Reintentando... (' + ytBridge.retryCount + '/' + ytBridge.MAX_RETRY + ') — ' + (err.message||''));
       setTimeout(function() { fetchYtInitialPage(videoId); }, 6000);
     } else {
-      setYtBridgeStatus('red', '❌ Error de red: ' + (err.message || err));
+      setYtBridgeStatus('red', '❌ Error: ' + (err.message || err));
       setPlatformStatus('youtube', false, '—');
     }
   }
@@ -937,29 +943,16 @@ async function fetchYtInitialPage(videoId) {
 
 async function pollYtChat() {
   if (!ytBridge.active || !ytBridge.continuation || !ytBridge.apiKey) return;
+  var serverBase = getServerHttpUrl();
+  if (!serverBase) return;
   try {
-    var apiUrl = 'https://www.youtube.com/youtubei/v1/live_chat/get_live_chat?key=' + ytBridge.apiKey;
-    var proxyUrl = 'https://api.allorigins.win/post?url=' + encodeURIComponent(apiUrl);
-
-    var body = JSON.stringify({
-      context: {
-        client: {
-          clientName: 'WEB',
-          clientVersion: '2.20240101'
-        }
-      },
-      continuation: ytBridge.continuation
-    });
-
-    var r = await fetch(proxyUrl, {
+    var r = await fetch(serverBase + '/api/yt-chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: apiUrl, method: 'POST', data: body, headers: { 'Content-Type': 'application/json' } })
+      body: JSON.stringify({ apiKey: ytBridge.apiKey, continuation: ytBridge.continuation })
     });
-    var proxyData = await r.json();
-    var responseText = proxyData.contents || '';
-    var data;
-    try { data = JSON.parse(responseText); } catch(e) { return; }
+    if (!r.ok) return;
+    var data = await r.json();
 
     // Actualizar continuation para el siguiente poll
     var lcc = data.continuationContents && data.continuationContents.liveChatContinuation;
