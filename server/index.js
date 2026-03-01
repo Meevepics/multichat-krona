@@ -4,6 +4,8 @@
 //  ✅ Donaciones: Twitch Bits/Subs | TikTok Gifts | Kick (browser) | YouTube SuperChats
 //  ✅ Kick avatar resuelto via kick.com/api/v2
 //  ✅ FIXED: Twitch emotes → chatemotes [{text,url,start,end}]
+//  ✅ FIXED: YOUTUBE_CHANNEL_ID directo — evita gastar cuota en resolución
+//  ✅ FIXED: Backoff agresivo en error de cuota YouTube (403/429)
 // ============================================================
 
 const express    = require('express');
@@ -25,14 +27,16 @@ const wss    = new WebSocketServer({ server });
 
 // ── CONFIG ───────────────────────────────────────────────────
 const CONFIG = {
-  twitch:       process.env.TWITCH_CHANNEL    || '',
-  kick:         process.env.KICK_CHANNEL      || '',
-  kickId:       process.env.KICK_CHANNEL_ID   || '',
-  tiktok:       process.env.TIKTOK_USERNAME   || '',
-  youtubeHandle: process.env.YOUTUBE_HANDLE     || '',
-  youtubeKey:    process.env.YOUTUBE_API_KEY    || '',
-  port:         process.env.PORT              || 3000,
-  tiktokMode:   process.env.TIKTOK_MODE       || 'connector',
+  twitch:          process.env.TWITCH_CHANNEL      || '',
+  kick:            process.env.KICK_CHANNEL        || '',
+  kickId:          process.env.KICK_CHANNEL_ID     || '',
+  tiktok:          process.env.TIKTOK_USERNAME     || '',
+  youtubeHandle:   process.env.YOUTUBE_HANDLE      || '',
+  youtubeKey:      process.env.YOUTUBE_API_KEY     || '',
+  // ✅ NUEVO: si defines YOUTUBE_CHANNEL_ID en Render, se usa directo y no gasta cuota
+  youtubeChannelId: process.env.YOUTUBE_CHANNEL_ID || '',
+  port:            process.env.PORT                || 3000,
+  tiktokMode:      process.env.TIKTOK_MODE         || 'connector',
 };
 
 app.use(express.json());
@@ -50,12 +54,12 @@ const state = {
   tiktok:   { connected: false, lastMsg: 0, instance: null, restartCount: 0 },
   twitch:   { connected: false },
   kick:     { connected: false },
-  youtube:  { connected: false, channelId: null, liveChatId: null, nextPageToken: null, pollTimer: null },
+  youtube:  { connected: false, channelId: CONFIG.youtubeChannelId || null, liveChatId: null, nextPageToken: null, pollTimer: null },
   msgCount: 0,
 };
 
 // ══════════════════════════════════════════════════════════════
-// ★ NUEVA FUNCIÓN: Parsear emotes de Twitch
+// ★ Parsear emotes de Twitch
 // ══════════════════════════════════════════════════════════════
 function parseTwitchEmotes(message, emotesTag) {
   if (!emotesTag || typeof emotesTag !== 'object') return [];
@@ -208,10 +212,10 @@ wss.on('connection', (ws) => {
 
       if (msg.type === 'highlight_clear') broadcast({ type: 'highlight_clear' });
 
-      if (msg.type === 'kick_message') handleKickMessageFromBrowser(msg);
-      if (msg.type === 'kick_donation') handleKickDonationFromBrowser(msg);
+      if (msg.type === 'kick_message')      handleKickMessageFromBrowser(msg);
+      if (msg.type === 'kick_donation')     handleKickDonationFromBrowser(msg);
       if (msg.type === 'kick_disconnected') { state.kick.connected = false; broadcastStatus(); }
-      if (msg.type === 'kick_connected') { state.kick.connected = true; broadcastStatus(); }
+      if (msg.type === 'kick_connected')    { state.kick.connected = true;  broadcastStatus(); }
     } catch(e) {}
   });
 });
@@ -440,10 +444,10 @@ function tryKickPusher(channelId) {
     if (!d) return;
 
     if (event === 'App\\Events\\ChatMessageEvent' || event === 'App.Events.ChatMessageEvent') {
-      const sender   = d.sender || {};
-      const username = sender.username || d.chatname || 'KickUser';
-      const content  = d.content || '';
-      const badges   = (sender.identity && sender.identity.badges) || [];
+      const sender    = d.sender || {};
+      const username  = sender.username || d.chatname || 'KickUser';
+      const content   = d.content || '';
+      const badges    = (sender.identity && sender.identity.badges) || [];
       const nameColor = (sender.identity && sender.identity.color) || '#53FC18';
 
       const kickRoles = [];
@@ -521,7 +525,7 @@ async function connectTikTokConnector() {
   state.tiktok.instance = conn;
 
   try {
-    const info = await conn.connect();
+    await conn.connect();
     state.tiktok.connected = true;
     state.tiktok.lastMsg   = Date.now();
     broadcastStatus();
@@ -582,7 +586,14 @@ function fetchJSON(url) {
   });
 }
 
+// ✅ NUEVO: solo resuelve si no hay YOUTUBE_CHANNEL_ID ya hardcodeado
 async function youtubeResolveChannelId(handleOrName) {
+  // Si ya tenemos el channelId directo, usarlo sin hacer requests
+  if (CONFIG.youtubeChannelId) {
+    console.log('[YouTube] ✅ Usando YOUTUBE_CHANNEL_ID directo (sin consumir cuota):', CONFIG.youtubeChannelId);
+    return CONFIG.youtubeChannelId;
+  }
+
   if (!handleOrName || !CONFIG.youtubeKey) {
     console.log('[YouTube] ❌ Faltan datos: handle=' + handleOrName + ' key=' + (CONFIG.youtubeKey ? 'OK' : 'MISSING'));
     return null;
@@ -606,7 +617,6 @@ async function youtubeResolveChannelId(handleOrName) {
     const searchData = await fetchJSON(
       `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=channel&maxResults=5&key=${CONFIG.youtubeKey}`
     );
-    console.log('[YouTube] Respuesta search:', JSON.stringify(searchData).slice(0, 300));
     if (searchData.items?.length > 0) {
       const id = searchData.items[0].snippet?.channelId;
       console.log('[YouTube] ✅ ChannelId encontrado vía search:', id);
@@ -655,27 +665,47 @@ async function youtubePollChat() {
   try {
     const data = await fetchJSON(url);
     if (data.error) {
-      console.error('[YouTube] ❌ Error en poll:', data.error.code, data.error.message);
-      if (data.error.code === 403 || data.error.code === 404) {
-        clearInterval(state.youtube.pollTimer);
+      const code = data.error.code;
+      console.error('[YouTube] ❌ Error en poll:', code, data.error.message);
+
+      // ✅ NUEVO: backoff agresivo si es error de cuota (403 rateLimitExceeded o 429)
+      if (code === 429 || (code === 403 && data.error.message?.toLowerCase().includes('quota'))) {
+        console.log('[YouTube] ⚠️ Cuota agotada. Pausando YouTube por 6 horas para no desperdiciar más cuota.');
+        clearTimeout(state.youtube.pollTimer);
+        state.youtube.connected = false;
+        broadcastStatus();
+        // Reintentar en 6 horas — la cuota se resetea a medianoche PT
+        setTimeout(connectYouTube, 6 * 60 * 60 * 1000);
+        return;
+      }
+
+      if (code === 403 || code === 404) {
+        clearTimeout(state.youtube.pollTimer);
         state.youtube.connected = false; state.youtube.liveChatId = null;
         broadcastStatus();
-        console.log('[YouTube] Live terminado o sin permisos. Reintentando en 60s...');
-        setTimeout(connectYouTube, 60000);
+        console.log('[YouTube] Live terminado o sin permisos. Reintentando en 5 min...');
+        setTimeout(connectYouTube, 5 * 60 * 1000);
       }
       return;
     }
     state.youtube.nextPageToken = data.nextPageToken || state.youtube.nextPageToken;
 
     for (const item of (data.items || [])) {
-      const snippet = item.snippet || {};
+      const snippet       = item.snippet || {};
       const authorDetails = item.authorDetails || {};
-      const msgType = snippet.type;
-      const base = { chatname: authorDetails.displayName || 'YouTuber', chatimg: authorDetails.profileImageUrl || null, nameColor: '#FF0000', isOwner: authorDetails.isChatOwner || false, isMod: authorDetails.isChatModerator || false, isMember: authorDetails.isChatSponsor || false };
+      const msgType       = snippet.type;
+      const base = {
+        chatname: authorDetails.displayName || 'YouTuber',
+        chatimg:  authorDetails.profileImageUrl || null,
+        nameColor: '#FF0000',
+        isOwner:  authorDetails.isChatOwner     || false,
+        isMod:    authorDetails.isChatModerator || false,
+        isMember: authorDetails.isChatSponsor   || false,
+      };
       const roles = [];
-      if (base.isOwner) roles.push({ type: 'broadcaster', label: 'Streamer' });
-      if (base.isMod)   roles.push({ type: 'moderator', label: 'Mod' });
-      if (base.isMember) roles.push({ type: 'member', label: 'Miembro' });
+      if (base.isOwner)  roles.push({ type: 'broadcaster', label: 'Streamer' });
+      if (base.isMod)    roles.push({ type: 'moderator',   label: 'Mod' });
+      if (base.isMember) roles.push({ type: 'member',      label: 'Miembro' });
 
       if (msgType === 'textMessageEvent') {
         broadcast({ type: 'youtube', platform: 'youtube', ...base, chatmessage: snippet.displayMessage || snippet.textMessageDetails?.messageText || '', roles, mid: 'yt-' + item.id });
@@ -698,41 +728,53 @@ async function youtubePollChat() {
 }
 
 async function connectYouTube() {
-  if (!CONFIG.youtubeHandle || !CONFIG.youtubeKey) {
-    console.log('[YouTube] ❌ Variables faltantes — YOUTUBE_HANDLE:', CONFIG.youtubeHandle || 'MISSING', '| YOUTUBE_API_KEY:', CONFIG.youtubeKey ? 'OK' : 'MISSING');
+  if (!CONFIG.youtubeHandle && !CONFIG.youtubeChannelId) {
+    console.log('[YouTube] ❌ Variables faltantes — define YOUTUBE_HANDLE o YOUTUBE_CHANNEL_ID');
     return;
   }
-  console.log('[YouTube] 🔄 Iniciando conexión — handle:', CONFIG.youtubeHandle);
+  if (!CONFIG.youtubeKey) {
+    console.log('[YouTube] ❌ Falta YOUTUBE_API_KEY');
+    return;
+  }
+  console.log('[YouTube] 🔄 Iniciando conexión...');
 
+  // ✅ NUEVO: si ya tenemos channelId en state (de arranque con YOUTUBE_CHANNEL_ID), lo usamos directo
   if (!state.youtube.channelId) {
     console.log('[YouTube] Resolviendo channelId...');
-    const channelId = await youtubeResolveChannelId(CONFIG.youtubeHandle);
+    const channelId = await youtubeResolveChannelId(CONFIG.youtubeHandle || CONFIG.youtubeChannelId);
     if (!channelId) {
-      console.log('[YouTube] ❌ No se pudo resolver channelId. Reintentando en 2 minutos...');
-      setTimeout(connectYouTube, 2 * 60 * 1000);
+      console.log('[YouTube] ❌ No se pudo resolver channelId. Reintentando en 10 minutos...');
+      setTimeout(connectYouTube, 10 * 60 * 1000);
       return;
     }
     state.youtube.channelId = channelId;
     console.log('[YouTube] ✅ ChannelId guardado:', channelId);
+  } else {
+    console.log('[YouTube] ✅ ChannelId ya disponible:', state.youtube.channelId);
   }
 
   const chatId = await youtubeGetLiveChatId(state.youtube.channelId);
   if (!chatId) {
-    console.log('[YouTube] ⏳ Sin live activo. Reintentando en 2 minutos...');
-    setTimeout(connectYouTube, 2 * 60 * 1000);
+    console.log('[YouTube] ⏳ Sin live activo. Reintentando en 5 minutos...');
+    setTimeout(connectYouTube, 5 * 60 * 1000);
     return;
   }
 
-  state.youtube.liveChatId = chatId;
-  state.youtube.nextPageToken = null;
-  state.youtube.connected = true;
+  state.youtube.liveChatId     = chatId;
+  state.youtube.nextPageToken  = null;
+  state.youtube.connected      = true;
   console.log('[YouTube] ✅ Conectado al live chat:', chatId);
   broadcastStatus();
   youtubePollChat();
 }
 
 // ── HTTP ENDPOINTS ───────────────────────────────────────────
-app.get('/health', (req, res) => res.json({ ok: true, uptime: Math.floor(process.uptime()), messages: state.msgCount, clients: state.clients.size, twitch: state.twitch.connected, kick: state.kick.connected, kickChatroomId: CONFIG.kickId || null, tiktok: state.tiktok.connected, youtube: state.youtube.connected }));
+app.get('/health', (req, res) => res.json({
+  ok: true, uptime: Math.floor(process.uptime()), messages: state.msgCount,
+  clients: state.clients.size, twitch: state.twitch.connected, kick: state.kick.connected,
+  kickChatroomId: CONFIG.kickId || null, tiktok: state.tiktok.connected, youtube: state.youtube.connected,
+  youtubeChannelId: state.youtube.channelId || null,
+}));
 
 app.get('/tiktok-preview', (req, res) => {
   const user = CONFIG.tiktok || req.query.user || '';
@@ -757,15 +799,19 @@ app.post('/api/kick/restart', (req, res) => {
 app.post('/api/youtube/restart', (req, res) => {
   clearTimeout(state.youtube.pollTimer);
   state.youtube.connected = false; state.youtube.liveChatId = null;
-  state.youtube.nextPageToken = null; state.youtube.channelId = null;
+  state.youtube.nextPageToken = null;
+  // ✅ NUEVO: no borrar channelId si ya está hardcodeado — evita gastar cuota al reconectar
+  if (!CONFIG.youtubeChannelId) {
+    state.youtube.channelId = null;
+  }
   broadcastStatus(); connectYouTube();
   res.json({ ok: true });
 });
 
 app.get('/api/status', (req, res) => res.json({
-  twitch: { connected: state.twitch.connected, channel: CONFIG.twitch },
-  kick: { connected: state.kick.connected, channel: CONFIG.kick },
-  tiktok: { connected: state.tiktok.connected, user: CONFIG.tiktok },
+  twitch:  { connected: state.twitch.connected,  channel: CONFIG.twitch },
+  kick:    { connected: state.kick.connected,    channel: CONFIG.kick },
+  tiktok:  { connected: state.tiktok.connected,  user: CONFIG.tiktok },
   youtube: { connected: state.youtube.connected, channelId: state.youtube.channelId || CONFIG.youtubeHandle },
   clients: state.clients.size, messages: state.msgCount, uptime: Math.floor(process.uptime()),
 }));
@@ -773,11 +819,12 @@ app.get('/api/status', (req, res) => res.json({
 // ── ARRANCAR ─────────────────────────────────────────────────
 server.listen(CONFIG.port, () => {
   console.log(`\n🎮 MEEVE MULTICHAT SERVER v2 — FIXED`);
-  console.log(`   Puerto  : ${CONFIG.port}`);
-  console.log(`   Twitch  : ${CONFIG.twitch || '(no config)'}`);
-  console.log(`   Kick    : ${CONFIG.kick || '(no config)'}`);
-  console.log(`   TikTok  : ${CONFIG.tiktok || '(no config)'}`);
-  console.log(`   YouTube : ${CONFIG.youtubeHandle || '(no config)'}\n`);
+  console.log(`   Puerto       : ${CONFIG.port}`);
+  console.log(`   Twitch       : ${CONFIG.twitch || '(no config)'}`);
+  console.log(`   Kick         : ${CONFIG.kick || '(no config)'}`);
+  console.log(`   TikTok       : ${CONFIG.tiktok || '(no config)'}`);
+  console.log(`   YouTube      : ${CONFIG.youtubeHandle || '(no config)'}`);
+  console.log(`   YT ChannelId : ${CONFIG.youtubeChannelId || '(se resolverá via API)'}\n`);
   connectTwitch();
   connectKick();
   connectTikTokConnector();
