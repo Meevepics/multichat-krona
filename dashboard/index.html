@@ -468,7 +468,14 @@
       <div class="card-header"><span class="card-title-text">▶️ YouTube — Puente Navegador</span></div>
       <div class="card-body">
         <div id="yt-bridge-status" class="info-box info-yellow">
-          🌐 Tu navegador leerá el chat directamente (sin API key, sin cuota).
+          🌐 Proxy local activo — corré <strong>proxy-local.js</strong> en tu PC.
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:2px;">
+          <label style="margin:0;white-space:nowrap;">Proxy:</label>
+          <select id="yt-proxy-select" onchange="ytBridge.proxyBase=this.value" style="font-size:10px;padding:4px 6px;">
+            <option value="http://localhost:3001">localhost:3001 (tu PC)</option>
+            <option value="https://multichat-krona-5uts.onrender.com/api">Render (puede fallar)</option>
+          </select>
         </div>
         <label>Link o Video ID del live:</label>
         <div class="input-row">
@@ -875,18 +882,13 @@ function setYtBridgeStatus(color, html) {
   box.innerHTML = html;
 }
 
-function getServerHttpUrl() {
-  var serverUrl = store.get('serverUrl') || '';
-  return serverUrl.replace(/^wss?/, 'https').replace(/\/$/, '');
-}
-
 async function fetchYtInitialPage(videoId) {
   if (!ytBridge.active) return;
-  var serverBase = getServerHttpUrl();
-  if (!serverBase) { setYtBridgeStatus('red', '❌ Conecta el servidor primero.'); return; }
   try {
     var ytUrl = 'https://www.youtube.com/watch?v=' + videoId;
-    var r = await fetch(serverBase + '/api/yt-proxy?url=' + encodeURIComponent(ytUrl));
+    // Primero intenta proxy local (tu PC), luego el servidor de Render
+    var proxyBase = ytBridge.proxyBase || 'http://localhost:3001';
+    var r = await fetch(proxyBase + '/yt-proxy?url=' + encodeURIComponent(ytUrl));
     if (!r.ok) throw new Error('HTTP ' + r.status);
     var html = await r.text();
 
@@ -943,10 +945,9 @@ async function fetchYtInitialPage(videoId) {
 
 async function pollYtChat() {
   if (!ytBridge.active || !ytBridge.continuation || !ytBridge.apiKey) return;
-  var serverBase = getServerHttpUrl();
-  if (!serverBase) return;
+  var proxyBase = ytBridge.proxyBase || 'http://localhost:3001';
   try {
-    var r = await fetch(serverBase + '/api/yt-chat', {
+    var r = await fetch(proxyBase + '/yt-chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ apiKey: ytBridge.apiKey, continuation: ytBridge.continuation })
