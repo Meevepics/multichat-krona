@@ -574,12 +574,17 @@
     <div class="card">
       <div class="card-header"><span class="card-title-text">▶️ YouTube — Control</span></div>
       <div class="card-body">
-        <div id="youtube-status-box" class="info-box info-yellow">⏳ Esperando conexión...</div>
-        <div style="display:flex;gap:6px;">
+        <div id="youtube-status-box" class="info-box info-yellow">⏳ Pegá el link del live y presioná ▶ Conectar</div>
+        <label>Link o Video ID del live:</label>
+        <div class="input-row">
+          <input id="yt-video-url" type="text" placeholder="https://youtube.com/watch?v=..." onkeydown="if(event.key==='Enter')connectYouTubeWithUrl()" />
+          <button class="btn btn-primary" onclick="connectYouTubeWithUrl()">▶ Conectar</button>
+        </div>
+        <div class="hint">Pegá el link de tu live cada vez que arranques el directo.</div>
+        <div style="display:flex;gap:6px;margin-top:2px;">
           <button class="btn btn-secondary btn-full" onclick="restartYouTube()">🔄 Reconectar</button>
           <button class="btn btn-secondary btn-full" onclick="openYouTubeLive()">📺 Live</button>
         </div>
-        <div class="hint">Reconectar cuando enciendas el directo en YouTube.</div>
       </div>
     </div>
 
@@ -903,6 +908,8 @@ document.addEventListener('DOMContentLoaded',function(){
   if(savedFont){ var sel=document.getElementById('fontSelector'); sel.value=savedFont; applyFont(savedFont,true); }
   if(store.get('glowOff')==='1'){ document.getElementById('glowToggle').checked=false; toggleGlow(false,true); }
   if(store.get('singleLine')==='1'){ document.getElementById('singleLineToggle').checked=true; toggleSingleLine(true,true); }
+  var savedYtUrl=store.get('ytVideoUrl');
+  if(savedYtUrl)document.getElementById('yt-video-url').value=savedYtUrl;
   var panel = document.getElementById('chat-panel');
   panel.addEventListener('scroll', function() {
     autoScroll = (panel.scrollHeight - panel.scrollTop - panel.clientHeight) < 80;
@@ -938,9 +945,8 @@ function handleStatus(data){
   if(mt){mt.textContent=data.tiktokMode||'connector';mt.className='tag '+(data.tiktokMode==='puppeteer'?'tag-puppeteer':'tag-connector');}
   var ytBox=document.getElementById('youtube-status-box');
   if(ytBox){
-    if(data.youtube){ytBox.className='info-box info-green';ytBox.innerHTML='✅ Conectado al chat en vivo';}
-    else if(data.channels&&data.channels.youtube){ytBox.className='info-box info-yellow';ytBox.innerHTML='⏳ <strong>'+esc(data.channels.youtube)+'</strong> — Sin live activo.';}
-    else{ytBox.className='info-box info-red';ytBox.innerHTML='⚠️ Configura <strong>YOUTUBE_HANDLE</strong> en el servidor.';}
+    if(data.youtube){ytBox.className='info-box info-green';ytBox.innerHTML='✅ Conectado al chat en vivo'+(data.youtubeVideoId?' <span style="color:var(--muted);font-size:9px;">('+data.youtubeVideoId+')</span>':'');}
+    else{ytBox.className='info-box info-yellow';ytBox.innerHTML='⏳ Pegá el link del live y presioná <strong>▶ Conectar</strong>';}
   }
   if(!data.kick){
     var savedId=store.get('kickChannelId');
@@ -1122,7 +1128,30 @@ async function sendKickId(idParam){
   }catch(e){toast('❌ '+e.message);}
 }
 async function restartTikTok(){ var su=store.get('serverUrl');if(!su) return toast('Configura la URL del servidor primero'); var hu=su.replace(/^wss?/,'https').replace(/\/$/,''); try{var r=await fetch(hu+'/api/tiktok/restart',{method:'POST'});var d=await r.json();toast(d.ok?'🔄 TikTok reconectando...':'❌ Error');}catch(e){toast('❌ No se pudo contactar el servidor');} }
-async function restartYouTube(){ var su=store.get('serverUrl');if(!su) return toast('Configura la URL del servidor primero'); var hu=su.replace(/^wss?/,'https').replace(/\/$/,''); var ytBox=document.getElementById('youtube-status-box');if(ytBox){ytBox.className='info-box info-yellow';ytBox.innerHTML='⏳ Buscando live activo...';} try{var r=await fetch(hu+'/api/youtube/restart',{method:'POST'});var d=await r.json();toast(d.ok?'🔄 YouTube reconectando...':'❌ Error');}catch(e){toast('❌ No se pudo contactar el servidor');} }
+async function restartYouTube(){var su=store.get('serverUrl');if(!su)return toast('Configura la URL del servidor primero');var hu=su.replace(/^wss?/,'https').replace(/\/$/,'');var ytBox=document.getElementById('youtube-status-box');if(ytBox){ytBox.className='info-box info-yellow';ytBox.innerHTML='⏳ Reconectando...';}try{var r=await fetch(hu+'/api/youtube/restart',{method:'POST'});var d=await r.json();toast(d.ok?'🔄 YouTube reconectando...':'❌ Error');}catch(e){toast('❌ No se pudo contactar el servidor');}}
+async function connectYouTubeWithUrl(){
+  var su=store.get('serverUrl');if(!su)return toast('Configura la URL del servidor primero');
+  var input=document.getElementById('yt-video-url').value.trim();
+  if(!input)return toast('Pegá el link del live de YouTube primero');
+  var hu=su.replace(/^wss?/,'https').replace(/\/$/,'');
+  var ytBox=document.getElementById('youtube-status-box');
+  if(ytBox){ytBox.className='info-box info-yellow';ytBox.innerHTML='⏳ Conectando...';}
+  try{
+    var r=await fetch(hu+'/api/youtube/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:input})});
+    var d=await r.json();
+    if(d.ok){
+      try{localStorage.setItem('ytVideoUrl',input);}catch(e){}
+      toast('✅ YouTube conectando — videoId: '+d.videoId);
+      if(ytBox){ytBox.className='info-box info-green';ytBox.innerHTML='⏳ Conectando al video: <strong>'+d.videoId+'</strong>...';}
+    }else{
+      toast('❌ URL inválida — pegá el link completo del live');
+      if(ytBox){ytBox.className='info-box info-red';ytBox.innerHTML='❌ URL inválida. Ej: https://youtube.com/watch?v=abc123';}
+    }
+  }catch(e){
+    toast('❌ No se pudo contactar el servidor');
+    if(ytBox){ytBox.className='info-box info-red';ytBox.innerHTML='❌ Error al contactar el servidor';}
+  }
+}
 function openTikTokLive(){ var u=currentChannels.tiktok||''; if(!u) return toast('TikTok no configurado'); window.open('https://www.tiktok.com/@'+u+'/live','_blank','noopener'); }
 function openYouTubeLive(){ var c=currentChannels.youtube||''; if(!c) return toast('YouTube no configurado'); var h=c.startsWith('@')?c:'@'+c; window.open('https://www.youtube.com/'+h+'/live','_blank','noopener'); }
 function sendCustomMessage(){ var input=document.getElementById('custom-msg-input'),text=input.value.trim(); if(!text) return; if(!isConnected||!ws) return toast('⚠️ No hay conexión'); ws.send(JSON.stringify({type:'custom_message',user:'Tú (dashboard)',text:text})); input.value=''; }
