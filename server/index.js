@@ -6,6 +6,7 @@
 //  ✅ FIXED: Twitch emotes → chatemotes [{text,url,start,end}]
 //  ✅ FIXED: YOUTUBE_CHANNEL_ID directo — evita gastar cuota en resolución
 //  ✅ FIXED: Backoff agresivo en error de cuota YouTube (403/429)
+//  ✅ FIXED: YOUTUBE_CHANNEL_ID se asigna correctamente al state al arrancar
 // ============================================================
 
 const express    = require('express');
@@ -33,8 +34,8 @@ const CONFIG = {
   tiktok:          process.env.TIKTOK_USERNAME     || '',
   youtubeHandle:   process.env.YOUTUBE_HANDLE      || '',
   youtubeKey:      process.env.YOUTUBE_API_KEY     || '',
-  // ✅ NUEVO: si defines YOUTUBE_CHANNEL_ID en Render, se usa directo y no gasta cuota
-  youtubeChannelId: process.env.YOUTUBE_CHANNEL_ID || '',
+  // ✅ FIXED: trim() para evitar strings vacíos con espacios
+  youtubeChannelId: (process.env.YOUTUBE_CHANNEL_ID || '').trim(),
   port:            process.env.PORT                || 3000,
   tiktokMode:      process.env.TIKTOK_MODE         || 'connector',
 };
@@ -49,12 +50,23 @@ app.use((req, res, next) => {
 });
 
 // ── ESTADO ───────────────────────────────────────────────────
+// ✅ FIXED: Se inicializa channelId con el valor de CONFIG.youtubeChannelId directamente
+const youtubeInitialChannelId = CONFIG.youtubeChannelId && CONFIG.youtubeChannelId.trim() !== ''
+  ? CONFIG.youtubeChannelId.trim()
+  : null;
+
 const state = {
   clients:  new Set(),
   tiktok:   { connected: false, lastMsg: 0, instance: null, restartCount: 0 },
   twitch:   { connected: false },
   kick:     { connected: false },
-  youtube:  { connected: false, channelId: CONFIG.youtubeChannelId || null, liveChatId: null, nextPageToken: null, pollTimer: null },
+  youtube:  {
+    connected: false,
+    channelId: youtubeInitialChannelId,  // ✅ FIXED: ahora sí se asigna al arrancar
+    liveChatId: null,
+    nextPageToken: null,
+    pollTimer: null
+  },
   msgCount: 0,
 };
 
@@ -586,12 +598,12 @@ function fetchJSON(url) {
   });
 }
 
-// ✅ NUEVO: solo resuelve si no hay YOUTUBE_CHANNEL_ID ya hardcodeado
+// ✅ FIXED: solo resuelve si no hay channelId ya en state o CONFIG
 async function youtubeResolveChannelId(handleOrName) {
-  // Si ya tenemos el channelId directo, usarlo sin hacer requests
-  if (CONFIG.youtubeChannelId) {
+  // Si ya tenemos el channelId directo en CONFIG, usarlo sin hacer requests
+  if (CONFIG.youtubeChannelId && CONFIG.youtubeChannelId.trim() !== '') {
     console.log('[YouTube] ✅ Usando YOUTUBE_CHANNEL_ID directo (sin consumir cuota):', CONFIG.youtubeChannelId);
-    return CONFIG.youtubeChannelId;
+    return CONFIG.youtubeChannelId.trim();
   }
 
   if (!handleOrName || !CONFIG.youtubeKey) {
@@ -668,13 +680,12 @@ async function youtubePollChat() {
       const code = data.error.code;
       console.error('[YouTube] ❌ Error en poll:', code, data.error.message);
 
-      // ✅ NUEVO: backoff agresivo si es error de cuota (403 rateLimitExceeded o 429)
+      // Backoff agresivo si es error de cuota (403 rateLimitExceeded o 429)
       if (code === 429 || (code === 403 && data.error.message?.toLowerCase().includes('quota'))) {
         console.log('[YouTube] ⚠️ Cuota agotada. Pausando YouTube por 6 horas para no desperdiciar más cuota.');
         clearTimeout(state.youtube.pollTimer);
         state.youtube.connected = false;
         broadcastStatus();
-        // Reintentar en 6 horas — la cuota se resetea a medianoche PT
         setTimeout(connectYouTube, 6 * 60 * 60 * 1000);
         return;
       }
@@ -738,7 +749,7 @@ async function connectYouTube() {
   }
   console.log('[YouTube] 🔄 Iniciando conexión...');
 
-  // ✅ NUEVO: si ya tenemos channelId en state (de arranque con YOUTUBE_CHANNEL_ID), lo usamos directo
+  // ✅ FIXED: si ya tenemos channelId en state (de arranque con YOUTUBE_CHANNEL_ID), lo usamos directo
   if (!state.youtube.channelId) {
     console.log('[YouTube] Resolviendo channelId...');
     const channelId = await youtubeResolveChannelId(CONFIG.youtubeHandle || CONFIG.youtubeChannelId);
@@ -750,7 +761,7 @@ async function connectYouTube() {
     state.youtube.channelId = channelId;
     console.log('[YouTube] ✅ ChannelId guardado:', channelId);
   } else {
-    console.log('[YouTube] ✅ ChannelId ya disponible:', state.youtube.channelId);
+    console.log('[YouTube] ✅ ChannelId ya disponible en state:', state.youtube.channelId);
   }
 
   const chatId = await youtubeGetLiveChatId(state.youtube.channelId);
@@ -800,7 +811,7 @@ app.post('/api/youtube/restart', (req, res) => {
   clearTimeout(state.youtube.pollTimer);
   state.youtube.connected = false; state.youtube.liveChatId = null;
   state.youtube.nextPageToken = null;
-  // ✅ NUEVO: no borrar channelId si ya está hardcodeado — evita gastar cuota al reconectar
+  // ✅ FIXED: no borrar channelId si ya está hardcodeado — evita gastar cuota al reconectar
   if (!CONFIG.youtubeChannelId) {
     state.youtube.channelId = null;
   }
@@ -824,7 +835,9 @@ server.listen(CONFIG.port, () => {
   console.log(`   Kick         : ${CONFIG.kick || '(no config)'}`);
   console.log(`   TikTok       : ${CONFIG.tiktok || '(no config)'}`);
   console.log(`   YouTube      : ${CONFIG.youtubeHandle || '(no config)'}`);
-  console.log(`   YT ChannelId : ${CONFIG.youtubeChannelId || '(se resolverá via API)'}\n`);
+  console.log(`   YT ChannelId : ${CONFIG.youtubeChannelId || '(se resolverá via API)'}`);
+  // ✅ FIXED: log para confirmar que el state se inicializó bien
+  console.log(`   YT State ID  : ${state.youtube.channelId || '(pendiente de resolución)'}\n`);
   connectTwitch();
   connectKick();
   connectTikTokConnector();
