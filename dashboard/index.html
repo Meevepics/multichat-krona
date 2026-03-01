@@ -227,35 +227,31 @@
     .value-display { color: var(--green); font-size: 10px; }
     .config-row { display: flex; align-items: center; gap: 8px; }
 
-    /* ══ MAIN / CHAT — SCROLL ARREGLADO ══ */
+    /* ══ MAIN / CHAT ══ */
     .main {
       flex: 1; min-width: 0;
       display: flex; flex-direction: column;
       overflow: hidden; position: relative;
     }
 
-    /* ★ FIX SCROLL: el panel de chat ocupa el espacio disponible y scrollea normalmente */
     .chat-panel {
       flex: 1;
-      overflow-y: auto;  /* ← SCROLL NATIVO */
+      overflow-y: auto;
       overflow-x: hidden;
       padding: 14px;
       display: flex;
       flex-direction: column;
       gap: 8px;
-      /* ★ IMPORTANTE: no usar transform/GSAP para el scroll, solo scroll nativo */
     }
     .chat-panel::-webkit-scrollbar { width: 8px; }
     .chat-panel::-webkit-scrollbar-track { background: rgba(0,20,10,0.5); }
     .chat-panel::-webkit-scrollbar-thumb { background: rgba(0,255,157,0.3); border-radius: 4px; }
     .chat-panel::-webkit-scrollbar-thumb:hover { background: rgba(0,255,157,0.6); }
 
-    /* Espaciador para empujar mensajes hacia abajo al inicio */
     .chat-spacer { flex: 1; min-height: 0; }
 
     #chat-placeholder { text-align: center; color: var(--muted); font-family: var(--font-title); font-size: 18px; text-shadow: var(--glow-sm); padding: 40px 20px; }
 
-    /* ── MSG NORMAL ── */
     .msg-item {
       position: relative; display: flex; align-items: flex-start;
       gap: 10px; padding: 10px 12px;
@@ -264,7 +260,7 @@
       border-radius: 4px; cursor: pointer;
       animation: msgAppear 0.4s ease-out;
       transition: background 0.2s, border-left-color 0.2s, transform 0.2s;
-      flex-shrink: 0; /* ← no comprimir los mensajes */
+      flex-shrink: 0;
     }
     @keyframes msgAppear { from { opacity:0; transform:translateX(-15px); filter:blur(3px); } to { opacity:1; transform:translateX(0); filter:blur(0); } }
     .msg-item:hover { background: rgba(0,255,157,0.08); border-left-color: var(--green); transform: translateX(3px); }
@@ -277,7 +273,6 @@
     .msg-item.highlighted { background: rgba(0,255,157,0.12); border-left-color: var(--green) !important; animation: msgAppear 0.4s ease-out, hlPulse 2s ease-in-out infinite; }
     @keyframes hlPulse { 0%,100%{ box-shadow: 0 0 15px rgba(0,255,157,0.2); } 50%{ box-shadow: 0 0 25px rgba(0,255,157,0.4); } }
 
-    /* Modo línea única */
     .chat-panel.single-line .msg-item { align-items: center; padding: 5px 12px; gap: 7px; }
     .chat-panel.single-line .msg-avatar { width: 24px !important; height: 24px !important; min-width: 24px; flex-shrink: 0; }
     .chat-panel.single-line .msg-body { display: flex; align-items: center; gap: 5px; flex: 1; min-width: 0; overflow: hidden; }
@@ -304,7 +299,6 @@
     .msg-time { font-size: 9px; color: var(--muted); margin-left: auto; white-space: nowrap; }
 
     .msg-text { font-size: 12px; color: var(--text); line-height: 1.5; word-break: break-word; }
-    /* ★ FIX EMOTES — imágenes inline en el dashboard */
     .msg-text img.emote {
       height: var(--ov-emote-size, 24px);
       width: auto;
@@ -321,6 +315,155 @@
     #hl-bar.active { display: flex; }
     #hl-bar strong { color: var(--text); max-width: 400px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family: var(--font-body); font-size: 11px; }
 
+    /* ══ CHAT VISOR ══ */
+    .chat-visor {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      background: #000d0d;
+      transform: translateY(100%);
+      opacity: 0;
+      transition: transform 0.32s cubic-bezier(0.4,0,0.2,1), opacity 0.25s;
+      pointer-events: none;
+    }
+    .chat-visor.open {
+      transform: translateY(0);
+      opacity: 1;
+      pointer-events: all;
+    }
+    .chat-visor-iframe-wrap {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    .chat-visor-iframe-wrap iframe {
+      width: 100%; height: 100%;
+      border: none; display: block;
+    }
+    .chat-visor-footer {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 14px;
+      background: rgba(0,10,10,0.97);
+      border-top: 1px solid rgba(0,255,157,0.3);
+      flex-shrink: 0;
+    }
+    .chat-visor-title {
+      font-family: var(--font-title);
+      font-size: 13px;
+      color: var(--green);
+      text-shadow: var(--glow-sm);
+      letter-spacing: 1px;
+      flex: 1;
+    }
+    .chat-visor-badge {
+      font-size: 9px;
+      padding: 2px 7px;
+      border-radius: 3px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      border: 1px solid;
+    }
+    .chat-visor-badge.twitch  { background:rgba(145,70,255,0.15); border-color:rgba(145,70,255,0.5); color:var(--twitch); }
+    .chat-visor-badge.kick    { background:rgba(83,252,24,0.1);   border-color:rgba(83,252,24,0.4);  color:var(--kick); }
+    .chat-visor-badge.youtube { background:rgba(255,0,0,0.1);     border-color:rgba(255,0,0,0.4);    color:var(--youtube); }
+    .chat-visor-badge.tiktok  { background:rgba(255,0,80,0.1);    border-color:rgba(255,0,80,0.4);   color:var(--tiktok); }
+    .chat-visor-close {
+      padding: 5px 12px;
+      background: rgba(0,255,157,0.08);
+      border: 1px solid rgba(0,255,157,0.4);
+      border-radius: 4px;
+      color: var(--green);
+      font-family: var(--font-body);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s;
+      letter-spacing: 0.5px;
+    }
+    .chat-visor-close:hover { background: rgba(0,255,157,0.2); box-shadow: var(--glow-sm); }
+    .chat-visor-unavailable {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 12px;
+      font-family: var(--font-title);
+      font-size: 16px;
+      color: var(--muted);
+      letter-spacing: 2px;
+      text-align: center;
+      padding: 30px;
+    }
+    .chat-visor-unavailable .uv-icon { font-size: 32px; opacity: 0.5; }
+    .chat-visor-unavailable .uv-sub {
+      font-family: var(--font-body);
+      font-size: 11px;
+      color: rgba(0,255,157,0.35);
+      max-width: 280px;
+      line-height: 1.8;
+    }
+
+    /* Barra de botones del visor */
+    .visor-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px 6px;
+      background: rgba(0,10,10,0.95);
+      border-top: 1px solid rgba(0,255,157,0.15);
+    }
+    .visor-bar-label {
+      font-size: 10px;
+      color: rgba(0,255,157,0.4);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-right: 2px;
+      flex-shrink: 0;
+    }
+    .visor-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 11px;
+      border-radius: 4px;
+      border: 1px solid rgba(0,255,157,0.2);
+      background: rgba(0,30,20,0.5);
+      font-family: var(--font-body);
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 0.5px; text-transform: uppercase;
+      cursor: pointer; transition: all 0.15s;
+      white-space: nowrap; flex-shrink: 0;
+      color: rgba(0,255,157,0.5);
+    }
+    .visor-btn .vb-dot {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: rgba(0,255,157,0.2);
+      border: 1px solid rgba(0,255,157,0.3);
+      transition: all 0.15s; flex-shrink: 0;
+    }
+    .visor-btn:hover { border-color: rgba(0,255,157,0.5); color: var(--green); }
+    .visor-btn:active { transform: scale(0.97); }
+
+    .visor-btn[data-view="twitch"]  { --vc:#9146FF; }
+    .visor-btn[data-view="kick"]    { --vc:#53FC18; }
+    .visor-btn[data-view="youtube"] { --vc:#FF0000; }
+    .visor-btn[data-view="tiktok"]  { --vc:#FF0050; }
+
+    .visor-btn.viewing {
+      border-color: var(--vc);
+      color: var(--vc);
+      background: color-mix(in srgb, var(--vc) 12%, transparent);
+      box-shadow: 0 0 8px color-mix(in srgb, var(--vc) 30%, transparent);
+    }
+    .visor-btn.viewing .vb-dot {
+      background: var(--vc);
+      box-shadow: 0 0 6px var(--vc);
+      border-color: var(--vc);
+      animation: dotPulseV 2s ease-in-out infinite;
+    }
+    @keyframes dotPulseV { 0%,100%{ opacity:1; } 50%{ opacity:0.5; } }
+
+    /* ══ INPUT BAR ══ */
     .input-bar { padding: 10px 14px; border-top: 1px solid rgba(0,255,157,0.3); background: rgba(0,10,10,0.95); display: flex; gap: 8px; }
 
     .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 500; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
@@ -528,9 +671,24 @@
   </div><!-- /sidebar -->
 
   <div class="main">
-    <!-- ★ FIX SCROLL: chat-panel con overflow-y:auto, mensajes apilados normalmente -->
+    <!-- ══ CHAT VISOR (iframe embebido) ══ -->
+    <div class="chat-visor" id="chat-visor">
+      <div class="chat-visor-iframe-wrap" id="visor-iframe-wrap">
+        <div class="chat-visor-unavailable" id="visor-unavailable" style="display:none;">
+          <span class="uv-icon">⚠</span>
+          <span id="visor-unavailable-msg">Canal no configurado</span>
+          <span class="uv-sub" id="visor-unavailable-sub">Configurá el canal en el panel lateral para poder ver el chat aquí.</span>
+        </div>
+        <iframe id="visor-iframe" src="about:blank" allow="autoplay" sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"></iframe>
+      </div>
+      <div class="chat-visor-footer">
+        <span class="chat-visor-title" id="visor-title">Chat</span>
+        <span class="chat-visor-badge" id="visor-badge">—</span>
+        <button class="chat-visor-close" onclick="closeChatVisor()">✕ Cerrar</button>
+      </div>
+    </div>
+
     <div class="chat-panel" id="chat-panel">
-      <!-- Espaciador que empuja los mensajes al fondo -->
       <div class="chat-spacer" id="chat-spacer"></div>
       <div id="chat-placeholder">🌊 Los mensajes del abismo aparecerán aquí...</div>
     </div>
@@ -538,6 +696,24 @@
       📌 Destacando:&nbsp;<strong id="hl-bar-text">—</strong>
       <button class="btn btn-secondary" style="font-size:10px;padding:3px 9px;margin-left:auto;" onclick="clearHighlight()">✕ Quitar</button>
     </div>
+
+    <!-- Botones visor de chat -->
+    <div class="visor-bar">
+      <span class="visor-bar-label">👁 Ver chat:</span>
+      <button class="visor-btn" data-view="twitch" onclick="openChatVisor('twitch')" id="view-twitch">
+        <span class="vb-dot"></span>Twitch
+      </button>
+      <button class="visor-btn" data-view="kick" onclick="openChatVisor('kick')" id="view-kick">
+        <span class="vb-dot"></span>Kick
+      </button>
+      <button class="visor-btn" data-view="youtube" onclick="openChatVisor('youtube')" id="view-youtube">
+        <span class="vb-dot"></span>YouTube
+      </button>
+      <button class="visor-btn" data-view="tiktok" onclick="openChatVisor('tiktok')" id="view-tiktok">
+        <span class="vb-dot"></span>TikTok
+      </button>
+    </div>
+
     <div class="input-bar">
       <input id="custom-msg-input" type="text" placeholder="Escribe un mensaje personalizado y pulsa Enter…" onkeydown="if(event.key==='Enter')sendCustomMessage()" />
       <button class="btn btn-primary" onclick="sendCustomMessage()">Enviar ✦</button>
@@ -566,7 +742,7 @@
 <div id="toast"></div>
 
 <script>
-// ═══════════════ PARTÍCULAS ═══════════════
+// ═══ PARTÍCULAS ═══
 (function(){
   var c=document.getElementById('particles');
   for(var i=0;i<35;i++){
@@ -580,18 +756,18 @@
   }
 })();
 
-// ═══════════════ STORAGE ═══════════════
+// ═══ STORAGE ═══
 var store={
   get:function(k,d){d=d||'';try{return localStorage.getItem(k)||d;}catch(e){return d;}},
   set:function(k,v){try{localStorage.setItem(k,v);}catch(e){}}
 };
 
-// ═══════════════ ESTADO ═══════════════
+// ═══ ESTADO ═══
 var ws=null,retryDelay=1000,isConnected=false,autoKickDone=false;
 var currentChannels={twitch:'',kick:'',tiktok:'',youtube:''};
 var MAX_MESSAGES=200, messages=[], currentHighlightMid=null;
-// ★ FIX SCROLL: controla si el scroll está al fondo
 var autoScroll=true;
+var currentVisor=null;
 
 var PLATFORM_LOGOS={
   twitch:'<svg viewBox="0 0 24 28" fill="currentColor"><path d="M2.149 0L.537 4.119v19.63h6.72V28l4.123-4.25h3.29L22.463 14V0H2.149zm18.24 13.18l-3.29 3.387h-3.948l-2.886 2.973v-2.973H6.584V2.387h13.805v10.793zM17.07 5.367h-2.148v6.42h2.148V5.367zm-5.907 0h-2.15v6.42h2.15V5.367z"/></svg>',
@@ -602,17 +778,12 @@ var PLATFORM_LOGOS={
   system:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>'
 };
 
-// ═══════════════════════════════════════
-// ★ PARSEO DE EMOTES
-// ═══════════════════════════════════════
 function esc(str){return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
-// Twitch: chatemotes [{text,url,start,end}]
 function processTwitchEmotes(text, emotes) {
   if (!emotes || !emotes.length) return esc(text);
   var sorted = emotes.slice().sort(function(a,b){ return a.start - b.start; });
-  var result = '';
-  var cursor = 0;
+  var result = ''; var cursor = 0;
   for (var i = 0; i < sorted.length; i++) {
     var e = sorted[i];
     if (e.start > cursor) result += esc(text.slice(cursor, e.start));
@@ -622,29 +793,20 @@ function processTwitchEmotes(text, emotes) {
   if (cursor < text.length) result += esc(text.slice(cursor));
   return result;
 }
-
-// Kick: [emote:ID:nombre] → img
 function parseKickEmotesFromText(text) {
   return esc(text).replace(/\[emote:(\d+):([^\]]+)\]/g, function(match, id, name) {
-    var url = 'https://files.kick.com/emotes/' + id + '/fullsize';
-    return '<img class="emote" src="' + url + '" alt="' + name + '" title="' + name + '" onerror="this.style.display=\'none\'">';
+    return '<img class="emote" src="https://files.kick.com/emotes/' + id + '/fullsize" alt="' + name + '" title="' + name + '" onerror="this.style.display=\'none\'">';
   });
 }
-
-// Función principal
 function processMessageHTML(data) {
   var text = data.chatmessage || '';
   var platform = data.platform || data.type || '';
-  if (platform === 'twitch' && data.chatemotes && data.chatemotes.length > 0) {
-    return processTwitchEmotes(text, data.chatemotes);
-  }
-  if (platform === 'kick') {
-    return parseKickEmotesFromText(text);
-  }
+  if (platform === 'twitch' && data.chatemotes && data.chatemotes.length > 0) return processTwitchEmotes(text, data.chatemotes);
+  if (platform === 'kick') return parseKickEmotesFromText(text);
   return esc(text);
 }
 
-// ═══════════════ SIDEBAR ═══════════════
+// ═══ SIDEBAR ═══
 function toggleSidebar(){
   var s=document.querySelector('.sidebar'),b=document.getElementById('sidebar-toggle');
   var c=s.classList.toggle('collapsed');
@@ -652,37 +814,107 @@ function toggleSidebar(){
   store.set('sidebarCollapsed',c?'1':'0');
 }
 
-// ═══════════════ INIT ═══════════════
+// ═══ CHAT VISOR ═══
+var VISOR_CONFIG = {
+  twitch: {
+    label: 'Twitch Chat', badge: 'TWITCH',
+    getUrl: function(ch) { return ch ? 'https://www.twitch.tv/popout/' + encodeURIComponent(ch) + '/chat?popout=' : null; },
+    noChMsg: 'Canal de Twitch no configurado',
+    noChSub: 'Conectá tu canal de Twitch en el servidor para poder ver el chat aquí.'
+  },
+  kick: {
+    label: 'Kick Chat', badge: 'KICK',
+    getUrl: function(ch) { return ch ? 'https://kick.com/' + encodeURIComponent(ch) + '/chatroom' : null; },
+    noChMsg: 'Canal de Kick no configurado',
+    noChSub: 'Conectá tu canal de Kick para poder ver el chat aquí.'
+  },
+  youtube: {
+    label: 'YouTube Live Chat', badge: 'YOUTUBE',
+    getUrl: function(ch) { return null; },
+    noChMsg: 'YouTube no soporta chat embebido',
+    noChSub: 'YouTube bloquea los iframes de chat. Usá el botón "📺 Live" del panel lateral para abrir en nueva pestaña.'
+  },
+  tiktok: {
+    label: 'TikTok Live', badge: 'TIKTOK',
+    getUrl: function(ch) { return null; },
+    noChMsg: 'TikTok no soporta chat embebido',
+    noChSub: 'TikTok bloquea los iframes de chat. Usá el botón "📺 Live" del panel lateral para abrir en nueva pestaña.'
+  }
+};
+
+function openChatVisor(platform) {
+  var cfg = VISOR_CONFIG[platform];
+  if (!cfg) return;
+
+  if (currentVisor === platform) { closeChatVisor(); return; }
+
+  var ch = currentChannels[platform] || '';
+  var url = cfg.getUrl(ch);
+
+  var visor      = document.getElementById('chat-visor');
+  var iframe     = document.getElementById('visor-iframe');
+  var titleEl    = document.getElementById('visor-title');
+  var badge      = document.getElementById('visor-badge');
+  var unavail    = document.getElementById('visor-unavailable');
+  var unavailMsg = document.getElementById('visor-unavailable-msg');
+  var unavailSub = document.getElementById('visor-unavailable-sub');
+
+  badge.className = 'chat-visor-badge ' + platform;
+  badge.textContent = cfg.badge;
+  titleEl.textContent = cfg.label + (ch ? ' — @' + ch : '');
+
+  if (!url) {
+    iframe.src = 'about:blank';
+    iframe.style.display = 'none';
+    unavail.style.display = 'flex';
+    unavailMsg.textContent = cfg.noChMsg;
+    unavailSub.textContent = cfg.noChSub;
+  } else {
+    iframe.style.display = 'block';
+    unavail.style.display = 'none';
+    iframe.src = url;
+  }
+
+  document.querySelectorAll('.visor-btn').forEach(function(b){ b.classList.remove('viewing'); });
+  var btn = document.getElementById('view-' + platform);
+  if (btn) btn.classList.add('viewing');
+
+  currentVisor = platform;
+  visor.classList.add('open');
+}
+
+function closeChatVisor() {
+  var visor  = document.getElementById('chat-visor');
+  var iframe = document.getElementById('visor-iframe');
+  visor.classList.remove('open');
+  document.querySelectorAll('.visor-btn').forEach(function(b){ b.classList.remove('viewing'); });
+  currentVisor = null;
+  setTimeout(function(){ iframe.src = 'about:blank'; }, 350);
+}
+
+// ═══ INIT ═══
 document.addEventListener('DOMContentLoaded',function(){
   var saved=store.get('serverUrl');
   document.getElementById('serverUrl').value=saved;
   updateOverlayUrls();
   if(saved) connectWS(saved);
-
-  if(store.get('sidebarCollapsed')==='1'){
-    document.querySelector('.sidebar').classList.add('collapsed');
-    document.getElementById('sidebar-toggle').classList.add('collapsed');
-  }
-
+  if(store.get('sidebarCollapsed')==='1'){document.querySelector('.sidebar').classList.add('collapsed');document.getElementById('sidebar-toggle').classList.add('collapsed');}
   var savedFont=store.get('chatFont');
   if(savedFont){ var sel=document.getElementById('fontSelector'); sel.value=savedFont; applyFont(savedFont,true); }
   if(store.get('glowOff')==='1'){ document.getElementById('glowToggle').checked=false; toggleGlow(false,true); }
   if(store.get('singleLine')==='1'){ document.getElementById('singleLineToggle').checked=true; toggleSingleLine(true,true); }
-
-  // ★ FIX SCROLL: detectar si el usuario scrollea hacia arriba (pause auto-scroll)
   var panel = document.getElementById('chat-panel');
   panel.addEventListener('scroll', function() {
-    var threshold = 80;
-    autoScroll = (panel.scrollHeight - panel.scrollTop - panel.clientHeight) < threshold;
+    autoScroll = (panel.scrollHeight - panel.scrollTop - panel.clientHeight) < 80;
   });
 });
 
-// ═══════════════ FONT / GLOW / SINGLE LINE ═══════════════
+// ═══ FONT / GLOW / SINGLELINE ═══
 function applyFont(fontValue, silent){ document.documentElement.style.setProperty('--font-body', fontValue); var preview=document.getElementById('font-preview'); preview.style.fontFamily=fontValue; store.set('chatFont',fontValue); if(!silent) toast('🔤 Fuente cambiada'); }
 function toggleGlow(enabled, silent){ store.set('glowOff', enabled ? '0' : '1'); var hint=document.getElementById('glow-hint'); if(enabled){ document.body.classList.remove('no-glow'); hint.textContent='✅ Brillo neón activo'; if(!silent) toast('💡 Brillo activado'); } else { document.body.classList.add('no-glow'); hint.textContent='🌑 Brillo desactivado'; if(!silent) toast('💡 Brillo desactivado'); } }
 function toggleSingleLine(enabled, silent){ store.set('singleLine',enabled?'1':'0'); var panel=document.getElementById('chat-panel'); if(enabled){ panel.classList.add('single-line'); if(!silent) toast('↔️ Modo línea única activado'); } else { panel.classList.remove('single-line'); if(!silent) toast('↕️ Modo normal activado'); } }
 
-// ═══════════════ WEBSOCKET ═══════════════
+// ═══ WEBSOCKET ═══
 function connectWS(url){
   if(!url) return;
   if(ws){try{ws.close();}catch(e){}}
@@ -715,10 +947,16 @@ function handleStatus(data){
     if(savedId&&(!kickWs||kickWs.readyState>1)){connectKickBrowser(savedId);}
     else if(!savedId&&!autoKickDone&&data.channels&&data.channels.kick){autoKickDone=true;setTimeout(resolveKickId,1500);}
   }
+  // Actualizar título del visor si está abierto
+  if(currentVisor){
+    var cfg=VISOR_CONFIG[currentVisor];
+    var ch=currentChannels[currentVisor]||'';
+    if(cfg) document.getElementById('visor-title').textContent=cfg.label+(ch?' — @'+ch:'');
+  }
 }
 function setPlatformStatus(p,c,ch){ var dot=document.getElementById('dot-'+p),el=document.getElementById('ch-'+p); if(dot) dot.className='platform-dot'+(c?' ok':''); if(el) el.textContent=ch||'—'; }
 
-// ═══════════════ APPEND MESSAGE — SCROLL ARREGLADO ═══════════════
+// ═══ APPEND MESSAGE ═══
 function appendMessage(data){
   if(!data.chatname&&!data.chatmessage) return;
   var panel=document.getElementById('chat-panel');
@@ -743,8 +981,6 @@ function appendMessage(data){
   if(data.chatbadges&&data.chatbadges.length) data.chatbadges.forEach(function(b){if(typeof b==='string')badgesHTML+='<img class="msg-badge" src="'+esc(b)+'">';else if(b.src)badgesHTML+='<img class="msg-badge" src="'+esc(b.src)+'">';});
 
   var nameStyle=data.nameColor?'color:'+data.nameColor+';text-shadow:0 0 8px '+data.nameColor+';':'';
-
-  // ★ EMOTES ARREGLADOS
   var msgHTML=processMessageHTML(data);
 
   var donHTML='';
@@ -760,19 +996,14 @@ function appendMessage(data){
   panel.appendChild(el);
   messages.push({el:el,data:data});
 
-  // ★ FIX: eliminar mensajes viejos
   if(messages.length>MAX_MESSAGES){
     var old=messages.shift();
     if(old.el.parentNode) old.el.parentNode.removeChild(old.el);
   }
-
-  // ★ FIX SCROLL: solo auto-scroll si estamos al fondo
-  if(autoScroll){
-    requestAnimationFrame(function(){ panel.scrollTop = panel.scrollHeight; });
-  }
+  if(autoScroll) requestAnimationFrame(function(){ panel.scrollTop = panel.scrollHeight; });
 }
 
-// ═══════════════ HIGHLIGHT ═══════════════
+// ═══ HIGHLIGHT ═══
 function sendHighlight(el){
   if(!isConnected||!ws) return toast('⚠️ No hay conexión');
   var data=el._msgData; if(!data) return;
@@ -791,7 +1022,7 @@ function clearHighlight(){
   toast('🧹 Destacado quitado');
 }
 
-// ═══════════════ KICK BRIDGE ═══════════════
+// ═══ KICK BRIDGE ═══
 var kickWs=null,kickRetryDelay=3000,kickRetryTimeout=null;
 function connectKickBrowser(channelId){
   if(!channelId) return;
@@ -819,9 +1050,6 @@ function tryKickUrl(channelId,urls,idx){
       badges.forEach(function(b){var bt=(b.type||'').toLowerCase();if(bt==='broadcaster'||bt==='owner')kickRoles.push({type:'broadcaster',label:'Owner'});else if(bt==='moderator'||bt==='mod')kickRoles.push({type:'moderator',label:'Mod'});else if(bt==='vip')kickRoles.push({type:'vip',label:'VIP'});else if(bt==='subscriber'||bt==='sub')kickRoles.push({type:'subscriber',label:'Sub'});else kickRoles.push({type:bt,label:b.type});});
       var username=(d.sender&&d.sender.username)||'Unknown';
       var nameColor=(d.sender&&d.sender.identity&&d.sender.identity.color)||'#53FC18';
-
-      // ★ Kick emotes: d.content puede tener [emote:ID:nombre]
-      // Los pasamos como ya están — parseKickEmotesFromText los procesará en el render
       getKickAvatarBrowser(username,function(avatar){
         var cm={type:'kick_message',platform:'kick',chatname:username,chatmessage:d.content,nameColor:nameColor,chatimg:avatar||null,roles:kickRoles,mid:d.id||('kick-'+Date.now())};
         if(ws&&ws.readyState===1) ws.send(JSON.stringify(cm));
@@ -860,7 +1088,7 @@ function getKickAvatarBrowser(username,cb){
     });
 }
 
-// ═══════════════ ACCIONES ═══════════════
+// ═══ ACCIONES ═══
 function saveAndConnect(){ var url=document.getElementById('serverUrl').value.trim(); if(!url) return toast('Introduce la URL del servidor'); store.set('serverUrl',url); retryDelay=1000; autoKickDone=false; connectWS(url); updateOverlayUrls(); toast('Conectando...'); }
 function toggleKickManual(){var el=document.getElementById('kick-manual-wrap');el.style.display=el.style.display==='none'?'block':'none';}
 
@@ -899,7 +1127,7 @@ function openTikTokLive(){ var u=currentChannels.tiktok||''; if(!u) return toast
 function openYouTubeLive(){ var c=currentChannels.youtube||''; if(!c) return toast('YouTube no configurado'); var h=c.startsWith('@')?c:'@'+c; window.open('https://www.youtube.com/'+h+'/live','_blank','noopener'); }
 function sendCustomMessage(){ var input=document.getElementById('custom-msg-input'),text=input.value.trim(); if(!text) return; if(!isConnected||!ws) return toast('⚠️ No hay conexión'); ws.send(JSON.stringify({type:'custom_message',user:'Tú (dashboard)',text:text})); input.value=''; }
 
-// ═══════════════ OVERLAY URLs ═══════════════
+// ═══ OVERLAY URLs ═══
 function getBaseOverlayDir(){ var href=window.location.href.split('?')[0].replace(/\/+$/,''); var base=href.replace(/\/dashboard(\/[^?]*)?$/,'/overlay'); if(base===href) base=href.replace(/\/[^/]+$/,'/overlay'); return base; }
 function updateOverlayUrls(){
   var serverUrl=store.get('serverUrl');
@@ -917,7 +1145,7 @@ function updateOverlayUrls(){
 function copyUrl(id){ var url=document.getElementById(id).dataset.url; if(!url) return toast('Configura el servidor primero'); navigator.clipboard.writeText(url).then(function(){toast('✅ URL copiada');}); }
 function openUrl(id){ var url=document.getElementById(id).dataset.url; if(!url) return toast('Configura el servidor primero'); window.open(url,'_blank'); }
 
-// ═══════════════ CONFIG VISUAL ═══════════════
+// ═══ CONFIG VISUAL ═══
 function setCfgVar(cssVar,val,displayId){ document.documentElement.style.setProperty(cssVar,val); if(displayId) document.getElementById(displayId).textContent=val; }
 function applyColorPrimary(val){ document.documentElement.style.setProperty('--green',val); document.documentElement.style.setProperty('--border',val); document.documentElement.style.setProperty('--muted',val+'88'); }
 
@@ -939,27 +1167,8 @@ function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 
 function injectTestMessage(){
-  // Emotes de prueba: un Twitch emote (Kappa)
-  appendMessage({
-    type:'custom',platform:'twitch',
-    chatname:'Test Twitch',
-    chatmessage:'Hola Kappa que tal PogChamp',
-    nameColor:'#9146FF',
-    chatemotes:[
-      {text:'Kappa',url:'https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/1.0',start:5,end:9},
-      {text:'PogChamp',url:'https://static-cdn.jtvnw.net/emoticons/v2/305954156/default/dark/1.0',start:15,end:22}
-    ],
-    mid:'test-tw-'+Date.now()
-  });
-  setTimeout(function(){
-    appendMessage({
-      type:'kick',platform:'kick',
-      chatname:'Test Kick',
-      chatmessage:'Hola [emote:1:GreenBalloon] como están [emote:2:MonkaS]',
-      nameColor:'#53FC18',
-      mid:'test-kick-'+Date.now()
-    });
-  }, 500);
+  appendMessage({type:'custom',platform:'twitch',chatname:'Test Twitch',chatmessage:'Hola Kappa que tal PogChamp',nameColor:'#9146FF',chatemotes:[{text:'Kappa',url:'https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/1.0',start:5,end:9},{text:'PogChamp',url:'https://static-cdn.jtvnw.net/emoticons/v2/305954156/default/dark/1.0',start:15,end:22}],mid:'test-tw-'+Date.now()});
+  setTimeout(function(){appendMessage({type:'kick',platform:'kick',chatname:'Test Kick',chatmessage:'Hola [emote:1:GreenBalloon] como están [emote:2:MonkaS]',nameColor:'#53FC18',mid:'test-kick-'+Date.now()});}, 500);
   toast('Mensajes de prueba inyectados');
 }
 function toast(msg){var el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(function(){el.classList.remove('show');},3000);}
