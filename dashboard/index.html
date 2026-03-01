@@ -471,27 +471,22 @@
       </div>
     </div>
 
-    <!-- ══ YOUTUBE — iframe live_chat ══ -->
+    <!-- ══ YOUTUBE — API v3 ══ -->
     <div class="card">
       <div class="card-header"><span class="card-title-text">▶️ YouTube — Chat al Multichat</span></div>
       <div class="card-body">
         <div id="yt-bridge-status" class="info-box info-yellow">
           📋 Pegá el link del live y presioná Conectar.
         </div>
-        <label>Tu dominio de GitHub Pages:</label>
-        <input id="yt-gh-domain" type="text" placeholder="usuario.github.io" onchange="store.set('ytGhDomain',this.value)" />
-        <label style="margin-top:4px;">Link o Video ID del live:</label>
+        <label>Link o Video ID del live:</label>
         <div class="input-row">
           <input id="yt-video-url" type="text" placeholder="https://youtube.com/watch?v=..." onkeydown="if(event.key==='Enter')connectYouTube()" />
           <button class="btn btn-primary" onclick="connectYouTube()">▶ Conectar</button>
         </div>
-        <div class="hint">Usa el iframe oficial de YouTube. El dashboard debe estar abierto.</div>
+        <div class="hint">El servidor usa YouTube Data API v3. Requiere <code style="color:var(--green);background:rgba(0,255,157,0.08);padding:1px 5px;border-radius:3px;">YOUTUBE_API_KEY</code> en Render.</div>
         <div style="display:flex;gap:6px;margin-top:2px;">
           <button class="btn btn-danger btn-full" onclick="disconnectYouTube()">⏹ Detener</button>
           <button class="btn btn-secondary btn-full" onclick="openYouTubeLive()">📺 Abrir Live</button>
-        </div>
-        <div id="yt-stats" style="display:none;font-size:10px;color:var(--muted);padding:4px 0;">
-          Mensajes: <span id="yt-msg-count">0</span> &middot; &Uacute;ltimo: <span id="yt-last-poll">&mdash;</span>
         </div>
       </div>
     </div>
@@ -740,12 +735,7 @@ var VISOR_CONFIG = {
   },
   youtube: {
     label: 'YouTube Live Chat', badge: 'YOUTUBE',
-    getUrl: function(ch) {
-      var vid = ytState.videoId || ch || '';
-      var domain = store.get('ytGhDomain') || '';
-      if (vid && domain) return 'https://www.youtube.com/live_chat?v=' + vid + '&embed_domain=' + encodeURIComponent(domain);
-      return null;
-    },
+    getUrl: function() { return null; },
     noChMsg: 'YouTube — Sin conectar',
     noChSub: 'Pegá el link del live y presioná Conectar en el panel lateral.'
   },
@@ -780,15 +770,10 @@ function openChatVisor(platform) {
     iframe.src='about:blank'; iframe.style.display='none'; unavail.style.display='flex';
     if(platform === 'youtube') {
       if(unavailIcon) unavailIcon.textContent='▶️';
-      if(ytState.active) {
-        unavailMsg.textContent='YouTube — Polling activo';
-        unavailSub.textContent='';
-        if(ytStatus) { ytStatus.style.display='block'; document.getElementById('visor-yt-count').textContent=ytState.msgCount; }
-        if(ytOpenBtn) ytOpenBtn.style.display='inline-block';
-      } else {
-        unavailMsg.textContent='YouTube — Sin conectar';
-        unavailSub.textContent=cfg.noChSub;
-      }
+      if(unavailMsg) unavailMsg.textContent = ytVideoId ? 'YouTube API v3 — activo' : 'YouTube — Sin conectar';
+      if(unavailSub) unavailSub.textContent = ytVideoId ? 'Los mensajes llegan al multichat via API v3.' : cfg.noChSub;
+      if(ytStatus && ytVideoId) { ytStatus.style.display='block'; }
+      if(ytOpenBtn && ytVideoId) ytOpenBtn.style.display='inline-block';
     } else {
       if(unavailIcon) unavailIcon.textContent='⚠';
       unavailMsg.textContent=cfg.noChMsg; unavailSub.textContent=cfg.noChSub;
@@ -821,8 +806,7 @@ document.addEventListener('DOMContentLoaded',function(){
   if(store.get('singleLine')==='1'){document.getElementById('singleLineToggle').checked=true;toggleSingleLine(true,true);}
   var savedYtUrl=store.get('ytVideoUrl');
   if(savedYtUrl) document.getElementById('yt-video-url').value=savedYtUrl;
-  var savedDomain=store.get('ytGhDomain');
-  if(savedDomain) document.getElementById('yt-gh-domain').value=savedDomain;
+
   var panel=document.getElementById('chat-panel');
   panel.addEventListener('scroll',function(){autoScroll=(panel.scrollHeight-panel.scrollTop-panel.clientHeight)<80;});
 });
@@ -851,7 +835,10 @@ function handleStatus(data){
   setPlatformStatus('kick',data.kick,(data.channels&&data.channels.kick)||'—');
   setPlatformStatus('tiktok',data.tiktok,(data.channels&&data.channels.tiktok)||'—');
   setPlatformStatus('youtube',data.youtube,data.youtubeVideoId||'—');
-  if(data.youtubeVideoId) ytState.videoId=data.youtubeVideoId;
+  if(data.youtubeVideoId) {
+    ytVideoId = data.youtubeVideoId;
+    if(data.youtube) setYtBridgeStatus('green','✅ Conectado — <b>'+data.youtubeVideoId+'</b> · Mensajes llegando via API v3.');
+  }
   if(data.channels) currentChannels=data.channels;
   var mt=document.getElementById('tiktok-mode-tag');
   if(mt){mt.textContent=data.tiktokMode||'connector';mt.className='tag '+(data.tiktokMode==='puppeteer'?'tag-puppeteer':'tag-connector');}
@@ -863,20 +850,8 @@ function handleStatus(data){
 }
 function setPlatformStatus(p,c,ch){var dot=document.getElementById('dot-'+p),el=document.getElementById('ch-'+p);if(dot)dot.className='platform-dot'+(c?' ok':'');if(el)el.textContent=ch||'—';}
 
-// ═══ YOUTUBE — iframe live_chat (sin CORS, sin 429, sin cookies) ═══
-// Abre https://www.youtube.com/live_chat?v=ID&embed_domain=DOMINIO en un iframe oculto
-// Lee el DOM del iframe cada 3 segundos y manda los mensajes por WebSocket
-
-var ytState = {
-  videoId: null,
-  active: false,
-  iframe: null,
-  pollTimer: null,
-  msgCount: 0,
-  seenIds: new Set(),
-  errorCount: 0,
-  POLL_INTERVAL: 3000,
-};
+// ═══ YOUTUBE — API v3 via servidor ═══
+var ytVideoId = null;
 
 function extractVideoId(input) {
   if (!input) return null;
@@ -886,181 +861,47 @@ function extractVideoId(input) {
   return m ? m[1] : null;
 }
 
-function connectYouTube() {
+function getHttpBase() {
+  var u = store.get('serverUrl');
+  if (!u) return null;
+  return u.replace(/^wss?/, 'https').replace(/\/$/, '');
+}
+
+async function connectYouTube() {
   var input = document.getElementById('yt-video-url').value.trim();
   var videoId = extractVideoId(input);
   if (!videoId) { setYtBridgeStatus('red', '❌ URL inválida. Ej: https://youtube.com/watch?v=abc123'); return; }
-
-  var domain = document.getElementById('yt-gh-domain').value.trim() || store.get('ytGhDomain') || '';
-  if (!domain) { setYtBridgeStatus('red', '❌ Ingresá tu dominio de GitHub Pages (ej: usuario.github.io)'); return; }
-
-  disconnectYouTube(true);
+  var base = getHttpBase();
+  if (!base) { setYtBridgeStatus('red', '❌ Primero conectá el servidor.'); return; }
   store.set('ytVideoUrl', input);
-  store.set('ytGhDomain', domain);
-  ytState.videoId  = videoId;
-  ytState.active   = true;
-  ytState.msgCount = 0;
-  ytState.seenIds  = new Set();
-  ytState.errorCount = 0;
-
-  setYtBridgeStatus('yellow', '⏳ Cargando iframe de YouTube...');
+  ytVideoId = videoId;
+  setYtBridgeStatus('yellow', '⏳ Conectando al live (' + videoId + ')...');
   setPlatformStatus('youtube', false, videoId);
-
-  // Crear iframe oculto con la URL oficial del chat embebido
-  var iframe = document.createElement('iframe');
-  iframe.id = 'yt-chat-iframe';
-  iframe.src = 'https://www.youtube.com/live_chat?v=' + videoId + '&embed_domain=' + encodeURIComponent(domain);
-  iframe.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;border:none;bottom:0;right:0;';
-  iframe.allow = 'autoplay';
-  document.body.appendChild(iframe);
-  ytState.iframe = iframe;
-
-  // Esperar a que cargue el iframe antes de empezar a leer
-  iframe.onload = function() {
-    setYtBridgeStatus('green', '✅ Chat cargado — <b>' + videoId + '</b> · Leyendo mensajes...');
-    setPlatformStatus('youtube', true, videoId);
-    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'youtube_connected', videoId: videoId }));
-    ytState.pollTimer = setTimeout(pollYtIframe, 2000);
-    toast('▶️ YouTube conectado via iframe');
-  };
-
-  iframe.onerror = function() {
-    setYtBridgeStatus('red', '❌ No se pudo cargar el iframe. ¿El dominio GitHub Pages es correcto?');
-    ytState.active = false;
-  };
-}
-
-function pollYtIframe() {
-  if (!ytState.active || !ytState.iframe) return;
-
   try {
-    var doc = ytState.iframe.contentDocument || ytState.iframe.contentWindow.document;
-    if (!doc || !doc.body) {
-      // iframe aún cargando
-      ytState.pollTimer = setTimeout(pollYtIframe, ytState.POLL_INTERVAL);
-      return;
-    }
-
-    // Los mensajes están en elementos yt-live-chat-text-message-renderer
-    var items = doc.querySelectorAll('yt-live-chat-text-message-renderer,yt-live-chat-paid-message-renderer,yt-live-chat-membership-item-renderer');
-
-    var newMessages = 0;
-    items.forEach(function(item) {
-      var msgId = item.getAttribute('id') || item.getAttribute('data-id') || '';
-      if (!msgId) {
-        // Generar ID basado en contenido si no tiene
-        var nameEl = item.querySelector('#author-name, .author-name');
-        var msgEl  = item.querySelector('#message, .message');
-        msgId = (nameEl ? nameEl.textContent.trim() : '') + '|' + (msgEl ? msgEl.textContent.trim().slice(0, 30) : '') + '|' + Math.floor(Date.now() / 5000);
-      }
-      if (ytState.seenIds.has(msgId)) return;
-      ytState.seenIds.add(msgId);
-      if (ytState.seenIds.size > 500) {
-        var arr = Array.from(ytState.seenIds);
-        ytState.seenIds = new Set(arr.slice(arr.length - 300));
-      }
-
-      // Extraer datos
-      var nameEl   = item.querySelector('#author-name, .author-name, yt-live-chat-author-chip #author-name');
-      var msgEl    = item.querySelector('#message, .message');
-      var avatarEl = item.querySelector('#author-photo img, .author-photo img');
-      var amountEl = item.querySelector('#purchase-amount, .purchase-amount-display');
-
-      var name    = nameEl   ? nameEl.textContent.trim()   : 'YouTuber';
-      var msgText = msgEl    ? msgEl.textContent.trim()     : '';
-      var avatar  = avatarEl ? avatarEl.src                 : null;
-      var amount  = amountEl ? amountEl.textContent.trim()  : null;
-
-      if (!name && !msgText) return;
-
-      // Roles
-      var roles = [];
-      if (item.querySelector('[aria-label*="Owner"], [aria-label*="Propietario"]')) roles.push({ type: 'broadcaster', label: 'Streamer' });
-      if (item.querySelector('[aria-label*="Moderator"], [aria-label*="Moderador"]')) roles.push({ type: 'moderator', label: 'Mod' });
-      if (item.querySelector('yt-live-chat-author-badge-renderer')) roles.push({ type: 'member', label: '⭐ Miembro' });
-
-      // Superchat / membership
-      var isPaid = item.tagName.toLowerCase().includes('paid');
-      var isMember = item.tagName.toLowerCase().includes('membership');
-
-      if (isPaid && amount) {
-        if (ws && ws.readyState === 1) {
-          ws.send(JSON.stringify({
-            type: 'youtube_donation', donationType: 'superchat',
-            chatname: name, chatmessage: msgText || '¡Superchat!',
-            chatimg: avatar, amount: 0, amountDisplay: amount,
-            roles: roles, videoId: ytState.videoId, mid: 'yt-sc-' + msgId
-          }));
-        }
-      } else if (isMember) {
-        if (ws && ws.readyState === 1) {
-          ws.send(JSON.stringify({
-            type: 'youtube_donation', donationType: 'member',
-            chatname: name, chatmessage: msgText || '¡Nuevo Miembro!',
-            chatimg: avatar, amount: 0, roles: roles,
-            videoId: ytState.videoId, mid: 'yt-mb-' + msgId
-          }));
-        }
-      } else {
-        if (!msgText) return;
-        if (ws && ws.readyState === 1) {
-          ws.send(JSON.stringify({
-            type: 'youtube_message',
-            chatname: name, chatmessage: msgText,
-            chatimg: avatar, roles: roles,
-            videoId: ytState.videoId, mid: 'yt-' + msgId
-          }));
-        } else {
-          appendMessage({ type: 'youtube', platform: 'youtube', chatname: name, chatmessage: msgText, chatimg: avatar, nameColor: '#FF0000', roles: roles, mid: 'yt-' + msgId });
-        }
-      }
-
-      ytState.msgCount++;
-      newMessages++;
+    var r = await fetch(base + '/api/youtube/connect', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ videoId: videoId })
     });
-
-    if (newMessages > 0) {
-      var statsEl = document.getElementById('yt-stats');
-      if (statsEl) statsEl.style.display = 'block';
-      var countEl = document.getElementById('yt-msg-count');
-      if (countEl) countEl.textContent = ytState.msgCount;
-      var lastEl = document.getElementById('yt-last-poll');
-      if (lastEl) lastEl.textContent = new Date().toLocaleTimeString('es', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
-      var visorCount = document.getElementById('visor-yt-count');
-      if (visorCount) visorCount.textContent = ytState.msgCount;
+    var d = await r.json();
+    if (d.ok) {
+      setYtBridgeStatus('green', '✅ Conectando a <b>' + videoId + '</b> — el servidor buscará el chat en vivo...');
+      toast('▶️ YouTube: conectando via API v3...');
+    } else {
+      setYtBridgeStatus('red', '❌ ' + (d.error || 'Error desconocido'));
     }
-
-    ytState.errorCount = 0;
-
   } catch(e) {
-    ytState.errorCount++;
-    // Error de acceso al iframe (CORS) — YouTube bloqueó el embed_domain
-    if (e.name === 'SecurityError' || (e.message && e.message.toLowerCase().includes('cross'))) {
-      setYtBridgeStatus('red', '❌ YouTube bloqueó el acceso al iframe. ¿El dominio ' + (store.get('ytGhDomain')||'') + ' está bien escrito? Debe ser exactamente como aparece en GitHub Pages.');
-      ytState.active = false;
-      return;
-    }
-    if (ytState.errorCount > 10) {
-      setYtBridgeStatus('red', '❌ No se pueden leer mensajes del iframe.');
-      ytState.active = false;
-      return;
-    }
+    setYtBridgeStatus('red', '❌ No se pudo contactar el servidor: ' + e.message);
   }
-
-  if (ytState.active) ytState.pollTimer = setTimeout(pollYtIframe, ytState.POLL_INTERVAL);
 }
 
-function disconnectYouTube(silent) {
-  ytState.active = false;
-  if (ytState.pollTimer) { clearTimeout(ytState.pollTimer); ytState.pollTimer = null; }
-  if (ytState.iframe && ytState.iframe.parentNode) { ytState.iframe.parentNode.removeChild(ytState.iframe); ytState.iframe = null; }
-  ytState.videoId = null;
+async function disconnectYouTube(silent) {
+  ytVideoId = null;
+  var base = getHttpBase();
+  if (base) { try { await fetch(base + '/api/youtube/disconnect', { method: 'POST' }); } catch(e) {} }
+  setPlatformStatus('youtube', false, '—');
   if (!silent) {
-    setPlatformStatus('youtube', false, '—');
     setYtBridgeStatus('yellow', '📋 Pegá el link del live y presioná Conectar.');
-    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'youtube_disconnected' }));
-    var statsEl = document.getElementById('yt-stats');
-    if (statsEl) statsEl.style.display = 'none';
     toast('⏹ YouTube detenido');
   }
 }
@@ -1073,7 +914,7 @@ function setYtBridgeStatus(color, html) {
 }
 
 function openYouTubeLive() {
-  var vid = ytState.videoId || '';
+  var vid = ytVideoId || '';
   if (vid) { window.open('https://www.youtube.com/watch?v=' + vid, '_blank', 'noopener'); }
   else { toast('Pegá el link del live primero'); }
 }
