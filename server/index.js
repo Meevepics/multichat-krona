@@ -408,6 +408,74 @@ async function connectYouTube() {
   }
 }
 
+// ══════════════════════════════════════════════════════════════
+//  YOUTUBE BROWSER BRIDGE — Proxy endpoints
+//  El dashboard del navegador llama a estos endpoints para
+//  evitar CORS sin depender de proxies externos.
+// ══════════════════════════════════════════════════════════════
+
+// GET /api/yt-proxy?url=... — devuelve el HTML de cualquier URL de YouTube
+app.get('/api/yt-proxy', (req, res) => {
+  const target = req.query.url;
+  if (!target || !target.startsWith('https://www.youtube.com/')) {
+    return res.status(400).json({ error: 'URL inválida' });
+  }
+  const options = {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    }
+  };
+  const ytReq = https.get(target, options, (ytRes) => {
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    ytRes.pipe(res);
+  });
+  ytReq.on('error', (e) => res.status(500).json({ error: e.message }));
+  ytReq.setTimeout(10000, () => { ytReq.destroy(); res.status(504).json({ error: 'timeout' }); });
+});
+
+// POST /api/yt-chat — llama a la API interna de YouTube Live Chat
+app.post('/api/yt-chat', (req, res) => {
+  const { apiKey, continuation } = req.body;
+  if (!apiKey || !continuation) return res.status(400).json({ error: 'apiKey y continuation requeridos' });
+
+  const bodyStr = JSON.stringify({
+    context: { client: { clientName: 'WEB', clientVersion: '2.20240101' } },
+    continuation
+  });
+
+  const options = {
+    hostname: 'www.youtube.com',
+    path: `/youtubei/v1/live_chat/get_live_chat?key=${apiKey}`,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(bodyStr),
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept-Language': 'es-ES,es;q=0.9',
+      'Origin': 'https://www.youtube.com',
+      'Referer': 'https://www.youtube.com/',
+    }
+  };
+
+  const ytReq = https.request(options, (ytRes) => {
+    let body = '';
+    ytRes.on('data', c => body += c);
+    ytRes.on('end', () => {
+      try {
+        res.json(JSON.parse(body));
+      } catch(e) {
+        res.status(502).json({ error: 'Respuesta inválida de YouTube', raw: body.slice(0, 200) });
+      }
+    });
+  });
+  ytReq.on('error', (e) => res.status(500).json({ error: e.message }));
+  ytReq.setTimeout(10000, () => { ytReq.destroy(); res.status(504).json({ error: 'timeout' }); });
+  ytReq.write(bodyStr);
+  ytReq.end();
+});
+
 // ── HTTP ENDPOINTS ───────────────────────────────────────────
 app.get('/health', (req, res) => res.json({
   ok: true, uptime: Math.floor(process.uptime()), messages: state.msgCount,
