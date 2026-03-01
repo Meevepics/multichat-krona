@@ -56,9 +56,6 @@ const state = {
 
 // ══════════════════════════════════════════════════════════════
 // ★ NUEVA FUNCIÓN: Parsear emotes de Twitch
-//   tmi.js entrega tags.emotes como:
-//   { '25': ['0-4', '12-16'], '1902': ['6-10'] }
-//   Lo convertimos a: [{ text, url, start, end }]
 // ══════════════════════════════════════════════════════════════
 function parseTwitchEmotes(message, emotesTag) {
   if (!emotesTag || typeof emotesTag !== 'object') return [];
@@ -75,7 +72,6 @@ function parseTwitchEmotes(message, emotesTag) {
       });
     }
   }
-  // Ordenar por posición
   result.sort((a, b) => a.start - b.start);
   return result;
 }
@@ -252,7 +248,6 @@ function connectTwitch() {
     if (badges.subscriber)  roles.push({ type: 'subscriber',  label: 'Sub' });
     if (badges.founder)     roles.push({ type: 'founder',     label: 'Founder' });
 
-    // ★ PARSEAR EMOTES DE TWITCH
     const chatemotes = parseTwitchEmotes(message, tags.emotes);
 
     const bitsMatch = message.match(/cheer(\d+)/i);
@@ -276,7 +271,7 @@ function connectTwitch() {
           type: 'twitch', platform: 'twitch',
           chatname: twitchUser,
           chatmessage: message,
-          chatemotes,   // ← INCLUIR EMOTES
+          chatemotes,
           nameColor: tags.color || '#9146FF',
           chatimg: avatar || null, roles,
           mid: tags.id || ('tw-' + Date.now()),
@@ -335,7 +330,6 @@ function handleKickDonationFromBrowser(data) {
 
 // ══════════════════════════════════════════════════════════════
 //  KICK — Conexión directa desde el servidor via Pusher WebSocket
-//  No requiere dashboard abierto en el navegador
 // ══════════════════════════════════════════════════════════════
 const { WebSocket: NodeWS } = require('ws');
 
@@ -374,7 +368,6 @@ async function resolveKickChannelId(channelName) {
 async function connectKick() {
   if (!CONFIG.kick) return;
 
-  // Resolver el channel ID si no lo tenemos
   if (!CONFIG.kickId) {
     console.log(`[Kick] Resolviendo chatroom ID para canal: ${CONFIG.kick}`);
     const id = await resolveKickChannelId(CONFIG.kick);
@@ -416,8 +409,6 @@ function tryKickPusher(channelId) {
   ws.on('open', () => {
     kickRetryDelay = 5000;
     ws.send(JSON.stringify({ event: 'pusher:subscribe', data: { auth: '', channel: `chatrooms.${channelId}.v2` } }));
-
-    // Ping cada 25 segundos para mantener la conexión viva
     kickPingInterval = setInterval(() => {
       if (ws.readyState === 1) ws.send(JSON.stringify({ event: 'pusher:ping', data: {} }));
     }, 25000);
@@ -444,7 +435,6 @@ function tryKickPusher(channelId) {
       return;
     }
 
-    // Mensaje de chat o donación
     let d;
     try { d = typeof msg.data === 'string' ? JSON.parse(msg.data) : msg.data; } catch(e) { return; }
     if (!d) return;
@@ -477,7 +467,6 @@ function tryKickPusher(channelId) {
       });
     }
 
-    // Gifted subs / donaciones de Kick
     if (event === 'App\\Events\\GiftedSubscriptionsEvent' || event === 'App.Events.GiftedSubscriptionsEvent') {
       const gifter = (d.gifted_by && d.gifted_by.username) || 'Anónimo';
       const qty = (d.gifted_usernames && d.gifted_usernames.length) || 1;
@@ -594,28 +583,68 @@ function fetchJSON(url) {
 }
 
 async function youtubeResolveChannelId(handleOrName) {
-  if (!handleOrName || !CONFIG.youtubeKey) return null;
-  if (/^UC[\w-]{22}$/.test(handleOrName)) return handleOrName;
-  const query = handleOrName.replace(/^@/, '');
-  try {
-    const handleData = await fetchJSON(`https://www.googleapis.com/youtube/v3/channels?part=id,snippet&forHandle=${encodeURIComponent(query)}&key=${CONFIG.youtubeKey}`);
-    if (handleData.items?.length > 0) return handleData.items[0].id;
-    const searchData = await fetchJSON(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=channel&maxResults=5&key=${CONFIG.youtubeKey}`);
-    if (searchData.items?.length > 0) return searchData.items[0].snippet?.channelId;
+  if (!handleOrName || !CONFIG.youtubeKey) {
+    console.log('[YouTube] ❌ Faltan datos: handle=' + handleOrName + ' key=' + (CONFIG.youtubeKey ? 'OK' : 'MISSING'));
     return null;
-  } catch(e) { return null; }
+  }
+  if (/^UC[\w-]{22}$/.test(handleOrName)) {
+    console.log('[YouTube] Handle es un channelId directo:', handleOrName);
+    return handleOrName;
+  }
+  const query = handleOrName.replace(/^@/, '');
+  console.log('[YouTube] Buscando channelId para handle:', query);
+  try {
+    const handleData = await fetchJSON(
+      `https://www.googleapis.com/youtube/v3/channels?part=id,snippet&forHandle=${encodeURIComponent(query)}&key=${CONFIG.youtubeKey}`
+    );
+    console.log('[YouTube] Respuesta forHandle:', JSON.stringify(handleData).slice(0, 300));
+    if (handleData.items?.length > 0) {
+      console.log('[YouTube] ✅ ChannelId encontrado vía forHandle:', handleData.items[0].id);
+      return handleData.items[0].id;
+    }
+    console.log('[YouTube] No encontrado vía forHandle, probando search...');
+    const searchData = await fetchJSON(
+      `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=channel&maxResults=5&key=${CONFIG.youtubeKey}`
+    );
+    console.log('[YouTube] Respuesta search:', JSON.stringify(searchData).slice(0, 300));
+    if (searchData.items?.length > 0) {
+      const id = searchData.items[0].snippet?.channelId;
+      console.log('[YouTube] ✅ ChannelId encontrado vía search:', id);
+      return id;
+    }
+    console.log('[YouTube] ❌ No se encontró channelId para:', query);
+    return null;
+  } catch(e) {
+    console.error('[YouTube] ❌ Error resolviendo channelId:', e.message);
+    return null;
+  }
 }
 
 async function youtubeGetLiveChatId(channelId) {
   if (!channelId || !CONFIG.youtubeKey) return null;
+  console.log('[YouTube] Buscando live activo para channelId:', channelId);
   try {
-    const searchData = await fetchJSON(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&eventType=live&type=video&key=${CONFIG.youtubeKey}`);
-    if (!searchData.items?.length) return null;
+    const searchData = await fetchJSON(
+      `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&eventType=live&type=video&key=${CONFIG.youtubeKey}`
+    );
+    console.log('[YouTube] Respuesta búsqueda live:', JSON.stringify(searchData).slice(0, 300));
+    if (!searchData.items?.length) {
+      console.log('[YouTube] ⏳ No hay live activo en este momento.');
+      return null;
+    }
     const videoId = searchData.items[0].id?.videoId;
+    console.log('[YouTube] Video en vivo encontrado:', videoId);
     if (!videoId) return null;
-    const videoData = await fetchJSON(`https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${videoId}&key=${CONFIG.youtubeKey}`);
-    return videoData.items?.[0]?.liveStreamingDetails?.activeLiveChatId || null;
-  } catch(e) { return null; }
+    const videoData = await fetchJSON(
+      `https://www.googleapis.com/youtube/v3/videos?part=liveStreamingDetails&id=${videoId}&key=${CONFIG.youtubeKey}`
+    );
+    const chatId = videoData.items?.[0]?.liveStreamingDetails?.activeLiveChatId || null;
+    console.log('[YouTube] liveChatId:', chatId || '❌ No encontrado');
+    return chatId;
+  } catch(e) {
+    console.error('[YouTube] ❌ Error buscando live:', e.message);
+    return null;
+  }
 }
 
 async function youtubePollChat() {
@@ -626,10 +655,12 @@ async function youtubePollChat() {
   try {
     const data = await fetchJSON(url);
     if (data.error) {
+      console.error('[YouTube] ❌ Error en poll:', data.error.code, data.error.message);
       if (data.error.code === 403 || data.error.code === 404) {
         clearInterval(state.youtube.pollTimer);
         state.youtube.connected = false; state.youtube.liveChatId = null;
         broadcastStatus();
+        console.log('[YouTube] Live terminado o sin permisos. Reintentando en 60s...');
         setTimeout(connectYouTube, 60000);
       }
       return;
@@ -660,23 +691,42 @@ async function youtubePollChat() {
     clearTimeout(state.youtube.pollTimer);
     state.youtube.pollTimer = setTimeout(youtubePollChat, pollingMs);
   } catch(e) {
+    console.error('[YouTube] ❌ Error en poll (excepción):', e.message);
     clearTimeout(state.youtube.pollTimer);
     state.youtube.pollTimer = setTimeout(youtubePollChat, 10000);
   }
 }
 
 async function connectYouTube() {
-  if (!CONFIG.youtubeHandle || !CONFIG.youtubeKey) return;
-  if (!state.youtube.channelId) {
-    const channelId = await youtubeResolveChannelId(CONFIG.youtubeHandle);
-    if (!channelId) { setTimeout(connectYouTube, 2 * 60 * 1000); return; }
-    state.youtube.channelId = channelId;
+  if (!CONFIG.youtubeHandle || !CONFIG.youtubeKey) {
+    console.log('[YouTube] ❌ Variables faltantes — YOUTUBE_HANDLE:', CONFIG.youtubeHandle || 'MISSING', '| YOUTUBE_API_KEY:', CONFIG.youtubeKey ? 'OK' : 'MISSING');
+    return;
   }
+  console.log('[YouTube] 🔄 Iniciando conexión — handle:', CONFIG.youtubeHandle);
+
+  if (!state.youtube.channelId) {
+    console.log('[YouTube] Resolviendo channelId...');
+    const channelId = await youtubeResolveChannelId(CONFIG.youtubeHandle);
+    if (!channelId) {
+      console.log('[YouTube] ❌ No se pudo resolver channelId. Reintentando en 2 minutos...');
+      setTimeout(connectYouTube, 2 * 60 * 1000);
+      return;
+    }
+    state.youtube.channelId = channelId;
+    console.log('[YouTube] ✅ ChannelId guardado:', channelId);
+  }
+
   const chatId = await youtubeGetLiveChatId(state.youtube.channelId);
-  if (!chatId) { setTimeout(connectYouTube, 2 * 60 * 1000); return; }
+  if (!chatId) {
+    console.log('[YouTube] ⏳ Sin live activo. Reintentando en 2 minutos...');
+    setTimeout(connectYouTube, 2 * 60 * 1000);
+    return;
+  }
+
   state.youtube.liveChatId = chatId;
   state.youtube.nextPageToken = null;
   state.youtube.connected = true;
+  console.log('[YouTube] ✅ Conectado al live chat:', chatId);
   broadcastStatus();
   youtubePollChat();
 }
