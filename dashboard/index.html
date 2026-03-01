@@ -221,7 +221,6 @@
     .tag { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; }
     .tag-connector { background: rgba(0,255,157,0.12); border:1px solid rgba(0,255,157,0.4); color: var(--green); }
     .tag-puppeteer { background: rgba(255,170,0,0.12); border:1px solid rgba(255,170,0,0.4); color: var(--yellow); }
-    .tag-browser { background: rgba(0,255,157,0.12); border:1px solid rgba(0,255,157,0.4); color: var(--green); }
 
     input[type=range] { width: 100%; accent-color: var(--green); cursor: pointer; }
     input[type=color] { width: 40px; height: 28px; border: 1px solid rgba(0,255,157,0.4); border-radius: 4px; cursor: pointer; background: transparent; padding: 1px; }
@@ -318,40 +317,150 @@
 
     /* ══ CHAT VISOR ══ */
     .chat-visor {
-      position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 50;
-      display: flex; flex-direction: column; background: #000d0d;
-      transform: translateY(100%); opacity: 0;
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 50;
+      display: flex;
+      flex-direction: column;
+      background: #000d0d;
+      transform: translateY(100%);
+      opacity: 0;
       transition: transform 0.32s cubic-bezier(0.4,0,0.2,1), opacity 0.25s;
       pointer-events: none;
     }
-    .chat-visor.open { transform: translateY(0); opacity: 1; pointer-events: all; }
-    .chat-visor-iframe-wrap { flex: 1; position: relative; overflow: hidden; }
-    .chat-visor-iframe-wrap iframe { width: 100%; height: 100%; border: none; display: block; }
-    .chat-visor-footer { display: flex; align-items: center; gap: 10px; padding: 7px 14px; background: rgba(0,10,10,0.97); border-top: 1px solid rgba(0,255,157,0.3); flex-shrink: 0; }
-    .chat-visor-title { font-family: var(--font-title); font-size: 13px; color: var(--green); text-shadow: var(--glow-sm); letter-spacing: 1px; flex: 1; }
-    .chat-visor-badge { font-size: 9px; padding: 2px 7px; border-radius: 3px; font-weight: 700; letter-spacing: 0.5px; border: 1px solid; }
+    .chat-visor.open {
+      transform: translateY(0);
+      opacity: 1;
+      pointer-events: all;
+    }
+    .chat-visor-iframe-wrap {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    .chat-visor-iframe-wrap iframe {
+      width: 100%; height: 100%;
+      border: none; display: block;
+    }
+    .chat-visor-footer {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 7px 14px;
+      background: rgba(0,10,10,0.97);
+      border-top: 1px solid rgba(0,255,157,0.3);
+      flex-shrink: 0;
+    }
+    .chat-visor-title {
+      font-family: var(--font-title);
+      font-size: 13px;
+      color: var(--green);
+      text-shadow: var(--glow-sm);
+      letter-spacing: 1px;
+      flex: 1;
+    }
+    .chat-visor-badge {
+      font-size: 9px;
+      padding: 2px 7px;
+      border-radius: 3px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      border: 1px solid;
+    }
     .chat-visor-badge.twitch  { background:rgba(145,70,255,0.15); border-color:rgba(145,70,255,0.5); color:var(--twitch); }
     .chat-visor-badge.kick    { background:rgba(83,252,24,0.1);   border-color:rgba(83,252,24,0.4);  color:var(--kick); }
     .chat-visor-badge.youtube { background:rgba(255,0,0,0.1);     border-color:rgba(255,0,0,0.4);    color:var(--youtube); }
     .chat-visor-badge.tiktok  { background:rgba(255,0,80,0.1);    border-color:rgba(255,0,80,0.4);   color:var(--tiktok); }
-    .chat-visor-close { padding: 5px 12px; background: rgba(0,255,157,0.08); border: 1px solid rgba(0,255,157,0.4); border-radius: 4px; color: var(--green); font-family: var(--font-body); font-size: 11px; cursor: pointer; transition: all 0.15s; letter-spacing: 0.5px; }
+    .chat-visor-close {
+      padding: 5px 12px;
+      background: rgba(0,255,157,0.08);
+      border: 1px solid rgba(0,255,157,0.4);
+      border-radius: 4px;
+      color: var(--green);
+      font-family: var(--font-body);
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s;
+      letter-spacing: 0.5px;
+    }
     .chat-visor-close:hover { background: rgba(0,255,157,0.2); box-shadow: var(--glow-sm); }
-    .chat-visor-unavailable { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; font-family: var(--font-title); font-size: 16px; color: var(--muted); letter-spacing: 2px; text-align: center; padding: 30px; }
+    .chat-visor-unavailable {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 12px;
+      font-family: var(--font-title);
+      font-size: 16px;
+      color: var(--muted);
+      letter-spacing: 2px;
+      text-align: center;
+      padding: 30px;
+    }
     .chat-visor-unavailable .uv-icon { font-size: 32px; opacity: 0.5; }
-    .chat-visor-unavailable .uv-sub { font-family: var(--font-body); font-size: 11px; color: rgba(0,255,157,0.35); max-width: 280px; line-height: 1.8; }
+    .chat-visor-unavailable .uv-sub {
+      font-family: var(--font-body);
+      font-size: 11px;
+      color: rgba(0,255,157,0.35);
+      max-width: 280px;
+      line-height: 1.8;
+    }
 
-    .visor-bar { display: flex; align-items: center; gap: 6px; padding: 7px 14px 6px; background: rgba(0,10,10,0.95); border-top: 1px solid rgba(0,255,157,0.15); }
-    .visor-bar-label { font-size: 10px; color: rgba(0,255,157,0.4); text-transform: uppercase; letter-spacing: 1px; margin-right: 2px; flex-shrink: 0; }
-    .visor-btn { display: inline-flex; align-items: center; gap: 5px; padding: 4px 11px; border-radius: 4px; border: 1px solid rgba(0,255,157,0.2); background: rgba(0,30,20,0.5); font-family: var(--font-body); font-size: 10px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; cursor: pointer; transition: all 0.15s; white-space: nowrap; flex-shrink: 0; color: rgba(0,255,157,0.5); }
-    .visor-btn .vb-dot { width: 5px; height: 5px; border-radius: 50%; background: rgba(0,255,157,0.2); border: 1px solid rgba(0,255,157,0.3); transition: all 0.15s; flex-shrink: 0; }
+    /* Barra de botones del visor */
+    .visor-bar {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px 6px;
+      background: rgba(0,10,10,0.95);
+      border-top: 1px solid rgba(0,255,157,0.15);
+    }
+    .visor-bar-label {
+      font-size: 10px;
+      color: rgba(0,255,157,0.4);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-right: 2px;
+      flex-shrink: 0;
+    }
+    .visor-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 11px;
+      border-radius: 4px;
+      border: 1px solid rgba(0,255,157,0.2);
+      background: rgba(0,30,20,0.5);
+      font-family: var(--font-body);
+      font-size: 10px; font-weight: 700;
+      letter-spacing: 0.5px; text-transform: uppercase;
+      cursor: pointer; transition: all 0.15s;
+      white-space: nowrap; flex-shrink: 0;
+      color: rgba(0,255,157,0.5);
+    }
+    .visor-btn .vb-dot {
+      width: 5px; height: 5px; border-radius: 50%;
+      background: rgba(0,255,157,0.2);
+      border: 1px solid rgba(0,255,157,0.3);
+      transition: all 0.15s; flex-shrink: 0;
+    }
     .visor-btn:hover { border-color: rgba(0,255,157,0.5); color: var(--green); }
     .visor-btn:active { transform: scale(0.97); }
+
     .visor-btn[data-view="twitch"]  { --vc:#9146FF; }
     .visor-btn[data-view="kick"]    { --vc:#53FC18; }
     .visor-btn[data-view="youtube"] { --vc:#FF0000; }
     .visor-btn[data-view="tiktok"]  { --vc:#FF0050; }
-    .visor-btn.viewing { border-color: var(--vc); color: var(--vc); background: color-mix(in srgb, var(--vc) 12%, transparent); box-shadow: 0 0 8px color-mix(in srgb, var(--vc) 30%, transparent); }
-    .visor-btn.viewing .vb-dot { background: var(--vc); box-shadow: 0 0 6px var(--vc); border-color: var(--vc); animation: dotPulseV 2s ease-in-out infinite; }
+
+    .visor-btn.viewing {
+      border-color: var(--vc);
+      color: var(--vc);
+      background: color-mix(in srgb, var(--vc) 12%, transparent);
+      box-shadow: 0 0 8px color-mix(in srgb, var(--vc) 30%, transparent);
+    }
+    .visor-btn.viewing .vb-dot {
+      background: var(--vc);
+      box-shadow: 0 0 6px var(--vc);
+      border-color: var(--vc);
+      animation: dotPulseV 2s ease-in-out infinite;
+    }
     @keyframes dotPulseV { 0%,100%{ opacity:1; } 50%{ opacity:0.5; } }
 
     /* ══ INPUT BAR ══ */
@@ -428,7 +537,6 @@
           <span class="platform-dot" id="dot-youtube"></span>
           <span class="platform-icon">▶️</span>
           <div class="platform-info"><div class="platform-name">YouTube</div><div class="platform-channel" id="ch-youtube">—</div></div>
-          <span class="tag tag-browser">navegador</span>
         </div>
       </div>
     </div>
@@ -463,21 +571,18 @@
       </div>
     </div>
 
-    <!-- ══ YOUTUBE BROWSER BRIDGE ══ -->
     <div class="card">
-      <div class="card-header"><span class="card-title-text">▶️ YouTube — Puente Navegador</span></div>
+      <div class="card-header"><span class="card-title-text">▶️ YouTube — Control</span></div>
       <div class="card-body">
-        <div id="yt-bridge-status" class="info-box info-yellow">
-          🌐 Tu navegador leerá el chat directamente (sin API key, sin cuota).
-        </div>
+        <div id="youtube-status-box" class="info-box info-yellow">⏳ Pegá el link del live y presioná ▶ Conectar</div>
         <label>Link o Video ID del live:</label>
         <div class="input-row">
-          <input id="yt-video-url" type="text" placeholder="https://youtube.com/watch?v=..." onkeydown="if(event.key==='Enter')connectYouTubeBrowser()" />
-          <button class="btn btn-primary" onclick="connectYouTubeBrowser()">▶ Conectar</button>
+          <input id="yt-video-url" type="text" placeholder="https://youtube.com/watch?v=..." onkeydown="if(event.key==='Enter')connectYouTubeWithUrl()" />
+          <button class="btn btn-primary" onclick="connectYouTubeWithUrl()">▶ Conectar</button>
         </div>
         <div class="hint">Pegá el link de tu live cada vez que arranques el directo.</div>
         <div style="display:flex;gap:6px;margin-top:2px;">
-          <button class="btn btn-danger btn-full" onclick="disconnectYouTubeBrowser()">⏹ Detener</button>
+          <button class="btn btn-secondary btn-full" onclick="restartYouTube()">🔄 Reconectar</button>
           <button class="btn btn-secondary btn-full" onclick="openYouTubeLive()">📺 Live</button>
         </div>
       </div>
@@ -571,6 +676,7 @@
   </div><!-- /sidebar -->
 
   <div class="main">
+    <!-- ══ CHAT VISOR (iframe embebido) ══ -->
     <div class="chat-visor" id="chat-visor">
       <div class="chat-visor-iframe-wrap" id="visor-iframe-wrap">
         <div class="chat-visor-unavailable" id="visor-unavailable" style="display:none;">
@@ -596,6 +702,7 @@
       <button class="btn btn-secondary" style="font-size:10px;padding:3px 9px;margin-left:auto;" onclick="clearHighlight()">✕ Quitar</button>
     </div>
 
+    <!-- Botones visor de chat -->
     <div class="visor-bar">
       <span class="visor-bar-label">👁 Ver chat:</span>
       <button class="visor-btn" data-view="twitch" onclick="openChatVisor('twitch')" id="view-twitch">
@@ -743,23 +850,51 @@ var VISOR_CONFIG = {
 function openChatVisor(platform) {
   var cfg = VISOR_CONFIG[platform];
   if (!cfg) return;
+
   if (currentVisor === platform) { closeChatVisor(); return; }
+
   var ch = currentChannels[platform] || '';
   var url = cfg.getUrl(ch);
-  var visor=document.getElementById('chat-visor'),iframe=document.getElementById('visor-iframe'),titleEl=document.getElementById('visor-title'),badge=document.getElementById('visor-badge'),unavail=document.getElementById('visor-unavailable'),unavailMsg=document.getElementById('visor-unavailable-msg'),unavailSub=document.getElementById('visor-unavailable-sub');
-  badge.className='chat-visor-badge '+platform; badge.textContent=cfg.badge;
-  titleEl.textContent=cfg.label+(ch?' — @'+ch:'');
-  if(!url){iframe.src='about:blank';iframe.style.display='none';unavail.style.display='flex';unavailMsg.textContent=cfg.noChMsg;unavailSub.textContent=cfg.noChSub;}
-  else{iframe.style.display='block';unavail.style.display='none';iframe.src=url;}
-  document.querySelectorAll('.visor-btn').forEach(function(b){b.classList.remove('viewing');});
-  var btn=document.getElementById('view-'+platform); if(btn) btn.classList.add('viewing');
-  currentVisor=platform; visor.classList.add('open');
+
+  var visor      = document.getElementById('chat-visor');
+  var iframe     = document.getElementById('visor-iframe');
+  var titleEl    = document.getElementById('visor-title');
+  var badge      = document.getElementById('visor-badge');
+  var unavail    = document.getElementById('visor-unavailable');
+  var unavailMsg = document.getElementById('visor-unavailable-msg');
+  var unavailSub = document.getElementById('visor-unavailable-sub');
+
+  badge.className = 'chat-visor-badge ' + platform;
+  badge.textContent = cfg.badge;
+  titleEl.textContent = cfg.label + (ch ? ' — @' + ch : '');
+
+  if (!url) {
+    iframe.src = 'about:blank';
+    iframe.style.display = 'none';
+    unavail.style.display = 'flex';
+    unavailMsg.textContent = cfg.noChMsg;
+    unavailSub.textContent = cfg.noChSub;
+  } else {
+    iframe.style.display = 'block';
+    unavail.style.display = 'none';
+    iframe.src = url;
+  }
+
+  document.querySelectorAll('.visor-btn').forEach(function(b){ b.classList.remove('viewing'); });
+  var btn = document.getElementById('view-' + platform);
+  if (btn) btn.classList.add('viewing');
+
+  currentVisor = platform;
+  visor.classList.add('open');
 }
-function closeChatVisor(){
-  var visor=document.getElementById('chat-visor'),iframe=document.getElementById('visor-iframe');
+
+function closeChatVisor() {
+  var visor  = document.getElementById('chat-visor');
+  var iframe = document.getElementById('visor-iframe');
   visor.classList.remove('open');
-  document.querySelectorAll('.visor-btn').forEach(function(b){b.classList.remove('viewing');});
-  currentVisor=null; setTimeout(function(){iframe.src='about:blank';},350);
+  document.querySelectorAll('.visor-btn').forEach(function(b){ b.classList.remove('viewing'); });
+  currentVisor = null;
+  setTimeout(function(){ iframe.src = 'about:blank'; }, 350);
 }
 
 // ═══ INIT ═══
@@ -770,19 +905,21 @@ document.addEventListener('DOMContentLoaded',function(){
   if(saved) connectWS(saved);
   if(store.get('sidebarCollapsed')==='1'){document.querySelector('.sidebar').classList.add('collapsed');document.getElementById('sidebar-toggle').classList.add('collapsed');}
   var savedFont=store.get('chatFont');
-  if(savedFont){var sel=document.getElementById('fontSelector');sel.value=savedFont;applyFont(savedFont,true);}
-  if(store.get('glowOff')==='1'){document.getElementById('glowToggle').checked=false;toggleGlow(false,true);}
-  if(store.get('singleLine')==='1'){document.getElementById('singleLineToggle').checked=true;toggleSingleLine(true,true);}
+  if(savedFont){ var sel=document.getElementById('fontSelector'); sel.value=savedFont; applyFont(savedFont,true); }
+  if(store.get('glowOff')==='1'){ document.getElementById('glowToggle').checked=false; toggleGlow(false,true); }
+  if(store.get('singleLine')==='1'){ document.getElementById('singleLineToggle').checked=true; toggleSingleLine(true,true); }
   var savedYtUrl=store.get('ytVideoUrl');
-  if(savedYtUrl) document.getElementById('yt-video-url').value=savedYtUrl;
-  var panel=document.getElementById('chat-panel');
-  panel.addEventListener('scroll',function(){autoScroll=(panel.scrollHeight-panel.scrollTop-panel.clientHeight)<80;});
+  if(savedYtUrl)document.getElementById('yt-video-url').value=savedYtUrl;
+  var panel = document.getElementById('chat-panel');
+  panel.addEventListener('scroll', function() {
+    autoScroll = (panel.scrollHeight - panel.scrollTop - panel.clientHeight) < 80;
+  });
 });
 
 // ═══ FONT / GLOW / SINGLELINE ═══
-function applyFont(fontValue,silent){document.documentElement.style.setProperty('--font-body',fontValue);var preview=document.getElementById('font-preview');preview.style.fontFamily=fontValue;store.set('chatFont',fontValue);if(!silent)toast('🔤 Fuente cambiada');}
-function toggleGlow(enabled,silent){store.set('glowOff',enabled?'0':'1');var hint=document.getElementById('glow-hint');if(enabled){document.body.classList.remove('no-glow');hint.textContent='✅ Brillo neón activo';if(!silent)toast('💡 Brillo activado');}else{document.body.classList.add('no-glow');hint.textContent='🌑 Brillo desactivado';if(!silent)toast('💡 Brillo desactivado');}}
-function toggleSingleLine(enabled,silent){store.set('singleLine',enabled?'1':'0');var panel=document.getElementById('chat-panel');if(enabled){panel.classList.add('single-line');if(!silent)toast('↔️ Modo línea única activado');}else{panel.classList.remove('single-line');if(!silent)toast('↕️ Modo normal activado');}}
+function applyFont(fontValue, silent){ document.documentElement.style.setProperty('--font-body', fontValue); var preview=document.getElementById('font-preview'); preview.style.fontFamily=fontValue; store.set('chatFont',fontValue); if(!silent) toast('🔤 Fuente cambiada'); }
+function toggleGlow(enabled, silent){ store.set('glowOff', enabled ? '0' : '1'); var hint=document.getElementById('glow-hint'); if(enabled){ document.body.classList.remove('no-glow'); hint.textContent='✅ Brillo neón activo'; if(!silent) toast('💡 Brillo activado'); } else { document.body.classList.add('no-glow'); hint.textContent='🌑 Brillo desactivado'; if(!silent) toast('💡 Brillo desactivado'); } }
+function toggleSingleLine(enabled, silent){ store.set('singleLine',enabled?'1':'0'); var panel=document.getElementById('chat-panel'); if(enabled){ panel.classList.add('single-line'); if(!silent) toast('↔️ Modo línea única activado'); } else { panel.classList.remove('single-line'); if(!silent) toast('↕️ Modo normal activado'); } }
 
 // ═══ WEBSOCKET ═══
 function connectWS(url){
@@ -796,246 +933,34 @@ function connectWS(url){
   ws.onerror=function(){ws.close();};
 }
 function scheduleRetry(url){retryDelay=Math.min(retryDelay*2,30000);setTimeout(function(){connectWS(url);},retryDelay);}
-function setStatus(ok){var dot=document.getElementById('ws-dot'),lbl=document.getElementById('ws-label');dot.className=ok?'ok':'';lbl.textContent=ok?'Conectado':'Desconectado';}
+function setStatus(ok){ var dot=document.getElementById('ws-dot'),lbl=document.getElementById('ws-label'); dot.className=ok?'ok':''; lbl.textContent=ok?'Conectado':'Desconectado'; }
 
 function handleStatus(data){
   setPlatformStatus('twitch',data.twitch,(data.channels&&data.channels.twitch)||'—');
   setPlatformStatus('kick',data.kick,(data.channels&&data.channels.kick)||'—');
   setPlatformStatus('tiktok',data.tiktok,(data.channels&&data.channels.tiktok)||'—');
-  // YouTube lo maneja el puente del navegador
+  setPlatformStatus('youtube',data.youtube,(data.channels&&data.channels.youtube)||'—');
   if(data.channels) currentChannels=data.channels;
   var mt=document.getElementById('tiktok-mode-tag');
   if(mt){mt.textContent=data.tiktokMode||'connector';mt.className='tag '+(data.tiktokMode==='puppeteer'?'tag-puppeteer':'tag-connector');}
+  var ytBox=document.getElementById('youtube-status-box');
+  if(ytBox){
+    if(data.youtube){ytBox.className='info-box info-green';ytBox.innerHTML='✅ Conectado al chat en vivo'+(data.youtubeVideoId?' <span style="color:var(--muted);font-size:9px;">('+data.youtubeVideoId+')</span>':'');}
+    else{ytBox.className='info-box info-yellow';ytBox.innerHTML='⏳ Pegá el link del live y presioná <strong>▶ Conectar</strong>';}
+  }
   if(!data.kick){
     var savedId=store.get('kickChannelId');
     if(savedId&&(!kickWs||kickWs.readyState>1)){connectKickBrowser(savedId);}
     else if(!savedId&&!autoKickDone&&data.channels&&data.channels.kick){autoKickDone=true;setTimeout(resolveKickId,1500);}
   }
+  // Actualizar título del visor si está abierto
   if(currentVisor){
-    var cfg=VISOR_CONFIG[currentVisor],ch=currentChannels[currentVisor]||'';
+    var cfg=VISOR_CONFIG[currentVisor];
+    var ch=currentChannels[currentVisor]||'';
     if(cfg) document.getElementById('visor-title').textContent=cfg.label+(ch?' — @'+ch:'');
   }
 }
-function setPlatformStatus(p,c,ch){var dot=document.getElementById('dot-'+p),el=document.getElementById('ch-'+p);if(dot)dot.className='platform-dot'+(c?' ok':'');if(el)el.textContent=ch||'—';}
-
-// ═══ YOUTUBE BROWSER BRIDGE ═══
-var ytBridge = {
-  active: false,
-  videoId: null,
-  pollInterval: null,
-  continuation: null,
-  apiKey: null,
-  seenIds: new Set(),
-  retryCount: 0,
-  MAX_RETRY: 5
-};
-
-function extractVideoId(input) {
-  if (!input) return null;
-  input = input.trim();
-  if (/^[a-zA-Z0-9_-]{11}$/.test(input)) return input;
-  var m = input.match(/(?:v=|youtu\.be\/|\/live\/|\/shorts\/)([a-zA-Z0-9_-]{11})/);
-  return m ? m[1] : null;
-}
-
-function connectYouTubeBrowser() {
-  var input = document.getElementById('yt-video-url').value.trim();
-  var videoId = extractVideoId(input);
-  if (!videoId) {
-    setYtBridgeStatus('red', '❌ URL inválida. Ej: https://youtube.com/watch?v=abc123');
-    return;
-  }
-  store.set('ytVideoUrl', input);
-  disconnectYouTubeBrowser();
-  ytBridge.videoId = videoId;
-  ytBridge.active = true;
-  ytBridge.retryCount = 0;
-  ytBridge.seenIds = new Set();
-  ytBridge.continuation = null;
-  ytBridge.apiKey = null;
-  setYtBridgeStatus('yellow', '⏳ Obteniendo chat en vivo...');
-  setPlatformStatus('youtube', false, videoId);
-  fetchYtInitialPage(videoId);
-}
-
-function disconnectYouTubeBrowser() {
-  ytBridge.active = false;
-  if (ytBridge.pollInterval) { clearInterval(ytBridge.pollInterval); ytBridge.pollInterval = null; }
-  ytBridge.continuation = null;
-  ytBridge.apiKey = null;
-  ytBridge.seenIds = new Set();
-  setPlatformStatus('youtube', false, '—');
-  setYtBridgeStatus('yellow', '🌐 Tu navegador leerá el chat directamente (sin API key, sin cuota).');
-}
-
-function setYtBridgeStatus(color, html) {
-  var box = document.getElementById('yt-bridge-status');
-  if (!box) return;
-  box.className = 'info-box info-' + color;
-  box.innerHTML = html;
-}
-
-function getServerHttpUrl() {
-  var serverUrl = store.get('serverUrl') || '';
-  return serverUrl.replace(/^wss?/, 'https').replace(/\/$/, '');
-}
-
-async function fetchYtInitialPage(videoId) {
-  if (!ytBridge.active) return;
-  var serverBase = getServerHttpUrl();
-  if (!serverBase) { setYtBridgeStatus('red', '❌ Conecta el servidor primero.'); return; }
-  try {
-    var ytUrl = 'https://www.youtube.com/watch?v=' + videoId;
-    var r = await fetch(serverBase + '/api/yt-proxy?url=' + encodeURIComponent(ytUrl));
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    var html = await r.text();
-
-    // Extraer API key (INNERTUBE_API_KEY)
-    var keyMatch = html.match(/"INNERTUBE_API_KEY"\s*:\s*"([^"]+)"/);
-    if (keyMatch) ytBridge.apiKey = keyMatch[1];
-
-    // Extraer continuation token del live chat
-    var contMatch = html.match(/"continuation"\s*:\s*"([^"]+)"[\s\S]{0,200}?"liveChatRenderer"/);
-    if (!contMatch) contMatch = html.match(/liveChatRenderer[\s\S]{0,500}?"continuation"\s*:\s*"([^"]+)"/);
-    if (!contMatch) contMatch = html.match(/"invalidationContinuationData"[\s\S]{0,200}?"continuation"\s*:\s*"([^"]+)"/);
-    // Fallback: buscar cualquier continuation cerca de "live_chat"
-    if (!contMatch) {
-      var lcIdx = html.indexOf('live_chat');
-      if (lcIdx > -1) {
-        var chunk = html.slice(Math.max(0, lcIdx - 200), lcIdx + 2000);
-        var cm2 = chunk.match(/"continuation"\s*:\s*"([^"]+)"/);
-        if (cm2) contMatch = cm2;
-      }
-    }
-
-    if (!ytBridge.apiKey || !contMatch) {
-      ytBridge.retryCount++;
-      if (ytBridge.retryCount <= ytBridge.MAX_RETRY) {
-        setYtBridgeStatus('yellow', '⏳ Intentando conectar... (' + ytBridge.retryCount + '/' + ytBridge.MAX_RETRY + ')');
-        setTimeout(function() { fetchYtInitialPage(videoId); }, 5000);
-      } else {
-        setYtBridgeStatus('red', '❌ No se pudo obtener el chat. ¿El live está activo y público?');
-        setPlatformStatus('youtube', false, '—');
-      }
-      return;
-    }
-
-    ytBridge.continuation = contMatch[1] || contMatch[0];
-    setYtBridgeStatus('green', '✅ Chat de YouTube conectado (puente navegador) — video: ' + videoId);
-    setPlatformStatus('youtube', true, videoId);
-    document.getElementById('ch-youtube').textContent = videoId;
-
-    // Iniciar polling
-    pollYtChat();
-    ytBridge.pollInterval = setInterval(pollYtChat, 5000);
-
-  } catch(err) {
-    ytBridge.retryCount++;
-    if (ytBridge.retryCount <= ytBridge.MAX_RETRY) {
-      setYtBridgeStatus('yellow', '⏳ Reintentando... (' + ytBridge.retryCount + '/' + ytBridge.MAX_RETRY + ') — ' + (err.message||''));
-      setTimeout(function() { fetchYtInitialPage(videoId); }, 6000);
-    } else {
-      setYtBridgeStatus('red', '❌ Error: ' + (err.message || err));
-      setPlatformStatus('youtube', false, '—');
-    }
-  }
-}
-
-async function pollYtChat() {
-  if (!ytBridge.active || !ytBridge.continuation || !ytBridge.apiKey) return;
-  var serverBase = getServerHttpUrl();
-  if (!serverBase) return;
-  try {
-    var r = await fetch(serverBase + '/api/yt-chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ apiKey: ytBridge.apiKey, continuation: ytBridge.continuation })
-    });
-    if (!r.ok) return;
-    var data = await r.json();
-
-    // Actualizar continuation para el siguiente poll
-    var lcc = data.continuationContents && data.continuationContents.liveChatContinuation;
-    if (!lcc) return;
-
-    var newCont = null;
-    if (lcc.continuations && lcc.continuations[0]) {
-      var c0 = lcc.continuations[0];
-      newCont = (c0.invalidationContinuationData && c0.invalidationContinuationData.continuation) ||
-                (c0.timedContinuationData && c0.timedContinuationData.continuation) ||
-                (c0.liveChatReplayContinuationData && c0.liveChatReplayContinuationData.continuation);
-    }
-    if (newCont) ytBridge.continuation = newCont;
-
-    var actions = lcc.actions || [];
-    actions.forEach(function(action) {
-      var item = action.addChatItemAction && action.addChatItemAction.item;
-      if (!item) return;
-      var renderer = item.liveChatTextMessageRenderer || item.liveChatPaidMessageRenderer || item.liveChatMembershipItemRenderer;
-      if (!renderer) return;
-      var msgId = renderer.id;
-      if (msgId && ytBridge.seenIds.has(msgId)) return;
-      if (msgId) ytBridge.seenIds.add(msgId);
-      if (ytBridge.seenIds.size > 500) {
-        var arr = Array.from(ytBridge.seenIds);
-        ytBridge.seenIds = new Set(arr.slice(arr.length - 300));
-      }
-
-      var authorName = renderer.authorName && renderer.authorName.simpleText || 'YouTuber';
-      var authorPhoto = null;
-      if (renderer.authorPhoto && renderer.authorPhoto.thumbnails && renderer.authorPhoto.thumbnails.length) {
-        authorPhoto = renderer.authorPhoto.thumbnails[renderer.authorPhoto.thumbnails.length - 1].url;
-      }
-
-      var roles = [];
-      var badges = renderer.authorBadges || [];
-      badges.forEach(function(b) {
-        var label = b.liveChatAuthorBadgeRenderer && (b.liveChatAuthorBadgeRenderer.tooltip || '');
-        if (label.toLowerCase().indexOf('owner') > -1 || label.toLowerCase().indexOf('streamer') > -1)
-          roles.push({ type: 'broadcaster', label: 'Streamer' });
-        else if (label.toLowerCase().indexOf('moderator') > -1 || label.toLowerCase().indexOf('mod') > -1)
-          roles.push({ type: 'moderator', label: 'Mod' });
-        else if (label.toLowerCase().indexOf('member') > -1)
-          roles.push({ type: 'member', label: 'Miembro' });
-      });
-
-      // Texto del mensaje
-      var text = '';
-      if (renderer.message && renderer.message.runs) {
-        text = renderer.message.runs.map(function(r) { return r.text || ''; }).join('');
-      }
-
-      // Superchat
-      if (item.liveChatPaidMessageRenderer) {
-        var sc = renderer;
-        var amount = sc.purchaseAmountText && sc.purchaseAmountText.simpleText || '';
-        var scText = text || '¡Super Chat!';
-        var msg = { type: 'donation', platform: 'youtube', donationType: 'superchat', chatname: authorName, chatmessage: scText, chatimg: authorPhoto, nameColor: '#FF0000', amount: amount, amountDisplay: amount, roles: roles, mid: 'yt-sc-' + (msgId || Date.now()) };
-        if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
-        appendMessage(msg);
-        return;
-      }
-
-      // Membresía
-      if (item.liveChatMembershipItemRenderer) {
-        var memText = text || '¡Nuevo miembro!';
-        var msg = { type: 'donation', platform: 'youtube', donationType: 'member', chatname: authorName, chatmessage: memText, chatimg: authorPhoto, nameColor: '#FF0000', roles: roles, mid: 'yt-mem-' + (msgId || Date.now()) };
-        if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
-        appendMessage(msg);
-        return;
-      }
-
-      // Mensaje normal
-      if (!text) return;
-      var msg = { type: 'youtube', platform: 'youtube', chatname: authorName, chatmessage: text, chatimg: authorPhoto, nameColor: '#FF0000', roles: roles, mid: 'yt-' + (msgId || Date.now()) };
-      if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
-      appendMessage(msg);
-    });
-
-  } catch(err) {
-    // Error silencioso en polling, reintenta solo
-  }
-}
+function setPlatformStatus(p,c,ch){ var dot=document.getElementById('dot-'+p),el=document.getElementById('ch-'+p); if(dot) dot.className='platform-dot'+(c?' ok':''); if(el) el.textContent=ch||'—'; }
 
 // ═══ APPEND MESSAGE ═══
 function appendMessage(data){
@@ -1043,31 +968,45 @@ function appendMessage(data){
   var panel=document.getElementById('chat-panel');
   var ph=document.getElementById('chat-placeholder');
   if(ph) ph.remove();
+
   var platform=data.platform||data.type||'custom';
   var logo=PLATFORM_LOGOS[platform]||PLATFORM_LOGOS.custom;
   var time=new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
   var el=document.createElement('div');
   el.className='msg-item '+platform;
   el.dataset.mid=data.mid||'';
-  var avatarHTML=data.chatimg?'<div class="msg-avatar"><img src="'+esc(data.chatimg)+'" onerror="this.style.display=\'none\'"></div>':'<div class="msg-avatar"><div class="msg-avatar-fallback" style="color:rgba(0,255,157,0.5);width:18px;height:18px;">'+logo+'</div></div>';
+
+  var avatarHTML=data.chatimg
+    ?'<div class="msg-avatar"><img src="'+esc(data.chatimg)+'" onerror="this.style.display=\'none\'"></div>'
+    :'<div class="msg-avatar"><div class="msg-avatar-fallback" style="color:rgba(0,255,157,0.5);width:18px;height:18px;">'+logo+'</div></div>';
+
   var platformBadge='<span class="msg-platform '+platform+'"><span style="width:10px;height:10px;display:inline-flex;">'+logo+'</span>'+platform.charAt(0).toUpperCase()+platform.slice(1)+'</span>';
+
   var badgesHTML='';
   if(data.roles&&data.roles.length) data.roles.forEach(function(r){badgesHTML+='<span style="font-size:9px;padding:1px 5px;background:rgba(0,255,157,0.08);border:1px solid rgba(0,255,157,0.3);border-radius:3px;color:#5eead4;">'+esc(r.label||r.type)+'</span>';});
   if(data.chatbadges&&data.chatbadges.length) data.chatbadges.forEach(function(b){if(typeof b==='string')badgesHTML+='<img class="msg-badge" src="'+esc(b)+'">';else if(b.src)badgesHTML+='<img class="msg-badge" src="'+esc(b.src)+'">';});
+
   var nameStyle=data.nameColor?'color:'+data.nameColor+';text-shadow:0 0 8px '+data.nameColor+';':'';
   var msgHTML=processMessageHTML(data);
+
   var donHTML='';
   if(data.type==='donation'&&(data.amount||data.donationType)){
     var dl=data.donationType==='bits'?'💎 '+data.amount+' Bits':data.donationType==='sub'?'🌟 ¡Nuevo Sub!':data.donationType==='resub'?'🔄 '+data.months+' meses':data.donationType==='subgift'?'🎁 Sub regalada':data.donationType==='superchat'?'💰 '+(data.amountDisplay||data.amount):data.donationType==='member'?'⭐ ¡Nuevo Miembro!':data.donationType==='gift'?'🎁 Regalo TikTok':data.amount?'💰 '+data.amount:'';
     if(dl) donHTML='<div style="margin-top:5px;padding:5px 10px;background:rgba(0,255,157,0.1);border:1px solid rgba(0,255,157,0.4);border-radius:3px;font-size:11px;font-weight:700;color:var(--green);text-align:center;">'+dl+'</div>';
   }
+
   el.innerHTML=avatarHTML+'<div class="msg-body"><div class="msg-header"><span class="msg-user" style="'+nameStyle+'">'+esc(data.chatname||'?')+'</span>'+platformBadge+badgesHTML+'<span class="msg-time">'+time+'</span><button class="msg-highlight-btn" onclick="event.stopPropagation();sendHighlight(this.closest(\'.msg-item\'))">📌 Destacar</button></div><div class="msg-text">'+msgHTML+'</div>'+donHTML+'</div>';
   el._msgData=data;
   el.addEventListener('click',function(){sendHighlight(el);});
+
   panel.appendChild(el);
   messages.push({el:el,data:data});
-  if(messages.length>MAX_MESSAGES){var old=messages.shift();if(old.el.parentNode)old.el.parentNode.removeChild(old.el);}
-  if(autoScroll) requestAnimationFrame(function(){panel.scrollTop=panel.scrollHeight;});
+
+  if(messages.length>MAX_MESSAGES){
+    var old=messages.shift();
+    if(old.el.parentNode) old.el.parentNode.removeChild(old.el);
+  }
+  if(autoScroll) requestAnimationFrame(function(){ panel.scrollTop = panel.scrollHeight; });
 }
 
 // ═══ HIGHLIGHT ═══
@@ -1093,7 +1032,7 @@ function clearHighlight(){
 var kickWs=null,kickRetryDelay=3000,kickRetryTimeout=null;
 function connectKickBrowser(channelId){
   if(!channelId) return;
-  if(kickWs){try{kickWs.onmessage=null;kickWs.onclose=null;kickWs.onerror=null;kickWs.close();}catch(e){}kickWs=null;}
+  if(kickWs){try{kickWs.onmessage=null;kickWs.onclose=null;kickWs.onerror=null;kickWs.close();}catch(e){} kickWs=null;}
   if(kickRetryTimeout){clearTimeout(kickRetryTimeout);kickRetryTimeout=null;}
   var box=document.getElementById('kick-status-box');
   if(box){box.className='info-box info-yellow';box.innerHTML='⏳ Conectando a Kick...';}
@@ -1144,11 +1083,19 @@ function getKickAvatarBrowser(username,cb){
   kickAvatarPending[slug]=[cb];
   fetch('https://kick.com/api/v2/channels/'+slug,{headers:{'Accept':'application/json'}})
     .then(function(r){return r.json();})
-    .then(function(data){var av=(data.user&&(data.user.profile_pic||data.user.profilePic))||data.profile_pic||null;if(av)kickAvatarCache[slug]=av;var cbs=kickAvatarPending[slug]||[];delete kickAvatarPending[slug];cbs.forEach(function(c){c(av);});}).catch(function(){var cbs=kickAvatarPending[slug]||[];delete kickAvatarPending[slug];cbs.forEach(function(c){c(null);});});
+    .then(function(data){
+      var av=(data.user&&(data.user.profile_pic||data.user.profilePic))||data.profile_pic||null;
+      if(av) kickAvatarCache[slug]=av;
+      var cbs=kickAvatarPending[slug]||[];delete kickAvatarPending[slug];
+      cbs.forEach(function(c){c(av);});
+    }).catch(function(){
+      var cbs=kickAvatarPending[slug]||[];delete kickAvatarPending[slug];
+      cbs.forEach(function(c){c(null);});
+    });
 }
 
 // ═══ ACCIONES ═══
-function saveAndConnect(){var url=document.getElementById('serverUrl').value.trim();if(!url)return toast('Introduce la URL del servidor');store.set('serverUrl',url);retryDelay=1000;autoKickDone=false;connectWS(url);updateOverlayUrls();toast('Conectando...');}
+function saveAndConnect(){ var url=document.getElementById('serverUrl').value.trim(); if(!url) return toast('Introduce la URL del servidor'); store.set('serverUrl',url); retryDelay=1000; autoKickDone=false; connectWS(url); updateOverlayUrls(); toast('Conectando...'); }
 function toggleKickManual(){var el=document.getElementById('kick-manual-wrap');el.style.display=el.style.display==='none'?'block':'none';}
 
 async function resolveKickId(){
@@ -1180,39 +1127,77 @@ async function sendKickId(idParam){
     else toast('❌ El servidor rechazó el ID');
   }catch(e){toast('❌ '+e.message);}
 }
-async function restartTikTok(){var su=store.get('serverUrl');if(!su)return toast('Configura la URL del servidor primero');var hu=su.replace(/^wss?/,'https').replace(/\/$/,'');try{var r=await fetch(hu+'/api/tiktok/restart',{method:'POST'});var d=await r.json();toast(d.ok?'🔄 TikTok reconectando...':'❌ Error');}catch(e){toast('❌ No se pudo contactar el servidor');}}
-function openTikTokLive(){var u=currentChannels.tiktok||'';if(!u)return toast('TikTok no configurado');window.open('https://www.tiktok.com/@'+u+'/live','_blank','noopener');}
-function openYouTubeLive(){var vid=ytBridge.videoId||'';if(vid){window.open('https://www.youtube.com/watch?v='+vid,'_blank','noopener');}else{var c=currentChannels.youtube||'';if(!c)return toast('YouTube no configurado');var h=c.startsWith('@')?c:'@'+c;window.open('https://www.youtube.com/'+h+'/live','_blank','noopener');}}
-function sendCustomMessage(){var input=document.getElementById('custom-msg-input'),text=input.value.trim();if(!text)return;if(!isConnected||!ws)return toast('⚠️ No hay conexión');ws.send(JSON.stringify({type:'custom_message',user:'Tú (dashboard)',text:text}));input.value='';}
+async function restartTikTok(){ var su=store.get('serverUrl');if(!su) return toast('Configura la URL del servidor primero'); var hu=su.replace(/^wss?/,'https').replace(/\/$/,''); try{var r=await fetch(hu+'/api/tiktok/restart',{method:'POST'});var d=await r.json();toast(d.ok?'🔄 TikTok reconectando...':'❌ Error');}catch(e){toast('❌ No se pudo contactar el servidor');} }
+async function restartYouTube(){var su=store.get('serverUrl');if(!su)return toast('Configura la URL del servidor primero');var hu=su.replace(/^wss?/,'https').replace(/\/$/,'');var ytBox=document.getElementById('youtube-status-box');if(ytBox){ytBox.className='info-box info-yellow';ytBox.innerHTML='⏳ Reconectando...';}try{var r=await fetch(hu+'/api/youtube/restart',{method:'POST'});var d=await r.json();toast(d.ok?'🔄 YouTube reconectando...':'❌ Error');}catch(e){toast('❌ No se pudo contactar el servidor');}}
+async function connectYouTubeWithUrl(){
+  var su=store.get('serverUrl');if(!su)return toast('Configura la URL del servidor primero');
+  var input=document.getElementById('yt-video-url').value.trim();
+  if(!input)return toast('Pegá el link del live de YouTube primero');
+  var hu=su.replace(/^wss?/,'https').replace(/\/$/,'');
+  var ytBox=document.getElementById('youtube-status-box');
+  if(ytBox){ytBox.className='info-box info-yellow';ytBox.innerHTML='⏳ Conectando...';}
+  try{
+    var r=await fetch(hu+'/api/youtube/connect',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:input})});
+    var d=await r.json();
+    if(d.ok){
+      try{localStorage.setItem('ytVideoUrl',input);}catch(e){}
+      toast('✅ YouTube conectando — videoId: '+d.videoId);
+      if(ytBox){ytBox.className='info-box info-green';ytBox.innerHTML='⏳ Conectando al video: <strong>'+d.videoId+'</strong>...';}
+    }else{
+      toast('❌ URL inválida — pegá el link completo del live');
+      if(ytBox){ytBox.className='info-box info-red';ytBox.innerHTML='❌ URL inválida. Ej: https://youtube.com/watch?v=abc123';}
+    }
+  }catch(e){
+    toast('❌ No se pudo contactar el servidor');
+    if(ytBox){ytBox.className='info-box info-red';ytBox.innerHTML='❌ Error al contactar el servidor';}
+  }
+}
+function openTikTokLive(){ var u=currentChannels.tiktok||''; if(!u) return toast('TikTok no configurado'); window.open('https://www.tiktok.com/@'+u+'/live','_blank','noopener'); }
+function openYouTubeLive(){ var c=currentChannels.youtube||''; if(!c) return toast('YouTube no configurado'); var h=c.startsWith('@')?c:'@'+c; window.open('https://www.youtube.com/'+h+'/live','_blank','noopener'); }
+function sendCustomMessage(){ var input=document.getElementById('custom-msg-input'),text=input.value.trim(); if(!text) return; if(!isConnected||!ws) return toast('⚠️ No hay conexión'); ws.send(JSON.stringify({type:'custom_message',user:'Tú (dashboard)',text:text})); input.value=''; }
 
 // ═══ OVERLAY URLs ═══
-function getBaseOverlayDir(){var href=window.location.href.split('?')[0].replace(/\/+$/,'');var base=href.replace(/\/dashboard(\/[^?]*)?$/,'/overlay');if(base===href)base=href.replace(/\/[^/]+$/,'/overlay');return base;}
+function getBaseOverlayDir(){ var href=window.location.href.split('?')[0].replace(/\/+$/,''); var base=href.replace(/\/dashboard(\/[^?]*)?$/,'/overlay'); if(base===href) base=href.replace(/\/[^/]+$/,'/overlay'); return base; }
 function updateOverlayUrls(){
   var serverUrl=store.get('serverUrl');
   var showtime=(parseInt(document.getElementById('showtime-input').value)||12)*1000;
   var base=(window.location.protocol!=='file:')?getBaseOverlayDir():'';
   var ids={'url-chat':{file:'index.html',params:''},'url-chatuno':{file:'chat_uno.html',params:''},'url-destacador':{file:'destacador.html',params:'&showtime='+showtime}};
   Object.keys(ids).forEach(function(id){
-    var box=document.getElementById(id);if(!box)return;
+    var box=document.getElementById(id);if(!box) return;
     if(!serverUrl){box.textContent='Configura el servidor primero...';box.dataset.url='';return;}
     if(!base){box.textContent='No disponible en local (usa GitHub Pages)';box.dataset.url='';return;}
     var url=base+'/'+ids[id].file+'?server='+encodeURIComponent(serverUrl)+ids[id].params;
     box.textContent=url;box.dataset.url=url;
   });
 }
-function copyUrl(id){var url=document.getElementById(id).dataset.url;if(!url)return toast('Configura el servidor primero');navigator.clipboard.writeText(url).then(function(){toast('✅ URL copiada');});}
-function openUrl(id){var url=document.getElementById(id).dataset.url;if(!url)return toast('Configura el servidor primero');window.open(url,'_blank');}
+function copyUrl(id){ var url=document.getElementById(id).dataset.url; if(!url) return toast('Configura el servidor primero'); navigator.clipboard.writeText(url).then(function(){toast('✅ URL copiada');}); }
+function openUrl(id){ var url=document.getElementById(id).dataset.url; if(!url) return toast('Configura el servidor primero'); window.open(url,'_blank'); }
 
 // ═══ CONFIG VISUAL ═══
-function setCfgVar(cssVar,val,displayId){document.documentElement.style.setProperty(cssVar,val);if(displayId)document.getElementById(displayId).textContent=val;}
-function applyColorPrimary(val){document.documentElement.style.setProperty('--green',val);document.documentElement.style.setProperty('--border',val);document.documentElement.style.setProperty('--muted',val+'88');}
-function clearChat(){if(!confirm('¿Limpiar todos los mensajes del dashboard?'))return;var panel=document.getElementById('chat-panel');panel.innerHTML='<div class="chat-spacer" id="chat-spacer"></div><div id="chat-placeholder">🌊 Los mensajes del abismo aparecerán aquí...</div>';messages=[];toast('🗑️ Chat limpiado');}
-function exportMessages(){var data=messages.map(function(m,i){return{id:i+1,name:m.data.chatname,message:m.data.chatmessage,platform:m.data.platform||m.data.type,timestamp:new Date().toISOString()};});var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download='krona_messages_'+Date.now()+'.json';a.click();URL.revokeObjectURL(url);toast('💾 Mensajes exportados');}
+function setCfgVar(cssVar,val,displayId){ document.documentElement.style.setProperty(cssVar,val); if(displayId) document.getElementById(displayId).textContent=val; }
+function applyColorPrimary(val){ document.documentElement.style.setProperty('--green',val); document.documentElement.style.setProperty('--border',val); document.documentElement.style.setProperty('--muted',val+'88'); }
+
+function clearChat(){
+  if(!confirm('¿Limpiar todos los mensajes del dashboard?')) return;
+  var panel=document.getElementById('chat-panel');
+  panel.innerHTML='<div class="chat-spacer" id="chat-spacer"></div><div id="chat-placeholder">🌊 Los mensajes del abismo aparecerán aquí...</div>';
+  messages=[]; toast('🗑️ Chat limpiado');
+}
+function exportMessages(){
+  var data=messages.map(function(m,i){return{id:i+1,name:m.data.chatname,message:m.data.chatmessage,platform:m.data.platform||m.data.type,timestamp:new Date().toISOString()};});
+  var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download='krona_messages_'+Date.now()+'.json';a.click();
+  URL.revokeObjectURL(url);toast('💾 Mensajes exportados');
+}
+
 function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
+
 function injectTestMessage(){
   appendMessage({type:'custom',platform:'twitch',chatname:'Test Twitch',chatmessage:'Hola Kappa que tal PogChamp',nameColor:'#9146FF',chatemotes:[{text:'Kappa',url:'https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/1.0',start:5,end:9},{text:'PogChamp',url:'https://static-cdn.jtvnw.net/emoticons/v2/305954156/default/dark/1.0',start:15,end:22}],mid:'test-tw-'+Date.now()});
-  setTimeout(function(){appendMessage({type:'youtube',platform:'youtube',chatname:'Test YouTube',chatmessage:'Mensaje de prueba desde YouTube 🔴',nameColor:'#FF0000',roles:[],mid:'test-yt-'+Date.now()});},500);
+  setTimeout(function(){appendMessage({type:'kick',platform:'kick',chatname:'Test Kick',chatmessage:'Hola [emote:1:GreenBalloon] como están [emote:2:MonkaS]',nameColor:'#53FC18',mid:'test-kick-'+Date.now()});}, 500);
   toast('Mensajes de prueba inyectados');
 }
 function toast(msg){var el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(function(){el.classList.remove('show');},3000);}
