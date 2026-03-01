@@ -471,22 +471,27 @@
       </div>
     </div>
 
-    <!-- ══ YOUTUBE — Server Side via youtube-chat ══ -->
+    <!-- ══ YOUTUBE — iframe live_chat ══ -->
     <div class="card">
       <div class="card-header"><span class="card-title-text">▶️ YouTube — Chat al Multichat</span></div>
       <div class="card-body">
         <div id="yt-bridge-status" class="info-box info-yellow">
-          📋 Pegá el link del live y presioná Conectar. El servidor se encarga de todo.
+          📋 Pegá el link del live y presioná Conectar.
         </div>
-        <label>Link o Video ID del live:</label>
+        <label>Tu dominio de GitHub Pages:</label>
+        <input id="yt-gh-domain" type="text" placeholder="usuario.github.io" onchange="store.set('ytGhDomain',this.value)" />
+        <label style="margin-top:4px;">Link o Video ID del live:</label>
         <div class="input-row">
           <input id="yt-video-url" type="text" placeholder="https://youtube.com/watch?v=..." onkeydown="if(event.key==='Enter')connectYouTube()" />
           <button class="btn btn-primary" onclick="connectYouTube()">▶ Conectar</button>
         </div>
-        <div class="hint">Tu navegador hace el polling directo a YouTube (sin 429). El dashboard debe estar abierto.</div>
+        <div class="hint">Usa el iframe oficial de YouTube. El dashboard debe estar abierto.</div>
         <div style="display:flex;gap:6px;margin-top:2px;">
           <button class="btn btn-danger btn-full" onclick="disconnectYouTube()">⏹ Detener</button>
           <button class="btn btn-secondary btn-full" onclick="openYouTubeLive()">📺 Abrir Live</button>
+        </div>
+        <div id="yt-stats" style="display:none;font-size:10px;color:var(--muted);padding:4px 0;">
+          Mensajes: <span id="yt-msg-count">0</span> &middot; &Uacute;ltimo: <span id="yt-last-poll">&mdash;</span>
         </div>
       </div>
     </div>
@@ -735,9 +740,14 @@ var VISOR_CONFIG = {
   },
   youtube: {
     label: 'YouTube Live Chat', badge: 'YOUTUBE',
-    getUrl: function() { return null; },
-    noChMsg: 'YouTube bloquea iframes externos',
-    noChSub: 'Los mensajes llegan igual al multichat vía youtube-chat en el servidor.'
+    getUrl: function(ch) {
+      var vid = ytState.videoId || ch || '';
+      var domain = store.get('ytGhDomain') || '';
+      if (vid && domain) return 'https://www.youtube.com/live_chat?v=' + vid + '&embed_domain=' + encodeURIComponent(domain);
+      return null;
+    },
+    noChMsg: 'YouTube — Sin conectar',
+    noChSub: 'Pegá el link del live y presioná Conectar en el panel lateral.'
   },
   tiktok: {
     label: 'TikTok Live', badge: 'TIKTOK',
@@ -811,6 +821,8 @@ document.addEventListener('DOMContentLoaded',function(){
   if(store.get('singleLine')==='1'){document.getElementById('singleLineToggle').checked=true;toggleSingleLine(true,true);}
   var savedYtUrl=store.get('ytVideoUrl');
   if(savedYtUrl) document.getElementById('yt-video-url').value=savedYtUrl;
+  var savedDomain=store.get('ytGhDomain');
+  if(savedDomain) document.getElementById('yt-gh-domain').value=savedDomain;
   var panel=document.getElementById('chat-panel');
   panel.addEventListener('scroll',function(){autoScroll=(panel.scrollHeight-panel.scrollTop-panel.clientHeight)<80;});
 });
@@ -851,20 +863,19 @@ function handleStatus(data){
 }
 function setPlatformStatus(p,c,ch){var dot=document.getElementById('dot-'+p),el=document.getElementById('ch-'+p);if(dot)dot.className='platform-dot'+(c?' ok':'');if(el)el.textContent=ch||'—';}
 
-// ═══ YOUTUBE — puente navegador CORREGIDO ═══
-// El navegador hace el polling DIRECTO a YouTube (IP residencial = sin 429)
-// Luego manda los mensajes al servidor por WebSocket
+// ═══ YOUTUBE — iframe live_chat (sin CORS, sin 429, sin cookies) ═══
+// Abre https://www.youtube.com/live_chat?v=ID&embed_domain=DOMINIO en un iframe oculto
+// Lee el DOM del iframe cada 3 segundos y manda los mensajes por WebSocket
+
 var ytState = {
   videoId: null,
   active: false,
-  apiKey: null,
-  continuation: null,
+  iframe: null,
   pollTimer: null,
   msgCount: 0,
   seenIds: new Set(),
   errorCount: 0,
-  POLL_INTERVAL: 6000,
-  ERROR_BACKOFF: 20000,
+  POLL_INTERVAL: 3000,
 };
 
 function extractVideoId(input) {
@@ -875,323 +886,181 @@ function extractVideoId(input) {
   return m ? m[1] : null;
 }
 
-// PASO 1: El navegador obtiene el HTML de YouTube directamente (sin proxy)
-async function fetchYtInitDataDirect(videoId) {
-  var urls = [
-    'https://www.youtube.com/watch?v=' + videoId,
-    'https://www.youtube.com/live/' + videoId,
-  ];
-
-  var html = null;
-  var lastErr = '';
-  for (var i = 0; i < urls.length; i++) {
-    try {
-      var resp = await fetch(urls[i], {
-        headers: {
-          'Accept-Language': 'es-ES,es;q=0.9',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-        credentials: 'omit'
-      });
-      if (!resp.ok) { lastErr = 'HTTP ' + resp.status; continue; }
-      var text = await resp.text();
-      if (text.length < 500) { lastErr = 'Respuesta muy corta'; continue; }
-      html = text;
-      break;
-    } catch(e) { lastErr = e.message; }
-  }
-  if (!html) throw new Error('No se pudo obtener la página: ' + lastErr);
-
-  // Extraer INNERTUBE_API_KEY
-  var apiKey = null;
-  var keyPatterns = [
-    /"INNERTUBE_API_KEY"\s*:\s*"([^"]{10,})"/,
-    /"innertubeApiKey"\s*:\s*"([^"]{10,})"/,
-  ];
-  for (var pi = 0; pi < keyPatterns.length; pi++) {
-    var m = html.match(keyPatterns[pi]);
-    if (m && m[1]) { apiKey = m[1]; break; }
-  }
-  if (!apiKey) apiKey = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
-
-  // Extraer continuation token
-  var continuation = null;
-  var contPatterns = [
-    /"invalidationContinuationData"\s*:\s*\{\s*"continuation"\s*:\s*"([^"]{30,})"/,
-    /"timedContinuationData"\s*:\s*\{[^}]{0,100}"continuation"\s*:\s*"([^"]{30,})"/,
-    /"reloadContinuationData"\s*:\s*\{\s*"continuation"\s*:\s*"([^"]{30,})"/,
-    /"liveChatRenderer"[\s\S]{0,800}?"continuation"\s*:\s*"([A-Za-z0-9_%+/=-]{30,})"/,
-    /"continuation"\s*:\s*"(0ofMy[A-Za-z0-9_%+/=-]{20,})"/,
-    /"continuation"\s*:\s*"(Cgt[A-Za-z0-9_%+/=-]{20,})"/,
-    /"continuation"\s*:\s*"([A-Za-z0-9_%+/=-]{50,})"/,
-  ];
-  for (var ci = 0; ci < contPatterns.length; ci++) {
-    var cm = html.match(contPatterns[ci]);
-    if (cm && cm[1] && cm[1].length >= 30) { continuation = cm[1]; break; }
-  }
-  // Fallback: buscar dentro del bloque liveChatRenderer
-  if (!continuation) {
-    var lcIdx = html.indexOf('liveChatRenderer');
-    if (lcIdx !== -1) {
-      var chunk = html.slice(lcIdx, lcIdx + 5000);
-      var fm = chunk.match(/"continuation"\s*:\s*"([A-Za-z0-9_%+/=-]{30,})"/);
-      if (fm) continuation = fm[1];
-    }
-  }
-
-  if (!continuation) {
-    throw new Error('No se encontró continuation token — ¿el video está en vivo con chat activo?');
-  }
-
-  return { apiKey: apiKey, continuation: continuation };
-}
-
-// PASO 2: El navegador llama DIRECTO a la InnerTube API de YouTube
-async function pollYtChatDirect() {
-  if (!ytState.active) return;
-
-  try {
-    var resp = await fetch(
-      'https://www.youtube.com/youtubei/v1/live_chat/get_live_chat?key=' + ytState.apiKey + '&prettyPrint=false',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept-Language': 'es-ES,es;q=0.9',
-          'X-Youtube-Client-Name': '1',
-          'X-Youtube-Client-Version': '2.20240101.00.00',
-          'Origin': 'https://www.youtube.com',
-          'Referer': 'https://www.youtube.com/',
-        },
-        body: JSON.stringify({
-          context: {
-            client: {
-              clientName: 'WEB',
-              clientVersion: '2.20240101.00.00',
-              hl: 'es',
-              gl: 'ES'
-            }
-          },
-          continuation: ytState.continuation
-        }),
-        credentials: 'omit'
-      }
-    );
-
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    var data = await resp.json();
-    ytState.errorCount = 0;
-
-    // Extraer próxima continuation
-    try {
-      var cr = data.continuationContents && data.continuationContents.liveChatContinuation;
-      if (cr && cr.continuations && cr.continuations[0]) {
-        var c0 = cr.continuations[0];
-        var next = (c0.invalidationContinuationData && c0.invalidationContinuationData.continuation) ||
-                   (c0.timedContinuationData && c0.timedContinuationData.continuation) ||
-                   (c0.reloadContinuationData && c0.reloadContinuationData.continuation);
-        if (next) ytState.continuation = next;
-      }
-    } catch(e) {}
-
-    // Extraer mensajes
-    try {
-      var actions = data.continuationContents.liveChatContinuation.actions || [];
-      actions.forEach(function(action) {
-        var item = action.addChatItemAction && action.addChatItemAction.item;
-        if (!item) return;
-
-        var lr = item.liveChatTextMessageRenderer;
-        var sc = item.liveChatPaidMessageRenderer;
-        var mb = item.liveChatMembershipItemRenderer;
-        var renderer = lr || sc || mb;
-        if (!renderer) return;
-
-        var msgId = renderer.id;
-        if (!msgId || ytState.seenIds.has(msgId)) return;
-        ytState.seenIds.add(msgId);
-        if (ytState.seenIds.size > 500) {
-          var arr = Array.from(ytState.seenIds);
-          ytState.seenIds = new Set(arr.slice(arr.length - 300));
-        }
-
-        var authorName = '';
-        if (renderer.authorName) {
-          authorName = renderer.authorName.simpleText ||
-            (renderer.authorName.runs && renderer.authorName.runs.map(function(r){return r.text;}).join('')) || '';
-        }
-
-        var avatar = null;
-        if (renderer.authorPhoto && renderer.authorPhoto.thumbnails && renderer.authorPhoto.thumbnails.length) {
-          avatar = renderer.authorPhoto.thumbnails[0].url;
-        }
-
-        var roles = [];
-        if (renderer.authorBadges) {
-          renderer.authorBadges.forEach(function(b) {
-            var badge = b.liveChatAuthorBadgeRenderer;
-            if (!badge) return;
-            var iconType = (badge.icon && badge.icon.iconType || '').toLowerCase();
-            if (iconType === 'owner' || iconType === 'broadcaster') roles.push({ type: 'broadcaster', label: 'Streamer' });
-            else if (iconType === 'moderator') roles.push({ type: 'moderator', label: 'Mod' });
-            else if (iconType === 'verified') roles.push({ type: 'verified', label: '✓ Verificado' });
-            if (badge.customThumbnail) roles.push({ type: 'member', label: '⭐ Miembro' });
-          });
-        }
-
-        // Superchat
-        if (sc) {
-          var scText = sc.message && sc.message.runs ? sc.message.runs.map(function(r){return r.text||'';}).join('') : '';
-          var amount = (sc.purchaseAmountText && sc.purchaseAmountText.simpleText) || '';
-          if (ws && ws.readyState === 1) {
-            ws.send(JSON.stringify({
-              type: 'youtube_donation', donationType: 'superchat',
-              chatname: authorName || 'YouTuber', chatmessage: scText || ('¡Superchat ' + amount + '!'),
-              chatimg: avatar, amount: 0, amountDisplay: amount, roles: roles,
-              videoId: ytState.videoId, mid: 'yt-sc-' + msgId
-            }));
-          }
-          ytState.msgCount++;
-          updateYtStats();
-          return;
-        }
-
-        // Membership
-        if (mb) {
-          var mbText = mb.headerSubtext && mb.headerSubtext.runs ? mb.headerSubtext.runs.map(function(r){return r.text||'';}).join('') : '¡Nuevo miembro!';
-          if (ws && ws.readyState === 1) {
-            ws.send(JSON.stringify({
-              type: 'youtube_donation', donationType: 'member',
-              chatname: authorName || 'YouTuber', chatmessage: mbText,
-              chatimg: avatar, amount: 0, roles: roles,
-              videoId: ytState.videoId, mid: 'yt-mb-' + msgId
-            }));
-          }
-          ytState.msgCount++;
-          updateYtStats();
-          return;
-        }
-
-        // Mensaje normal
-        if (lr) {
-          var msgText = lr.message && lr.message.runs ? lr.message.runs.map(function(r){return r.text||'';}).join('') : '';
-          if (!msgText) return;
-          if (ws && ws.readyState === 1) {
-            ws.send(JSON.stringify({
-              type: 'youtube_message',
-              chatname: authorName || 'YouTuber', chatmessage: msgText,
-              chatimg: avatar, roles: roles,
-              videoId: ytState.videoId, mid: 'yt-' + msgId
-            }));
-          } else {
-            appendMessage({ type: 'youtube', platform: 'youtube', chatname: authorName || 'YouTuber', chatmessage: msgText, chatimg: avatar, nameColor: '#FF0000', roles: roles, mid: 'yt-' + msgId });
-          }
-          ytState.msgCount++;
-          updateYtStats();
-        }
-      });
-    } catch(e) {
-      console.warn('[YT] Error parseando mensajes:', e);
-    }
-
-    // Calcular próximo intervalo
-    if (ytState.active) {
-      var timeout = ytState.POLL_INTERVAL;
-      try {
-        var cr2 = data.continuationContents.liveChatContinuation.continuations[0];
-        var tms = (cr2.timedContinuationData && cr2.timedContinuationData.timeoutMs) ||
-                  (cr2.invalidationContinuationData && cr2.invalidationContinuationData.timeoutMs);
-        if (tms && tms > 500) timeout = Math.min(Math.max(tms, 3000), 15000);
-      } catch(e) {}
-      ytState.pollTimer = setTimeout(pollYtChatDirect, timeout);
-    }
-
-  } catch(e) {
-    ytState.errorCount++;
-    setYtBridgeStatus('yellow', '⚠️ Error #' + ytState.errorCount + ': ' + e.message + ' — Reintentando...');
-    if (ytState.errorCount > 6) {
-      setYtBridgeStatus('red', '❌ Demasiados errores seguidos. El live puede haber terminado. <button class="btn btn-secondary" style="font-size:10px;padding:2px 7px;margin-left:5px;" onclick="reconnectYouTube()">🔄 Reintentar</button>');
-      ytState.active = false;
-      setPlatformStatus('youtube', false, ytState.videoId || '—');
-      if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'youtube_disconnected' }));
-      return;
-    }
-    if (ytState.active) ytState.pollTimer = setTimeout(pollYtChatDirect, ytState.ERROR_BACKOFF);
-  }
-}
-
-function updateYtStats() {
-  // Actualizar contador en el visor si está abierto
-  var visorCount = document.getElementById('visor-yt-count');
-  if (visorCount) visorCount.textContent = ytState.msgCount;
-}
-
-async function connectYouTube() {
+function connectYouTube() {
   var input = document.getElementById('yt-video-url').value.trim();
   var videoId = extractVideoId(input);
-  if (!videoId) {
-    setYtBridgeStatus('red', '❌ URL inválida. Ej: https://youtube.com/watch?v=abc123');
-    return;
-  }
+  if (!videoId) { setYtBridgeStatus('red', '❌ URL inválida. Ej: https://youtube.com/watch?v=abc123'); return; }
+
+  var domain = document.getElementById('yt-gh-domain').value.trim() || store.get('ytGhDomain') || '';
+  if (!domain) { setYtBridgeStatus('red', '❌ Ingresá tu dominio de GitHub Pages (ej: usuario.github.io)'); return; }
 
   disconnectYouTube(true);
   store.set('ytVideoUrl', input);
-  ytState.videoId    = videoId;
-  ytState.active     = true;
-  ytState.msgCount   = 0;
-  ytState.seenIds    = new Set();
+  store.set('ytGhDomain', domain);
+  ytState.videoId  = videoId;
+  ytState.active   = true;
+  ytState.msgCount = 0;
+  ytState.seenIds  = new Set();
   ytState.errorCount = 0;
 
-  setYtBridgeStatus('yellow', '⏳ Conectando al live de YouTube (' + videoId + ')...');
+  setYtBridgeStatus('yellow', '⏳ Cargando iframe de YouTube...');
   setPlatformStatus('youtube', false, videoId);
 
-  try {
-    var init = await fetchYtInitDataDirect(videoId);
-    ytState.apiKey       = init.apiKey;
-    ytState.continuation = init.continuation;
+  // Crear iframe oculto con la URL oficial del chat embebido
+  var iframe = document.createElement('iframe');
+  iframe.id = 'yt-chat-iframe';
+  iframe.src = 'https://www.youtube.com/live_chat?v=' + videoId + '&embed_domain=' + encodeURIComponent(domain);
+  iframe.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;border:none;bottom:0;right:0;';
+  iframe.allow = 'autoplay';
+  document.body.appendChild(iframe);
+  ytState.iframe = iframe;
 
-    setYtBridgeStatus('green', '✅ Conectado — <b>' + videoId + '</b> · Los mensajes llegan al multichat.');
+  // Esperar a que cargue el iframe antes de empezar a leer
+  iframe.onload = function() {
+    setYtBridgeStatus('green', '✅ Chat cargado — <b>' + videoId + '</b> · Leyendo mensajes...');
     setPlatformStatus('youtube', true, videoId);
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'youtube_connected', videoId: videoId }));
+    ytState.pollTimer = setTimeout(pollYtIframe, 2000);
+    toast('▶️ YouTube conectado via iframe');
+  };
 
-    if (ws && ws.readyState === 1) {
-      ws.send(JSON.stringify({ type: 'youtube_connected', videoId: videoId }));
-    }
-
-    ytState.pollTimer = setTimeout(pollYtChatDirect, 1500);
-    openChatVisor('youtube');
-    toast('▶️ YouTube conectado');
-
-  } catch(e) {
+  iframe.onerror = function() {
+    setYtBridgeStatus('red', '❌ No se pudo cargar el iframe. ¿El dominio GitHub Pages es correcto?');
     ytState.active = false;
-    setYtBridgeStatus('red', '❌ ' + e.message);
-    setPlatformStatus('youtube', false, '—');
-    toast('❌ YouTube: ' + e.message);
-  }
+  };
 }
 
-async function reconnectYouTube() {
-  ytState.errorCount = 0;
-  ytState.active = true;
+function pollYtIframe() {
+  if (!ytState.active || !ytState.iframe) return;
+
   try {
-    var init = await fetchYtInitDataDirect(ytState.videoId);
-    ytState.apiKey       = init.apiKey;
-    ytState.continuation = init.continuation;
-    setYtBridgeStatus('green', '✅ Reconectado — ' + ytState.videoId);
-    setPlatformStatus('youtube', true, ytState.videoId);
-    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'youtube_connected', videoId: ytState.videoId }));
-    ytState.pollTimer = setTimeout(pollYtChatDirect, 1000);
+    var doc = ytState.iframe.contentDocument || ytState.iframe.contentWindow.document;
+    if (!doc || !doc.body) {
+      // iframe aún cargando
+      ytState.pollTimer = setTimeout(pollYtIframe, ytState.POLL_INTERVAL);
+      return;
+    }
+
+    // Los mensajes están en elementos yt-live-chat-text-message-renderer
+    var items = doc.querySelectorAll('yt-live-chat-text-message-renderer,yt-live-chat-paid-message-renderer,yt-live-chat-membership-item-renderer');
+
+    var newMessages = 0;
+    items.forEach(function(item) {
+      var msgId = item.getAttribute('id') || item.getAttribute('data-id') || '';
+      if (!msgId) {
+        // Generar ID basado en contenido si no tiene
+        var nameEl = item.querySelector('#author-name, .author-name');
+        var msgEl  = item.querySelector('#message, .message');
+        msgId = (nameEl ? nameEl.textContent.trim() : '') + '|' + (msgEl ? msgEl.textContent.trim().slice(0, 30) : '') + '|' + Math.floor(Date.now() / 5000);
+      }
+      if (ytState.seenIds.has(msgId)) return;
+      ytState.seenIds.add(msgId);
+      if (ytState.seenIds.size > 500) {
+        var arr = Array.from(ytState.seenIds);
+        ytState.seenIds = new Set(arr.slice(arr.length - 300));
+      }
+
+      // Extraer datos
+      var nameEl   = item.querySelector('#author-name, .author-name, yt-live-chat-author-chip #author-name');
+      var msgEl    = item.querySelector('#message, .message');
+      var avatarEl = item.querySelector('#author-photo img, .author-photo img');
+      var amountEl = item.querySelector('#purchase-amount, .purchase-amount-display');
+
+      var name    = nameEl   ? nameEl.textContent.trim()   : 'YouTuber';
+      var msgText = msgEl    ? msgEl.textContent.trim()     : '';
+      var avatar  = avatarEl ? avatarEl.src                 : null;
+      var amount  = amountEl ? amountEl.textContent.trim()  : null;
+
+      if (!name && !msgText) return;
+
+      // Roles
+      var roles = [];
+      if (item.querySelector('[aria-label*="Owner"], [aria-label*="Propietario"]')) roles.push({ type: 'broadcaster', label: 'Streamer' });
+      if (item.querySelector('[aria-label*="Moderator"], [aria-label*="Moderador"]')) roles.push({ type: 'moderator', label: 'Mod' });
+      if (item.querySelector('yt-live-chat-author-badge-renderer')) roles.push({ type: 'member', label: '⭐ Miembro' });
+
+      // Superchat / membership
+      var isPaid = item.tagName.toLowerCase().includes('paid');
+      var isMember = item.tagName.toLowerCase().includes('membership');
+
+      if (isPaid && amount) {
+        if (ws && ws.readyState === 1) {
+          ws.send(JSON.stringify({
+            type: 'youtube_donation', donationType: 'superchat',
+            chatname: name, chatmessage: msgText || '¡Superchat!',
+            chatimg: avatar, amount: 0, amountDisplay: amount,
+            roles: roles, videoId: ytState.videoId, mid: 'yt-sc-' + msgId
+          }));
+        }
+      } else if (isMember) {
+        if (ws && ws.readyState === 1) {
+          ws.send(JSON.stringify({
+            type: 'youtube_donation', donationType: 'member',
+            chatname: name, chatmessage: msgText || '¡Nuevo Miembro!',
+            chatimg: avatar, amount: 0, roles: roles,
+            videoId: ytState.videoId, mid: 'yt-mb-' + msgId
+          }));
+        }
+      } else {
+        if (!msgText) return;
+        if (ws && ws.readyState === 1) {
+          ws.send(JSON.stringify({
+            type: 'youtube_message',
+            chatname: name, chatmessage: msgText,
+            chatimg: avatar, roles: roles,
+            videoId: ytState.videoId, mid: 'yt-' + msgId
+          }));
+        } else {
+          appendMessage({ type: 'youtube', platform: 'youtube', chatname: name, chatmessage: msgText, chatimg: avatar, nameColor: '#FF0000', roles: roles, mid: 'yt-' + msgId });
+        }
+      }
+
+      ytState.msgCount++;
+      newMessages++;
+    });
+
+    if (newMessages > 0) {
+      var statsEl = document.getElementById('yt-stats');
+      if (statsEl) statsEl.style.display = 'block';
+      var countEl = document.getElementById('yt-msg-count');
+      if (countEl) countEl.textContent = ytState.msgCount;
+      var lastEl = document.getElementById('yt-last-poll');
+      if (lastEl) lastEl.textContent = new Date().toLocaleTimeString('es', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      var visorCount = document.getElementById('visor-yt-count');
+      if (visorCount) visorCount.textContent = ytState.msgCount;
+    }
+
+    ytState.errorCount = 0;
+
   } catch(e) {
-    setYtBridgeStatus('red', '❌ Reconexión fallida: ' + e.message);
+    ytState.errorCount++;
+    // Error de acceso al iframe (CORS) — YouTube bloqueó el embed_domain
+    if (e.name === 'SecurityError' || (e.message && e.message.toLowerCase().includes('cross'))) {
+      setYtBridgeStatus('red', '❌ YouTube bloqueó el acceso al iframe. ¿El dominio ' + (store.get('ytGhDomain')||'') + ' está bien escrito? Debe ser exactamente como aparece en GitHub Pages.');
+      ytState.active = false;
+      return;
+    }
+    if (ytState.errorCount > 10) {
+      setYtBridgeStatus('red', '❌ No se pueden leer mensajes del iframe.');
+      ytState.active = false;
+      return;
+    }
   }
+
+  if (ytState.active) ytState.pollTimer = setTimeout(pollYtIframe, ytState.POLL_INTERVAL);
 }
 
 function disconnectYouTube(silent) {
   ytState.active = false;
   if (ytState.pollTimer) { clearTimeout(ytState.pollTimer); ytState.pollTimer = null; }
+  if (ytState.iframe && ytState.iframe.parentNode) { ytState.iframe.parentNode.removeChild(ytState.iframe); ytState.iframe = null; }
+  ytState.videoId = null;
   if (!silent) {
     setPlatformStatus('youtube', false, '—');
     setYtBridgeStatus('yellow', '📋 Pegá el link del live y presioná Conectar.');
     if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'youtube_disconnected' }));
+    var statsEl = document.getElementById('yt-stats');
+    if (statsEl) statsEl.style.display = 'none';
     toast('⏹ YouTube detenido');
   }
 }
@@ -1208,7 +1077,6 @@ function openYouTubeLive() {
   if (vid) { window.open('https://www.youtube.com/watch?v=' + vid, '_blank', 'noopener'); }
   else { toast('Pegá el link del live primero'); }
 }
-
 // ═══ APPEND MESSAGE ═══
 function appendMessage(data){
   if(!data.chatname&&!data.chatmessage) return;
