@@ -48,7 +48,6 @@
     .avatar-fallback { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: rgba(0,255,157,0.4); padding: 8px; }
 
     .username-box { flex: 1; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-
     .username { font-family: var(--font-title); font-size: 17px; color: var(--green); text-shadow: var(--glow-sm); letter-spacing: 0.5px; }
 
     .platform-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 9px; padding: 2px 6px; border-radius: 3px; font-weight: 700; letter-spacing: 0.5px; border: 1px solid rgba(0,255,157,0.4); background: rgba(0,255,157,0.08); color: var(--green); }
@@ -63,15 +62,7 @@
     .msg-badge { height: 14px; width: auto; vertical-align: middle; filter: drop-shadow(0 0 4px var(--green)); }
 
     .msg-content { color: #e0e0e0; font-size: 14px; line-height: 1.55; word-break: break-word; position: relative; z-index: 1; }
-    /* ★ FIX EMOTES */
-    .msg-content img.emote {
-      height: var(--ov-emote-size, 26px);
-      width: auto;
-      vertical-align: middle;
-      margin: 0 2px;
-      image-rendering: -webkit-optimize-contrast;
-      display: inline-block;
-    }
+    .msg-content img.emote { height: var(--ov-emote-size, 26px); width: auto; vertical-align: middle; margin: 0 2px; image-rendering: -webkit-optimize-contrast; display: inline-block; }
 
     .donation-box { margin-top: 8px; padding: 7px 12px; background: rgba(0,255,157,0.1); border: 1px solid rgba(0,255,157,0.5); border-radius: 3px; font-size: 13px; font-weight: 700; color: var(--green); text-align: center; text-shadow: var(--glow-sm); box-shadow: 0 0 12px rgba(0,255,157,0.2); position: relative; z-index: 1; }
 
@@ -122,7 +113,6 @@
 
     function esc(str){return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
-    // ★ FIX EMOTES: Twitch usa chatemotes[], Kick usa [emote:ID:name]
     function processTwitchEmotes(text, emotes) {
       if (!emotes || !emotes.length) return esc(text);
       var sorted = emotes.slice().sort(function(a,b){ return a.start - b.start; });
@@ -130,7 +120,7 @@
       for (var i = 0; i < sorted.length; i++) {
         var e = sorted[i];
         if (e.start > cursor) result += esc(text.slice(cursor, e.start));
-        result += '<img class="emote" src="' + esc(e.url) + '" alt="' + esc(e.text) + '" title="' + esc(e.text) + '" onerror="this.style.display=\'none\'">';
+        result += '<img class="emote" src="' + esc(e.url) + '" alt="' + esc(e.text) + '" onerror="this.style.display=\'none\'">';
         cursor = e.end + 1;
       }
       if (cursor < text.length) result += esc(text.slice(cursor));
@@ -139,7 +129,7 @@
 
     function parseKickEmotesFromText(text) {
       return esc(text).replace(/\[emote:(\d+):([^\]]+)\]/g, function(match, id, name) {
-        return '<img class="emote" src="https://files.kick.com/emotes/' + id + '/fullsize" alt="' + name + '" title="' + name + '" onerror="this.style.display=\'none\'">';
+        return '<img class="emote" src="https://files.kick.com/emotes/' + id + '/fullsize" alt="' + name + '" onerror="this.style.display=\'none\'">';
       });
     }
 
@@ -182,8 +172,6 @@
         else if(b.src) badgesHTML+='<img class="msg-badge" src="'+esc(b.src)+'">';
       });
       var nameStyle=data.nameColor?'color:'+data.nameColor+';text-shadow:0 0 8px '+data.nameColor+';':'';
-
-      // ★ EMOTES ARREGLADOS
       var msgHTML = processMessageHTML(data);
 
       var donHTML='';
@@ -222,6 +210,7 @@
       ws.onmessage=function(e){
         try{
           var d=JSON.parse(e.data);
+          // ✅ filtrar status, highlight y highlight_clear — no mostrar como mensajes
           if(d.type==='status'||d.type==='highlight'||d.type==='highlight_clear') return;
           addMessage(d);
         }catch(err){}
