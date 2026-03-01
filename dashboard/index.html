@@ -884,48 +884,91 @@ function getHttpBase() {
   return u.replace(/^wss?/, 'https').replace(/\/$/, '');
 }
 
-// PASO 1: Buscar apiKey y continuation en el HTML del live
+// PASO 1: Obtener apiKey y continuation token via proxy del servidor
 async function fetchYtInitData(videoId) {
   var base = getHttpBase();
   if (!base) throw new Error('Servidor no configurado');
-  var proxyUrl = base + '/api/yt-proxy?url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + videoId);
-  var resp = await fetch(proxyUrl);
-  if (!resp.ok) throw new Error('Proxy HTTP ' + resp.status);
-  var html = await resp.text();
 
-  // Extraer ytcfg (tiene el INNERTUBE_API_KEY / apiKey)
+  // Intentar con /watch primero, luego con /live como fallback
+  var urls = [
+    'https://www.youtube.com/watch?v=' + videoId,
+    'https://www.youtube.com/live/' + videoId,
+  ];
+
+  var html = null;
+  var lastErr = '';
+  for (var i = 0; i < urls.length; i++) {
+    try {
+      var proxyUrl = base + '/api/yt-proxy?url=' + encodeURIComponent(urls[i]);
+      var resp = await fetch(proxyUrl);
+      if (!resp.ok) { lastErr = 'HTTP ' + resp.status; continue; }
+      var text = await resp.text();
+      if (text.length < 500) { lastErr = 'Respuesta muy corta'; continue; }
+      html = text;
+      break;
+    } catch(e) { lastErr = e.message; }
+  }
+  if (!html) throw new Error('Proxy falló: ' + lastErr);
+
+  // ── Extraer INNERTUBE_API_KEY ──
   var apiKey = null;
-  var m = html.match(/"INNERTUBE_API_KEY"\s*:\s*"([^"]+)"/);
-  if (m) apiKey = m[1];
-  if (!apiKey) {
-    m = html.match(/"innertubeApiKey"\s*:\s*"([^"]+)"/);
-    if (m) apiKey = m[1];
+  var patterns = [
+    /"INNERTUBE_API_KEY"\s*:\s*"([^"]{10,})"/,
+    /"innertubeApiKey"\s*:\s*"([^"]{10,})"/,
+    /["']INNERTUBE_API_KEY["']\s*:\s*["']([^"']{10,})["']/,
+    /ytcfg\.set\([^)]*"INNERTUBE_API_KEY"\s*:\s*"([^"]+)"/,
+  ];
+  for (var pi = 0; pi < patterns.length; pi++) {
+    var m = html.match(patterns[pi]);
+    if (m && m[1]) { apiKey = m[1]; break; }
   }
 
-  // Extraer continuation token (live chat)
+  // Si no encontramos apiKey, YouTube respondió con página sin datos (bot-check)
+  // En ese caso usamos la clave pública fija de YouTube Web (cambia raramente)
+  if (!apiKey) {
+    // Clave pública conocida de YouTube Web — funciona para live chat
+    apiKey = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+    console.log('[YT] Usando apiKey pública de fallback');
+  }
+
+  // ── Extraer continuation token ──
   var continuation = null;
-  // Buscar en el initialData que contiene liveChatRenderer
-  m = html.match(/"continuation"\s*:\s*\{\s*"reloadContinuationData"\s*:\s*\{\s*"continuation"\s*:\s*"([^"]+)"/);
-  if (!m) m = html.match(/"invalidationContinuationData"\s*:\s*\{\s*"continuation"\s*:\s*"([^"]+)"/);
-  if (!m) m = html.match(/"timedContinuationData"\s*:\s*\{\s*[^}]*"continuation"\s*:\s*"([^"]+)"/);
-  if (!m) {
-    // Buscar cualquier continuation dentro de liveChatRenderer
+  var contPatterns = [
+    // Patrón más específico: dentro de liveChatRenderer
+    /"liveChatRenderer"[\s\S]{0,500}?"continuation"\s*:\s*"([A-Za-z0-9_%+/=-]{30,})"/,
+    // invalidationContinuationData (live activo)
+    /"invalidationContinuationData"\s*:\s*\{\s*"continuation"\s*:\s*"([^"]{30,})"/,
+    // timedContinuationData
+    /"timedContinuationData"\s*:\s*\{[^}]{0,100}"continuation"\s*:\s*"([^"]{30,})"/,
+    // reloadContinuationData
+    /"reloadContinuationData"\s*:\s*\{\s*"continuation"\s*:\s*"([^"]{30,})"/,
+    // Cualquier continuation larga cerca de "live"
+    /"continuation"\s*:\s*"(0ofMy[A-Za-z0-9_%+/=-]{20,})"/,
+    /"continuation"\s*:\s*"(Cgt[A-Za-z0-9_%+/=-]{20,})"/,
+    /"continuation"\s*:\s*"([A-Za-z0-9_%+/=-]{50,})"/,
+  ];
+  for (var ci = 0; ci < contPatterns.length; ci++) {
+    var cm = html.match(contPatterns[ci]);
+    if (cm && cm[1] && cm[1].length >= 30) { continuation = cm[1]; break; }
+  }
+
+  // Fallback: buscar dentro del bloque liveChatRenderer
+  if (!continuation) {
     var lcIdx = html.indexOf('liveChatRenderer');
     if (lcIdx !== -1) {
-      var chunk = html.slice(lcIdx, lcIdx + 3000);
-      var cm = chunk.match(/"continuation"\s*:\s*"([A-Za-z0-9_=-]{20,})"/);
-      if (cm) m = cm;
+      var chunk = html.slice(lcIdx, lcIdx + 5000);
+      var fm = chunk.match(/"continuation"\s*:\s*"([A-Za-z0-9_%+/=-]{30,})"/);
+      if (fm) continuation = fm[1];
     }
   }
-  if (m) continuation = m[1] || m[0];
-  // Si el regex devolvió el grupo completo vs solo el token
-  if (continuation && continuation.length > 200) {
-    var inner = continuation.match(/([A-Za-z0-9_=-]{20,})/);
-    if (inner) continuation = inner[1];
+
+  if (!continuation) {
+    // Debug: mostrar fragmento del HTML para diagnóstico
+    var snippet = html.slice(0, 200) + '...' + html.slice(html.length - 200);
+    console.log('[YT] HTML snippet:', snippet);
+    throw new Error('No se encontró continuation token — ¿el video está en vivo con chat activo?');
   }
 
-  if (!apiKey)    throw new Error('No se encontró INNERTUBE_API_KEY — ¿el video está en vivo?');
-  if (!continuation) throw new Error('No se encontró continuation token — ¿el chat está activo?');
   return { apiKey, continuation };
 }
 
