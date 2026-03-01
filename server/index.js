@@ -1,7 +1,7 @@
 // ============================================================
-//  MEEVE MULTICHAT SERVER v2 — MASTERCHAT EDITION
-//  ✅ YouTube via masterchat — SIN API KEY, SIN CUOTA
-//  ✅ VideoId manual via /api/youtube/video-id o YOUTUBE_VIDEO_ID env
+//  MEEVE MULTICHAT SERVER v2 — youtube-chat EDITION
+//  ✅ YouTube via youtube-chat — SIN API KEY, SIN CUOTA
+//  ✅ VideoId manual via /api/youtube/connect o YOUTUBE_VIDEO_ID env
 //  ✅ Auto-reconexión cuando termina el live
 // ============================================================
 
@@ -16,10 +16,10 @@ try {
   ({ WebcastPushConnection } = require('tiktok-live-connector'));
 } catch(e) { console.log('[TikTok] tiktok-live-connector no disponible'); }
 
-let Masterchat, stringify_mc;
+let LiveChat;
 try {
-  ({ Masterchat, stringify: stringify_mc } = require('@stu43005/masterchat'));
-} catch(e) { console.log('[YouTube] ⚠️  masterchat no instalado — corré: npm i masterchat'); }
+  ({ LiveChat } = require('youtube-chat'));
+} catch(e) { console.log('[YouTube] ⚠️  youtube-chat no instalado — corré: npm i youtube-chat'); }
 
 const app    = express();
 const server = http.createServer(app);
@@ -33,8 +33,6 @@ const CONFIG = {
   tiktok:           process.env.TIKTOK_USERNAME     || '',
   youtubeHandle:    (process.env.YOUTUBE_HANDLE     || '').trim(),
   youtubeChannelId: (process.env.YOUTUBE_CHANNEL_ID || '').trim(),
-  // ✅ YOUTUBE_VIDEO_ID: pegá el ID del video cuando arrancás el live
-  //    ej: si el link es https://youtube.com/watch?v=abc123xyz  → YOUTUBE_VIDEO_ID=abc123xyz
   youtubeVideoId:   (process.env.YOUTUBE_VIDEO_ID   || '').trim(),
   port:             process.env.PORT                || 3000,
   tiktokMode:       process.env.TIKTOK_MODE         || 'connector',
@@ -162,7 +160,6 @@ wss.on('connection', (ws) => {
       if (msg.type === 'kick_donation')     handleKickDonationFromBrowser(msg);
       if (msg.type === 'kick_disconnected') { state.kick.connected = false; broadcastStatus(); }
       if (msg.type === 'kick_connected')    { state.kick.connected = true;  broadcastStatus(); }
-      // ✅ Permitir setear videoId de YouTube desde el frontend via WebSocket
       if (msg.type === 'youtube_set_video') {
         const vid = extractVideoId(msg.videoId || msg.url || '');
         if (vid) { state.youtube.videoId = vid; connectYouTube(); }
@@ -304,23 +301,20 @@ async function connectTikTokConnector() {
 setInterval(() => { if (state.tiktok.connected && state.tiktok.lastMsg > 0 && Date.now() - state.tiktok.lastMsg > 3 * 60 * 1000) { state.tiktok.connected = false; broadcastStatus(); connectTikTokConnector(); } }, 60000);
 
 // ══════════════════════════════════════════════════════════════
-//  YOUTUBE — via masterchat (SIN API KEY, SIN CUOTA)
+//  YOUTUBE — via youtube-chat (SIN API KEY, SIN CUOTA)
 // ══════════════════════════════════════════════════════════════
 
-// ✅ Extrae el videoId desde una URL de YouTube o un ID directo
 function extractVideoId(input) {
   if (!input) return null;
   input = input.trim();
-  // Si ya es un videoId (11 chars alfanuméricos)
   if (/^[a-zA-Z0-9_-]{11}$/.test(input)) return input;
-  // Extrae de URLs: youtube.com/watch?v=XXX, youtu.be/XXX, etc.
   const m = input.match(/(?:v=|youtu\.be\/|\/live\/|\/shorts\/)([a-zA-Z0-9_-]{11})/);
   return m ? m[1] : null;
 }
 
 async function connectYouTube() {
-  if (!Masterchat) {
-    console.log('[YouTube] ❌ masterchat no instalado. Agregá "masterchat" al package.json');
+  if (!LiveChat) {
+    console.log('[YouTube] ❌ youtube-chat no instalado. Corré: npm i youtube-chat');
     return;
   }
 
@@ -329,71 +323,80 @@ async function connectYouTube() {
     try { state.youtube.mcInstance.stop(); } catch(e) {}
     state.youtube.mcInstance = null;
   }
-  if (state.youtube.retryTimer) { clearTimeout(state.youtube.retryTimer); state.youtube.retryTimer = null; }
+  if (state.youtube.retryTimer) {
+    clearTimeout(state.youtube.retryTimer);
+    state.youtube.retryTimer = null;
+  }
 
   const videoId = state.youtube.videoId;
   if (!videoId) {
-    console.log('[YouTube] ⏳ Sin videoId. Usá el panel de control o define YOUTUBE_VIDEO_ID para conectar.');
+    console.log('[YouTube] ⏳ Sin videoId. Pegá el link desde el panel de control.');
     state.youtube.connected = false;
     broadcastStatus();
     return;
   }
 
-  console.log(`[YouTube] 🔄 Conectando a https://youtube.com/watch?v=${videoId} (sin API key)...`);
+  console.log(`[YouTube] 🔄 Conectando a videoId: ${videoId}...`);
 
   try {
-    const mc = await Masterchat.init(videoId, '', { mode: 'live' });
-    state.youtube.mcInstance = mc;
+    const liveChat = new LiveChat({ videoId });
+    state.youtube.mcInstance = liveChat;
 
-    mc.on('chat', (action) => {
-      if (action.type !== 'addChatItemAction') return;
-      const item = action.item;
-      if (!item) return;
+    liveChat.on('chat', (chatItem) => {
+      try {
+        const authorName  = chatItem.author?.name || 'YouTuber';
+        const authorPhoto = chatItem.author?.thumbnail?.url || null;
+        const roles = [];
+        if (chatItem.author?.isOwner)      roles.push({ type: 'broadcaster', label: 'Streamer' });
+        if (chatItem.author?.isModerator)  roles.push({ type: 'moderator',   label: 'Mod' });
+        if (chatItem.author?.isMembership) roles.push({ type: 'member',      label: 'Miembro' });
 
-      const authorName  = item.authorName || 'YouTuber';
-      const authorPhoto = item.authorPhoto?.url || null;
-      const roles = [];
-      if (item.isOwner)     roles.push({ type: 'broadcaster', label: 'Streamer' });
-      if (item.isModerator) roles.push({ type: 'moderator',   label: 'Mod' });
-      if (item.membership)  roles.push({ type: 'member',      label: 'Miembro' });
-
-      const getText = (msg) => {
-        if (!msg) return '';
-        if (stringify_mc) return stringify_mc(msg);
-        return Array.isArray(msg) ? msg.map(r => r.text || '').join('') : '';
-      };
-
-      if (!item.superchat && !item.isMembership) {
-        const text = getText(item.message);
+        // Armar texto del mensaje (puede ser array de runs)
+        let text = '';
+        if (Array.isArray(chatItem.message)) {
+          text = chatItem.message.map(r => r.text || '').join('');
+        } else if (typeof chatItem.message === 'string') {
+          text = chatItem.message;
+        }
         if (!text) return;
-        broadcast({ type: 'youtube', platform: 'youtube', chatname: authorName, chatmessage: text, chatimg: authorPhoto, nameColor: '#FF0000', roles, mid: 'yt-' + (item.id || Date.now()) });
-      }
 
-      if (item.superchat) {
-        const sc = item.superchat;
-        broadcast({ type: 'donation', platform: 'youtube', donationType: 'superchat', chatname: authorName, chatmessage: getText(item.message) || '¡Super Chat!', chatimg: authorPhoto, nameColor: '#FF0000', amount: sc.amount || 0, amountDisplay: sc.displayString || String(sc.amount || ''), currency: sc.currency || 'USD', roles, mid: 'yt-sc-' + (item.id || Date.now()) });
-      }
-
-      if (item.isMembership) {
-        broadcast({ type: 'donation', platform: 'youtube', donationType: 'member', chatname: authorName, chatmessage: getText(item.message) || '¡Nuevo miembro!', chatimg: authorPhoto, nameColor: '#FF0000', roles, mid: 'yt-mem-' + (item.id || Date.now()) });
+        broadcast({
+          type: 'youtube', platform: 'youtube',
+          chatname: authorName,
+          chatmessage: text,
+          chatimg: authorPhoto,
+          nameColor: '#FF0000',
+          roles,
+          mid: 'yt-' + (chatItem.id || Date.now())
+        });
+      } catch(err) {
+        console.error('[YouTube] Error procesando mensaje:', err?.message);
       }
     });
 
-    mc.on('end', (reason) => {
-      console.log(`[YouTube] 🔴 Live terminado: ${reason || 'desconocido'}`);
+    liveChat.on('error', (err) => {
+      console.error('[YouTube] ❌ Error:', err?.message || err);
       state.youtube.connected  = false;
-      state.youtube.videoId    = CONFIG.youtubeVideoId || null;
       state.youtube.mcInstance = null;
       broadcastStatus();
+      // Reintentar en 15 segundos
+      state.youtube.retryTimer = setTimeout(connectYouTube, 15000);
     });
 
-    mc.on('error', (err) => {
-      console.error('[YouTube] ❌ Error masterchat:', err?.message || err);
-    });
+    const ok = await liveChat.start();
 
-    mc.listen();
+    if (!ok) {
+      console.error('[YouTube] ❌ No se pudo iniciar el chat. ¿El live está activo y es público?');
+      state.youtube.connected  = false;
+      state.youtube.mcInstance = null;
+      broadcastStatus();
+      // Reintentar en 30 segundos
+      state.youtube.retryTimer = setTimeout(connectYouTube, 30000);
+      return;
+    }
+
     state.youtube.connected = true;
-    console.log(`[YouTube] ✅ Conectado al chat sin API key 🎉`);
+    console.log('[YouTube] ✅ Conectado al chat en vivo 🎉');
     broadcastStatus();
 
   } catch(err) {
@@ -401,6 +404,7 @@ async function connectYouTube() {
     state.youtube.connected  = false;
     state.youtube.mcInstance = null;
     broadcastStatus();
+    state.youtube.retryTimer = setTimeout(connectYouTube, 15000);
   }
 }
 
@@ -430,7 +434,6 @@ app.post('/api/youtube/connect', (req, res) => {
   res.json({ ok: true, videoId });
 });
 
-// Alias para compatibilidad con versiones anteriores
 app.post('/api/youtube/video-id', (req, res) => {
   const input = req.body.videoId || req.body.url || '';
   const videoId = extractVideoId(input);
@@ -459,14 +462,14 @@ app.get('/api/status', (req, res) => res.json({
 
 // ── ARRANCAR ─────────────────────────────────────────────────
 server.listen(CONFIG.port, () => {
-  console.log(`\n🎮 MEEVE MULTICHAT SERVER v2 — MASTERCHAT EDITION`);
+  console.log(`\n🎮 MEEVE MULTICHAT SERVER v2 — youtube-chat EDITION`);
   console.log(`   Puerto         : ${CONFIG.port}`);
   console.log(`   Twitch         : ${CONFIG.twitch || '(no config)'}`);
   console.log(`   Kick           : ${CONFIG.kick   || '(no config)'}`);
   console.log(`   TikTok         : ${CONFIG.tiktok || '(no config)'}`);
   console.log(`   YouTube handle : ${CONFIG.youtubeHandle || CONFIG.youtubeChannelId || '(no config)'}`);
-  console.log(`   YouTube videoId: ${CONFIG.youtubeVideoId || '(pegar desde el panel cuando arranques el live)'}`);
-  console.log(`   ⚡ YouTube mode : masterchat — SIN API KEY, SIN CUOTA\n`);
+  console.log(`   YouTube videoId: ${CONFIG.youtubeVideoId || '(pegar desde el panel cuando arrancés el live)'}`);
+  console.log(`   ⚡ YouTube mode : youtube-chat — SIN API KEY, SIN CUOTA\n`);
   if (CONFIG.youtubeVideoId) console.log(`[YouTube] 🎯 VideoId hardcodeado, conectando...`);
   else console.log(`[YouTube] ℹ️  Para conectar: POST /api/youtube/connect con { "url": "https://youtube.com/watch?v=XXXX" }`);
   connectTwitch();
