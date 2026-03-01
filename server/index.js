@@ -3,7 +3,7 @@
 //  ✅ Twitch via tmi.js
 //  ✅ Kick via Pusher WebSocket
 //  ✅ TikTok via tiktok-live-connector
-//  ✅ YouTube via PUENTE NAVEGADOR (sin API key, sin cuota, sin 429)
+//  ✅ YouTube via youtube-chat (sin API key, sin proxy browser, sin 429)
 // ============================================================
 
 const express    = require('express');
@@ -16,6 +16,14 @@ let WebcastPushConnection;
 try {
   ({ WebcastPushConnection } = require('tiktok-live-connector'));
 } catch(e) { console.log('[TikTok] tiktok-live-connector no disponible'); }
+
+let LiveChat;
+try {
+  ({ LiveChat } = require('youtube-chat'));
+  console.log('[YouTube] ✅ youtube-chat cargado correctamente');
+} catch(e) {
+  console.log('[YouTube] youtube-chat no disponible — ejecutá: npm i youtube-chat');
+}
 
 const app    = express();
 const server = http.createServer(app);
@@ -148,25 +156,6 @@ wss.on('connection', (ws) => {
       if (msg.type === 'kick_donation')     handleKickDonationFromBrowser(msg);
       if (msg.type === 'kick_disconnected') { state.kick.connected = false; broadcastStatus(); }
       if (msg.type === 'kick_connected')    { state.kick.connected = true;  broadcastStatus(); }
-      if (msg.type === 'youtube_message') {
-        state.youtube.connected = true;
-        state.youtube.videoId   = msg.videoId || state.youtube.videoId;
-        broadcast({ type: 'youtube', platform: 'youtube', chatname: msg.chatname || 'YouTuber', chatmessage: msg.chatmessage || '', chatimg: msg.chatimg || null, nameColor: '#FF0000', roles: msg.roles || [], mid: msg.mid || ('yt-' + Date.now()) });
-      }
-      if (msg.type === 'youtube_donation') {
-        state.youtube.connected = true;
-        broadcast({ type: 'donation', platform: 'youtube', donationType: msg.donationType || 'superchat', chatname: msg.chatname || 'YouTuber', chatmessage: msg.chatmessage || '', chatimg: msg.chatimg || null, nameColor: '#FF0000', amount: msg.amount || 0, amountDisplay: msg.amountDisplay || '', roles: msg.roles || [], mid: msg.mid || ('yt-don-' + Date.now()) });
-      }
-      if (msg.type === 'youtube_connected') {
-        state.youtube.connected = true;
-        state.youtube.videoId   = msg.videoId || null;
-        broadcastStatus();
-      }
-      if (msg.type === 'youtube_disconnected') {
-        state.youtube.connected = false;
-        state.youtube.videoId   = null;
-        broadcastStatus();
-      }
     } catch(e) {}
   });
 });
@@ -311,93 +300,134 @@ async function connectTikTokConnector() {
 }
 setInterval(() => { if (state.tiktok.connected && state.tiktok.lastMsg > 0 && Date.now() - state.tiktok.lastMsg > 3 * 60 * 1000) { state.tiktok.connected = false; broadcastStatus(); connectTikTokConnector(); } }, 60000);
 
-// ══ YOUTUBE PROXY — headers mejorados para evitar detección ══
-app.get('/api/yt-proxy', (req, res) => {
-  const target = req.query.url;
-  if (!target || !target.startsWith('https://www.youtube.com/')) {
-    return res.status(400).json({ error: 'URL inválida' });
+// ══ YOUTUBE — via youtube-chat (sin API key, sin proxy browser, sin 429) ══
+let ytChat = null;
+
+function buildMessageText(messageItems) {
+  if (!messageItems || !Array.isArray(messageItems)) return '';
+  return messageItems.map(item => {
+    if (item.text)      return item.text;
+    if (item.emojiText) return item.emojiText;
+    if (item.alt)       return item.alt;
+    return '';
+  }).join('');
+}
+
+async function connectYouTube(videoId) {
+  // Detener instancia anterior si existe
+  if (ytChat) {
+    try { ytChat.stop(); } catch(e) {}
+    ytChat = null;
   }
 
-  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
-  const options = {
-    headers: {
-      'User-Agent':                UA,
-      'Accept':                    'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-      'Accept-Language':           'es-ES,es;q=0.9,en-US;q=0.8,en;q=0.7',
-      'Accept-Encoding':           'identity',
-      'Cache-Control':             'no-cache',
-      'Pragma':                    'no-cache',
-      'Sec-Ch-Ua':                 '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
-      'Sec-Ch-Ua-Mobile':          '?0',
-      'Sec-Ch-Ua-Platform':        '"Windows"',
-      'Sec-Fetch-Dest':            'document',
-      'Sec-Fetch-Mode':            'navigate',
-      'Sec-Fetch-Site':            'none',
-      'Sec-Fetch-User':            '?1',
-      'Upgrade-Insecure-Requests': '1',
-      'Cookie':                    'CONSENT=YES+cb; VISITOR_INFO1_LIVE=; YSC=; GPS=1;',
-    }
-  };
+  if (!LiveChat) {
+    console.log('[YouTube] youtube-chat no instalado — ejecutá: npm i youtube-chat');
+    broadcast({ type: 'system', platform: 'system', chatname: 'Sistema', chatmessage: '⚠️ youtube-chat no instalado en el servidor. Ejecutá: npm i youtube-chat', nameColor: '#ffaa00', mid: 'sys-yt-' + Date.now() });
+    return;
+  }
 
-  const doFetch = (url, redirects) => {
-    if (redirects > 3) return res.status(502).json({ error: 'demasiados redirects' });
-    const r = https.get(url, options, (ytRes) => {
-      if ((ytRes.statusCode === 301 || ytRes.statusCode === 302) && ytRes.headers.location) {
-        const loc = ytRes.headers.location.startsWith('http')
-          ? ytRes.headers.location
-          : 'https://www.youtube.com' + ytRes.headers.location;
-        ytRes.resume();
-        if (loc.startsWith('https://www.youtube.com/')) return doFetch(loc, redirects + 1);
-      }
-      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-      ytRes.pipe(res);
-    });
-    r.on('error', (e) => { if (!res.headersSent) res.status(500).json({ error: e.message }); });
-    r.setTimeout(15000, () => { r.destroy(); if (!res.headersSent) res.status(504).json({ error: 'timeout' }); });
-  };
-  doFetch(target, 0);
-});
+  if (!videoId) return;
 
-app.post('/api/yt-chat', (req, res) => {
-  const { apiKey, continuation } = req.body;
-  if (!apiKey || !continuation) return res.status(400).json({ error: 'apiKey y continuation requeridos' });
+  console.log(`[YouTube] Conectando a video ${videoId}...`);
+  state.youtube.connected = false;
+  state.youtube.videoId   = videoId;
 
-  const bodyStr = JSON.stringify({
-    context: { client: { clientName: 'WEB', clientVersion: '2.20240101.00.00', hl: 'es', gl: 'ES' } },
-    continuation
+  ytChat = new LiveChat({ liveId: videoId });
+
+  ytChat.on('start', (liveId) => {
+    console.log(`[YouTube] ✅ Chat conectado: ${liveId}`);
+    state.youtube.connected = true;
+    state.youtube.videoId   = liveId;
+    broadcastStatus();
   });
 
-  const options = {
-    hostname: 'www.youtube.com',
-    path:     `/youtubei/v1/live_chat/get_live_chat?key=${apiKey}&prettyPrint=false`,
-    method:   'POST',
-    headers: {
-      'Content-Type':    'application/json',
-      'Content-Length':  Buffer.byteLength(bodyStr),
-      'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-      'Accept-Language': 'es-ES,es;q=0.9',
-      'Origin':          'https://www.youtube.com',
-      'Referer':         'https://www.youtube.com/',
-      'Accept-Encoding': 'identity',
-      'X-Youtube-Client-Name': '1',
-      'X-Youtube-Client-Version': '2.20240101.00.00',
-    }
-  };
+  ytChat.on('end', (reason) => {
+    console.log(`[YouTube] Stream terminado: ${reason}`);
+    state.youtube.connected = false;
+    broadcastStatus();
+    // Reintentar en 60s por si fue un corte temporal
+    setTimeout(() => {
+      if (state.youtube.videoId) connectYouTube(state.youtube.videoId);
+    }, 60000);
+  });
 
-  const ytReq = https.request(options, (ytRes) => {
-    let body = '';
-    ytRes.on('data', c => body += c);
-    ytRes.on('end', () => {
-      try { res.json(JSON.parse(body)); }
-      catch(e) { res.status(502).json({ error: 'Respuesta inválida de YouTube', raw: body.slice(0, 200) }); }
+  ytChat.on('error', (err) => {
+    console.error('[YouTube] Error:', err?.message || err);
+    state.youtube.connected = false;
+    broadcastStatus();
+  });
+
+  ytChat.on('chat', (item) => {
+    const author = item.author || {};
+    const name   = author.name || 'YouTuber';
+    const avatar = (author.thumbnail && author.thumbnail.url) || null;
+
+    const roles = [];
+    if (item.isOwner)      roles.push({ type: 'broadcaster', label: 'Streamer' });
+    if (item.isModerator)  roles.push({ type: 'moderator',   label: 'Mod' });
+    if (item.isMembership) roles.push({ type: 'member',      label: '⭐ Miembro' });
+    if (item.isVerified)   roles.push({ type: 'verified',    label: '✓ Verificado' });
+
+    // Superchat
+    if (item.superchat) {
+      broadcast({
+        type: 'donation', platform: 'youtube', donationType: 'superchat',
+        chatname: name,
+        chatmessage: buildMessageText(item.message) || '¡Superchat!',
+        chatimg: avatar, nameColor: '#FF0000', amount: 0,
+        amountDisplay: item.superchat.amount || '',
+        roles, mid: 'yt-sc-' + Date.now()
+      });
+      return;
+    }
+
+    // Membership sin mensaje
+    if (item.isMembership && !buildMessageText(item.message)) {
+      broadcast({
+        type: 'donation', platform: 'youtube', donationType: 'member',
+        chatname: name, chatmessage: '¡Nuevo Miembro!',
+        chatimg: avatar, nameColor: '#FF0000', roles, mid: 'yt-mb-' + Date.now()
+      });
+      return;
+    }
+
+    // Mensaje normal
+    broadcast({
+      type: 'youtube', platform: 'youtube',
+      chatname: name,
+      chatmessage: buildMessageText(item.message),
+      chatimg: avatar, nameColor: '#FF0000', roles,
+      mid: 'yt-' + Date.now() + '-' + Math.random()
     });
   });
-  ytReq.on('error', (e) => { if (!res.headersSent) res.status(500).json({ error: e.message }); });
-  ytReq.setTimeout(15000, () => { ytReq.destroy(); if (!res.headersSent) res.status(504).json({ error: 'timeout' }); });
-  ytReq.write(bodyStr);
-  ytReq.end();
+
+  const ok = await ytChat.start();
+  if (!ok) {
+    console.error('[YouTube] No se pudo iniciar. ¿El video está en vivo con chat activo?');
+    state.youtube.connected = false;
+    state.youtube.videoId   = null;
+    broadcastStatus();
+  }
+}
+
+// Endpoint: conectar YouTube desde el dashboard (POST /api/youtube/connect)
+app.post('/api/youtube/connect', async (req, res) => {
+  const { videoId } = req.body;
+  if (!videoId) return res.status(400).json({ error: 'videoId requerido' });
+  connectYouTube(videoId);
+  res.json({ ok: true, videoId });
 });
 
+// Endpoint: desconectar YouTube desde el dashboard (POST /api/youtube/disconnect)
+app.post('/api/youtube/disconnect', (req, res) => {
+  if (ytChat) { try { ytChat.stop(); } catch(e) {} ytChat = null; }
+  state.youtube.connected = false;
+  state.youtube.videoId   = null;
+  broadcastStatus();
+  res.json({ ok: true });
+});
+
+// ══ ENDPOINTS VARIOS ══
 app.get('/health', (req, res) => res.json({
   ok: true, uptime: Math.floor(process.uptime()), messages: state.msgCount,
   clients: state.clients.size, twitch: state.twitch.connected, kick: state.kick.connected,
@@ -422,12 +452,12 @@ app.get('/api/status', (req, res) => res.json({
 }));
 
 server.listen(CONFIG.port, () => {
-  console.log(`\n🎮 MEEVE MULTICHAT SERVER v2 — BROWSER BRIDGE EDITION`);
+  console.log(`\n🎮 MEEVE MULTICHAT SERVER v2 — youtube-chat EDITION`);
   console.log(`   Puerto  : ${CONFIG.port}`);
   console.log(`   Twitch  : ${CONFIG.twitch || '(no config)'}`);
   console.log(`   Kick    : ${CONFIG.kick   || '(no config)'}`);
   console.log(`   TikTok  : ${CONFIG.tiktok || '(no config)'}`);
-  console.log(`   YouTube : puente navegador (sin API key, sin 429) ✅\n`);
+  console.log(`   YouTube : youtube-chat (sin API key, sin proxy browser) ✅\n`);
   connectTwitch();
   connectKick();
   connectTikTokConnector();
