@@ -48,7 +48,6 @@
     .msg-badge{height:16px;width:auto;vertical-align:middle;filter:drop-shadow(0 0 4px var(--green));}
     .msg-content{color:#e0e0e0;font-size:22px;line-height:1.6;word-break:break-word;text-shadow:0 0 4px rgba(0,255,157,0.1);animation:contentAppear 0.5s cubic-bezier(0.34,1.56,0.64,1);}
     @keyframes contentAppear{0%{transform:scale(0.95);opacity:0;}100%{transform:scale(1);opacity:1;}}
-    /* ★ FIX EMOTES */
     .msg-content img.emote{height:var(--ov-emote-size,28px);width:auto;vertical-align:middle;margin:0 2px;image-rendering:-webkit-optimize-contrast;display:inline-block;}
     .donation-box{margin-top:12px;padding:10px 16px;background:rgba(0,255,157,0.1);border:2px solid var(--green);border-radius:3px;font-size:20px;font-weight:700;color:var(--green);text-align:center;text-shadow:var(--glow);animation:donationPop 0.7s cubic-bezier(0.34,1.56,0.64,1);}
     @keyframes donationPop{0%{transform:scale(0.8);}50%{transform:scale(1.05);}100%{transform:scale(1);}}
@@ -89,7 +88,6 @@
     var chatContainer = document.getElementById('chat-container');
     var connDot = document.getElementById('conn-dot');
 
-    // ★ EMOTE PARSERS
     function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
     function processTwitchEmotes(text,emotes){
       if(!emotes||!emotes.length) return esc(text);
@@ -98,7 +96,7 @@
       for(var i=0;i<sorted.length;i++){
         var e=sorted[i];
         if(e.start>cursor) result+=esc(text.slice(cursor,e.start));
-        result+='<img class="emote" src="'+esc(e.url)+'" alt="'+esc(e.text)+'" title="'+esc(e.text)+'" onerror="this.style.display=\'none\'">';
+        result+='<img class="emote" src="'+esc(e.url)+'" alt="'+esc(e.text)+'" onerror="this.style.display=\'none\'">';
         cursor=e.end+1;
       }
       if(cursor<text.length) result+=esc(text.slice(cursor));
@@ -106,7 +104,7 @@
     }
     function parseKickEmotesFromText(text){
       return esc(text).replace(/\[emote:(\d+):([^\]]+)\]/g,function(match,id,name){
-        return '<img class="emote" src="https://files.kick.com/emotes/'+id+'/fullsize" alt="'+name+'" title="'+name+'" onerror="this.style.display=\'none\'">';
+        return '<img class="emote" src="https://files.kick.com/emotes/'+id+'/fullsize" alt="'+name+'" onerror="this.style.display=\'none\'">';
       });
     }
     function processMessageHTML(data){
@@ -156,8 +154,6 @@
       });
       var nameStyle=data.nameColor?'color:'+data.nameColor+';text-shadow:0 0 10px '+data.nameColor+';':'';
       var isDonation=data.type==='donation';
-
-      // ★ EMOTES ARREGLADOS
       var msgHTML=processMessageHTML(data);
 
       var donHTML='';
@@ -186,7 +182,12 @@
       try{ws=new WebSocket(SERVER_URL);}catch(e){connDot.className='';setTimeout(connect,retryDelay);return;}
       ws.onopen=function(){connDot.className='ok';retryDelay=1000;};
       ws.onmessage=function(e){
-        try{var d=JSON.parse(e.data);if(d.type==='status'||d.type==='highlight'||d.type==='highlight_clear')return;addMessage(d);}catch(err){}
+        try{
+          var d=JSON.parse(e.data);
+          // ✅ filtrar status, highlight y highlight_clear — no mostrar como mensajes
+          if(d.type==='status'||d.type==='highlight'||d.type==='highlight_clear')return;
+          addMessage(d);
+        }catch(err){}
       };
       ws.onclose=function(){connDot.className='';retryDelay=Math.min(retryDelay*2,30000);setTimeout(connect,retryDelay);};
       ws.onerror=function(){ws.close();};
