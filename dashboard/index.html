@@ -221,7 +221,7 @@
     .tag { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; }
     .tag-connector { background: rgba(0,255,157,0.12); border:1px solid rgba(0,255,157,0.4); color: var(--green); }
     .tag-puppeteer { background: rgba(255,170,0,0.12); border:1px solid rgba(255,170,0,0.4); color: var(--yellow); }
-    .tag-browser { background: rgba(0,255,157,0.12); border:1px solid rgba(0,255,157,0.4); color: var(--green); }
+    .tag-browser { background: rgba(255,0,0,0.12); border:1px solid rgba(255,0,0,0.4); color: #ff6666; }
 
     input[type=range] { width: 100%; accent-color: var(--green); cursor: pointer; }
     input[type=color] { width: 40px; height: 28px; border: 1px solid rgba(0,255,157,0.4); border-radius: 4px; cursor: pointer; background: transparent; padding: 1px; }
@@ -393,6 +393,7 @@
 
   <div class="sidebar">
 
+    <!-- SERVIDOR -->
     <div class="card">
       <div class="card-header"><span class="card-title-text">🔌 Servidor</span></div>
       <div class="card-body">
@@ -401,10 +402,11 @@
           <input id="serverUrl" type="text" placeholder="wss://tu-app.onrender.com" />
           <button class="btn btn-primary" onclick="saveAndConnect()">Conectar</button>
         </div>
-        <div class="hint">Se guarda en el navegador automáticamente</div>
+        <div class="hint">Se guarda automáticamente en el navegador</div>
       </div>
     </div>
 
+    <!-- ESTADO -->
     <div class="card">
       <div class="card-header"><span class="card-title-text">📡 Estado Conexiones</span></div>
       <div class="card-body">
@@ -428,11 +430,12 @@
           <span class="platform-dot" id="dot-youtube"></span>
           <span class="platform-icon">▶️</span>
           <div class="platform-info"><div class="platform-name">YouTube</div><div class="platform-channel" id="ch-youtube">—</div></div>
-          <span class="tag tag-browser">navegador</span>
+          <span class="tag tag-browser">polling</span>
         </div>
       </div>
     </div>
 
+    <!-- KICK -->
     <div class="card">
       <div class="card-header"><span class="card-title-text">🟢 Kick — Chatroom</span></div>
       <div class="card-body">
@@ -452,6 +455,7 @@
       </div>
     </div>
 
+    <!-- TIKTOK -->
     <div class="card">
       <div class="card-header"><span class="card-title-text">🎵 TikTok — Control</span></div>
       <div class="card-body">
@@ -463,33 +467,30 @@
       </div>
     </div>
 
-    <!-- ══ YOUTUBE BROWSER BRIDGE ══ -->
+    <!-- ══ YOUTUBE POLLING (sin localhost) ══ -->
     <div class="card">
-      <div class="card-header"><span class="card-title-text">▶️ YouTube — Puente Navegador</span></div>
+      <div class="card-header"><span class="card-title-text">▶️ YouTube — Chat al Multichat</span></div>
       <div class="card-body">
         <div id="yt-bridge-status" class="info-box info-yellow">
-          📋 Pegá el link del live y presioná Conectar.
-        </div>
-        <div style="display:flex;gap:6px;align-items:center;margin-bottom:2px;">
-          <label style="margin:0;white-space:nowrap;">Proxy:</label>
-          <select id="yt-proxy-select" onchange="ytBridge.proxyBase=this.value" style="font-size:10px;padding:4px 6px;">
-            <option value="http://localhost:3001">localhost:3001 (tu PC)</option>
-            <option value="https://multichat-krona-5uts.onrender.com/api">Render (puede fallar)</option>
-          </select>
+          📋 Pegá el link del live y presioná Conectar. Los mensajes llegarán al multichat automáticamente.
         </div>
         <label>Link o Video ID del live:</label>
         <div class="input-row">
-          <input id="yt-video-url" type="text" placeholder="https://youtube.com/watch?v=..." onkeydown="if(event.key==='Enter')connectYouTubeBrowser()" />
-          <button class="btn btn-primary" onclick="connectYouTubeBrowser()">▶ Conectar</button>
+          <input id="yt-video-url" type="text" placeholder="https://youtube.com/watch?v=..." onkeydown="if(event.key==='Enter')connectYouTube()" />
+          <button class="btn btn-primary" onclick="connectYouTube()">▶ Conectar</button>
         </div>
-        <div class="hint">Pegá el link de tu live cada vez que arranques el directo.</div>
+        <div class="hint">Los mensajes de YouTube aparecen en el multichat en tiempo real.</div>
         <div style="display:flex;gap:6px;margin-top:2px;">
-          <button class="btn btn-danger btn-full" onclick="disconnectYouTubeBrowser()">⏹ Detener</button>
-          <button class="btn btn-secondary btn-full" onclick="openYouTubeLive()">📺 Live</button>
+          <button class="btn btn-danger btn-full" onclick="disconnectYouTube()">⏹ Detener</button>
+          <button class="btn btn-secondary btn-full" onclick="openYouTubeLive()">📺 Abrir Live</button>
+        </div>
+        <div id="yt-stats" style="display:none;font-size:10px;color:var(--muted);padding:4px 0;">
+          Mensajes recibidos: <span id="yt-msg-count">0</span> · Último poll: <span id="yt-last-poll">—</span>
         </div>
       </div>
     </div>
 
+    <!-- OBS URLs -->
     <div class="card">
       <div class="card-header"><span class="card-title-text">📺 URLs para OBS</span></div>
       <div class="card-body">
@@ -518,6 +519,7 @@
       </div>
     </div>
 
+    <!-- CONFIG VISUAL -->
     <div class="card">
       <div class="card-header"><span class="card-title-text">⚙️ Configuración Visual</span></div>
       <div class="card-body">
@@ -542,7 +544,6 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
-        <div class="hint" id="glow-hint">Activa/desactiva el efecto de luz verde</div>
 
         <div class="toggle-row">
           <span class="toggle-label">↔️ Modo línea única</span>
@@ -551,7 +552,6 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
-        <div class="hint">Todo en una línea: avatar + usuario + mensaje</div>
 
         <div class="separator"></div>
 
@@ -605,18 +605,10 @@
 
     <div class="visor-bar">
       <span class="visor-bar-label">👁 Ver chat:</span>
-      <button class="visor-btn" data-view="twitch" onclick="openChatVisor('twitch')" id="view-twitch">
-        <span class="vb-dot"></span>Twitch
-      </button>
-      <button class="visor-btn" data-view="kick" onclick="openChatVisor('kick')" id="view-kick">
-        <span class="vb-dot"></span>Kick
-      </button>
-      <button class="visor-btn" data-view="youtube" onclick="openChatVisor('youtube')" id="view-youtube">
-        <span class="vb-dot"></span>YouTube
-      </button>
-      <button class="visor-btn" data-view="tiktok" onclick="openChatVisor('tiktok')" id="view-tiktok">
-        <span class="vb-dot"></span>TikTok
-      </button>
+      <button class="visor-btn" data-view="twitch"  onclick="openChatVisor('twitch')"  id="view-twitch"><span class="vb-dot"></span>Twitch</button>
+      <button class="visor-btn" data-view="kick"    onclick="openChatVisor('kick')"    id="view-kick"><span class="vb-dot"></span>Kick</button>
+      <button class="visor-btn" data-view="youtube" onclick="openChatVisor('youtube')" id="view-youtube"><span class="vb-dot"></span>YouTube</button>
+      <button class="visor-btn" data-view="tiktok"  onclick="openChatVisor('tiktok')"  id="view-tiktok"><span class="vb-dot"></span>TikTok</button>
     </div>
 
     <div class="input-bar">
@@ -628,6 +620,7 @@
 
 </div>
 
+<!-- TIKTOK MODAL -->
 <div id="tiktok-modal" class="modal-overlay">
   <div class="modal-box">
     <button class="modal-close" onclick="closeModal('tiktok-modal')">✕</button>
@@ -735,9 +728,8 @@ var VISOR_CONFIG = {
   },
   youtube: {
     label: 'YouTube Live Chat', badge: 'YOUTUBE',
-    getUrl: function(ch) {
-      // ch aquí es el videoId guardado en ytBridge
-      var vid = (typeof ytBridge !== 'undefined' && ytBridge.videoId) ? ytBridge.videoId : ch;
+    getUrl: function() {
+      var vid = ytState.videoId;
       if (!vid) return null;
       return 'https://www.youtube.com/live_chat?v=' + vid + '&embed_domain=' + window.location.hostname;
     },
@@ -746,7 +738,7 @@ var VISOR_CONFIG = {
   },
   tiktok: {
     label: 'TikTok Live', badge: 'TIKTOK',
-    getUrl: function(ch) { return null; },
+    getUrl: function() { return null; },
     noChMsg: 'TikTok no soporta chat embebido',
     noChSub: 'TikTok bloquea los iframes de chat. Usá el botón "📺 Live" del panel lateral para abrir en nueva pestaña.'
   }
@@ -793,7 +785,7 @@ document.addEventListener('DOMContentLoaded',function(){
 
 // ═══ FONT / GLOW / SINGLELINE ═══
 function applyFont(fontValue,silent){document.documentElement.style.setProperty('--font-body',fontValue);var preview=document.getElementById('font-preview');preview.style.fontFamily=fontValue;store.set('chatFont',fontValue);if(!silent)toast('🔤 Fuente cambiada');}
-function toggleGlow(enabled,silent){store.set('glowOff',enabled?'0':'1');var hint=document.getElementById('glow-hint');if(enabled){document.body.classList.remove('no-glow');hint.textContent='✅ Brillo neón activo';if(!silent)toast('💡 Brillo activado');}else{document.body.classList.add('no-glow');hint.textContent='🌑 Brillo desactivado';if(!silent)toast('💡 Brillo desactivado');}}
+function toggleGlow(enabled,silent){store.set('glowOff',enabled?'0':'1');if(enabled){document.body.classList.remove('no-glow');if(!silent)toast('💡 Brillo activado');}else{document.body.classList.add('no-glow');if(!silent)toast('💡 Brillo desactivado');}}
 function toggleSingleLine(enabled,silent){store.set('singleLine',enabled?'1':'0');var panel=document.getElementById('chat-panel');if(enabled){panel.classList.add('single-line');if(!silent)toast('↔️ Modo línea única activado');}else{panel.classList.remove('single-line');if(!silent)toast('↕️ Modo normal activado');}}
 
 // ═══ WEBSOCKET ═══
@@ -814,7 +806,6 @@ function handleStatus(data){
   setPlatformStatus('twitch',data.twitch,(data.channels&&data.channels.twitch)||'—');
   setPlatformStatus('kick',data.kick,(data.channels&&data.channels.kick)||'—');
   setPlatformStatus('tiktok',data.tiktok,(data.channels&&data.channels.tiktok)||'—');
-  // YouTube lo maneja el puente del navegador
   if(data.channels) currentChannels=data.channels;
   var mt=document.getElementById('tiktok-mode-tag');
   if(mt){mt.textContent=data.tiktokMode||'connector';mt.className='tag '+(data.tiktokMode==='puppeteer'?'tag-puppeteer':'tag-connector');}
@@ -823,15 +814,25 @@ function handleStatus(data){
     if(savedId&&(!kickWs||kickWs.readyState>1)){connectKickBrowser(savedId);}
     else if(!savedId&&!autoKickDone&&data.channels&&data.channels.kick){autoKickDone=true;setTimeout(resolveKickId,1500);}
   }
-  if(currentVisor){
-    var cfg=VISOR_CONFIG[currentVisor],ch=currentChannels[currentVisor]||'';
-    if(cfg) document.getElementById('visor-title').textContent=cfg.label+(ch?' — @'+ch:'');
-  }
 }
 function setPlatformStatus(p,c,ch){var dot=document.getElementById('dot-'+p),el=document.getElementById('ch-'+p);if(dot)dot.className='platform-dot'+(c?' ok':'');if(el)el.textContent=ch||'—';}
 
-// ═══ YOUTUBE BROWSER BRIDGE ═══
-var ytBridge = { videoId: null, active: false };
+// ════════════════════════════════════════════════════════
+//  YOUTUBE POLLING — Sin localhost, todo via Render
+//  Usa /api/yt-proxy y /api/yt-chat del servidor configurado
+// ════════════════════════════════════════════════════════
+var ytState = {
+  videoId: null,
+  active: false,
+  apiKey: null,
+  continuation: null,
+  pollTimer: null,
+  msgCount: 0,
+  seenIds: new Set(),
+  errorCount: 0,
+  POLL_INTERVAL: 5000,   // ms entre polls normales
+  ERROR_BACKOFF:  15000, // ms cuando hay error
+};
 
 function extractVideoId(input) {
   if (!input) return null;
@@ -841,33 +842,334 @@ function extractVideoId(input) {
   return m ? m[1] : null;
 }
 
-function connectYouTubeBrowser() {
+function getHttpBase() {
+  var u = store.get('serverUrl');
+  if (!u) return null;
+  return u.replace(/^wss?/, 'https').replace(/\/$/, '');
+}
+
+// PASO 1: Buscar apiKey y continuation en el HTML del live
+async function fetchYtInitData(videoId) {
+  var base = getHttpBase();
+  if (!base) throw new Error('Servidor no configurado');
+  var proxyUrl = base + '/api/yt-proxy?url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + videoId);
+  var resp = await fetch(proxyUrl);
+  if (!resp.ok) throw new Error('Proxy HTTP ' + resp.status);
+  var html = await resp.text();
+
+  // Extraer ytcfg (tiene el INNERTUBE_API_KEY / apiKey)
+  var apiKey = null;
+  var m = html.match(/"INNERTUBE_API_KEY"\s*:\s*"([^"]+)"/);
+  if (m) apiKey = m[1];
+  if (!apiKey) {
+    m = html.match(/"innertubeApiKey"\s*:\s*"([^"]+)"/);
+    if (m) apiKey = m[1];
+  }
+
+  // Extraer continuation token (live chat)
+  var continuation = null;
+  // Buscar en el initialData que contiene liveChatRenderer
+  m = html.match(/"continuation"\s*:\s*\{\s*"reloadContinuationData"\s*:\s*\{\s*"continuation"\s*:\s*"([^"]+)"/);
+  if (!m) m = html.match(/"invalidationContinuationData"\s*:\s*\{\s*"continuation"\s*:\s*"([^"]+)"/);
+  if (!m) m = html.match(/"timedContinuationData"\s*:\s*\{\s*[^}]*"continuation"\s*:\s*"([^"]+)"/);
+  if (!m) {
+    // Buscar cualquier continuation dentro de liveChatRenderer
+    var lcIdx = html.indexOf('liveChatRenderer');
+    if (lcIdx !== -1) {
+      var chunk = html.slice(lcIdx, lcIdx + 3000);
+      var cm = chunk.match(/"continuation"\s*:\s*"([A-Za-z0-9_=-]{20,})"/);
+      if (cm) m = cm;
+    }
+  }
+  if (m) continuation = m[1] || m[0];
+  // Si el regex devolvió el grupo completo vs solo el token
+  if (continuation && continuation.length > 200) {
+    var inner = continuation.match(/([A-Za-z0-9_=-]{20,})/);
+    if (inner) continuation = inner[1];
+  }
+
+  if (!apiKey)    throw new Error('No se encontró INNERTUBE_API_KEY — ¿el video está en vivo?');
+  if (!continuation) throw new Error('No se encontró continuation token — ¿el chat está activo?');
+  return { apiKey, continuation };
+}
+
+// PASO 2: Llamar a /api/yt-chat con la continuation actual
+async function pollYtChat() {
+  if (!ytState.active) return;
+  var base = getHttpBase();
+  if (!base) return;
+
+  try {
+    var resp = await fetch(base + '/api/yt-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ apiKey: ytState.apiKey, continuation: ytState.continuation })
+    });
+    if (!resp.ok) throw new Error('yt-chat HTTP ' + resp.status);
+    var data = await resp.json();
+    ytState.errorCount = 0;
+
+    // Extraer próxima continuation
+    var nextCont = null;
+    try {
+      var cr = data.continuationContents && data.continuationContents.liveChatContinuation;
+      if (cr && cr.continuations && cr.continuations[0]) {
+        var c0 = cr.continuations[0];
+        nextCont = (c0.invalidationContinuationData && c0.invalidationContinuationData.continuation) ||
+                   (c0.timedContinuationData && c0.timedContinuationData.continuation) ||
+                   (c0.reloadContinuationData && c0.reloadContinuationData.continuation) ||
+                   (c0.liveChatReplayContinuationData && c0.liveChatReplayContinuationData.continuation);
+      }
+    } catch(e) {}
+    if (nextCont) ytState.continuation = nextCont;
+
+    // Extraer mensajes
+    try {
+      var actions = data.continuationContents.liveChatContinuation.actions || [];
+      actions.forEach(function(action) {
+        var item = action.addChatItemAction && action.addChatItemAction.item;
+        if (!item) return;
+
+        // Mensaje normal
+        var lr = item.liveChatTextMessageRenderer;
+        // Superchat
+        var sc = item.liveChatPaidMessageRenderer;
+        // Membership
+        var mb = item.liveChatMembershipItemRenderer;
+
+        var renderer = lr || sc || mb;
+        if (!renderer) return;
+
+        var msgId = renderer.id;
+        if (!msgId || ytState.seenIds.has(msgId)) return;
+        ytState.seenIds.add(msgId);
+        if (ytState.seenIds.size > 500) {
+          // Limpiar IDs viejos
+          var arr = Array.from(ytState.seenIds);
+          ytState.seenIds = new Set(arr.slice(arr.length - 300));
+        }
+
+        // Nombre del autor
+        var authorName = '';
+        if (renderer.authorName) {
+          authorName = (renderer.authorName.simpleText) ||
+            (renderer.authorName.runs && renderer.authorName.runs.map(function(r){return r.text;}).join('')) || '';
+        }
+
+        // Avatar
+        var avatar = null;
+        if (renderer.authorPhoto && renderer.authorPhoto.thumbnails && renderer.authorPhoto.thumbnails.length) {
+          avatar = renderer.authorPhoto.thumbnails[0].url;
+        }
+
+        // Roles
+        var roles = [];
+        if (renderer.authorBadges) {
+          renderer.authorBadges.forEach(function(b) {
+            var icon = b.liveChatAuthorBadgeRenderer && b.liveChatAuthorBadgeRenderer.icon;
+            if (icon) {
+              var t = (icon.iconType || '').toLowerCase();
+              if (t === 'owner' || t === 'broadcaster') roles.push({ type: 'broadcaster', label: 'Streamer' });
+              else if (t === 'moderator') roles.push({ type: 'moderator', label: 'Mod' });
+              else if (t === 'verified') roles.push({ type: 'verified', label: '✓ Verificado' });
+            }
+            // Badge de miembro
+            var custom = b.liveChatAuthorBadgeRenderer && b.liveChatAuthorBadgeRenderer.customThumbnail;
+            if (custom) roles.push({ type: 'member', label: '⭐ Miembro' });
+          });
+        }
+
+        // Texto del mensaje
+        var messageText = '';
+        if (sc) {
+          // Superchat: puede tener mensaje opcional
+          if (sc.message && sc.message.runs) {
+            messageText = sc.message.runs.map(function(r){return r.text||'';}).join('');
+          }
+          // Monto
+          var amount = (sc.purchaseAmountText && (sc.purchaseAmountText.simpleText || '')) || '';
+          if (ws && ws.readyState === 1) {
+            ws.send(JSON.stringify({
+              type: 'youtube_donation',
+              donationType: 'superchat',
+              chatname: authorName || 'YouTuber',
+              chatmessage: messageText || ('¡Superchat de ' + amount + '!'),
+              chatimg: avatar,
+              amount: 0,
+              amountDisplay: amount,
+              roles: roles,
+              videoId: ytState.videoId,
+              mid: 'yt-sc-' + msgId
+            }));
+          }
+          ytState.msgCount++;
+          updateYtStats();
+          return; // superchat se manda como donation, no como mensaje normal
+        } else if (mb) {
+          // Mensaje de membresía
+          if (mb.headerSubtext && mb.headerSubtext.runs) {
+            messageText = mb.headerSubtext.runs.map(function(r){return r.text||'';}).join('');
+          } else {
+            messageText = '¡Nuevo miembro!';
+          }
+          if (ws && ws.readyState === 1) {
+            ws.send(JSON.stringify({
+              type: 'youtube_donation',
+              donationType: 'member',
+              chatname: authorName || 'YouTuber',
+              chatmessage: messageText,
+              chatimg: avatar,
+              amount: 0,
+              roles: roles,
+              videoId: ytState.videoId,
+              mid: 'yt-mb-' + msgId
+            }));
+          }
+          ytState.msgCount++;
+          updateYtStats();
+          return;
+        } else if (lr) {
+          // Mensaje normal
+          if (lr.message && lr.message.runs) {
+            messageText = lr.message.runs.map(function(r){return r.text||'';}).join('');
+          }
+        }
+
+        if (!messageText) return;
+
+        var msgPayload = {
+          type: 'youtube_message',
+          chatname: authorName || 'YouTuber',
+          chatmessage: messageText,
+          chatimg: avatar || null,
+          roles: roles,
+          videoId: ytState.videoId,
+          mid: 'yt-' + msgId
+        };
+
+        if (ws && ws.readyState === 1) {
+          ws.send(JSON.stringify(msgPayload));
+        } else {
+          // Si no hay WS, mostrar directo en el dashboard
+          appendMessage(Object.assign({ platform: 'youtube', nameColor: '#FF0000' }, msgPayload));
+        }
+        ytState.msgCount++;
+        updateYtStats();
+      });
+    } catch(e) {
+      console.warn('[YT] Error parseando mensajes:', e);
+    }
+
+    // Programar siguiente poll
+    if (ytState.active) {
+      var timeout = ytState.POLL_INTERVAL;
+      // Respetar timeoutMs del servidor si lo da
+      try {
+        var cr2 = data.continuationContents.liveChatContinuation.continuations[0];
+        var tms = (cr2.timedContinuationData && cr2.timedContinuationData.timeoutMs) ||
+                  (cr2.invalidationContinuationData && cr2.invalidationContinuationData.timeoutMs);
+        if (tms && tms > 500) timeout = Math.max(tms, 3000);
+      } catch(e) {}
+      ytState.pollTimer = setTimeout(pollYtChat, timeout);
+    }
+
+  } catch(e) {
+    console.warn('[YT] Error en poll:', e.message);
+    ytState.errorCount++;
+    setYtBridgeStatus('yellow', '⚠️ Error #' + ytState.errorCount + ': ' + e.message + ' — Reintentando...');
+    if (ytState.errorCount > 5) {
+      setYtBridgeStatus('red', '❌ Demasiados errores. El live puede haber terminado o YouTube bloqueó el polling. <button class="btn btn-secondary" style="font-size:10px;padding:2px 7px;margin-left:5px;" onclick="reconnectYouTube()">🔄 Reintentar</button>');
+      ytState.active = false;
+      setPlatformStatus('youtube', false, ytState.videoId || '—');
+      return;
+    }
+    if (ytState.active) ytState.pollTimer = setTimeout(pollYtChat, ytState.ERROR_BACKOFF);
+  }
+}
+
+function updateYtStats() {
+  var el = document.getElementById('yt-stats');
+  if (el) {
+    el.style.display = 'block';
+    document.getElementById('yt-msg-count').textContent = ytState.msgCount;
+    document.getElementById('yt-last-poll').textContent = new Date().toLocaleTimeString('es', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  }
+}
+
+async function connectYouTube() {
   var input = document.getElementById('yt-video-url').value.trim();
   var videoId = extractVideoId(input);
   if (!videoId) {
     setYtBridgeStatus('red', '❌ URL inválida. Ej: https://youtube.com/watch?v=abc123');
     return;
   }
+  if (!getHttpBase()) {
+    setYtBridgeStatus('red', '❌ Primero configurá y conectá el servidor (URL de Render).');
+    return;
+  }
+
+  // Detener polling anterior si había
+  disconnectYouTube(true);
+
   store.set('ytVideoUrl', input);
-  ytBridge.videoId = videoId;
-  ytBridge.active  = true;
-  setPlatformStatus('youtube', true, videoId);
-  document.getElementById('ch-youtube').textContent = videoId;
-  setYtBridgeStatus('green', '✅ Video configurado: ' + videoId + ' — Abrí el visor con el botón YouTube abajo.');
-  // Notificar al servidor
-  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'youtube_connected', videoId: videoId }));
-  // Abrir visor automáticamente
-  openChatVisor('youtube');
-  toast('▶️ YouTube chat abierto');
+  ytState.videoId    = videoId;
+  ytState.active     = true;
+  ytState.msgCount   = 0;
+  ytState.seenIds    = new Set();
+  ytState.errorCount = 0;
+
+  setYtBridgeStatus('yellow', '⏳ Conectando al live de YouTube (' + videoId + ')...');
+  setPlatformStatus('youtube', false, videoId);
+
+  try {
+    var init = await fetchYtInitData(videoId);
+    ytState.apiKey       = init.apiKey;
+    ytState.continuation = init.continuation;
+
+    setYtBridgeStatus('green', '✅ Conectado — <b>' + videoId + '</b> · Los mensajes aparecen en el multichat.');
+    setPlatformStatus('youtube', true, videoId);
+
+    if (ws && ws.readyState === 1) {
+      ws.send(JSON.stringify({ type: 'youtube_connected', videoId: videoId }));
+    }
+
+    // Arrancar polling
+    ytState.pollTimer = setTimeout(pollYtChat, 1500);
+    toast('▶️ YouTube conectado — mensajes llegando al multichat');
+
+  } catch(e) {
+    ytState.active = false;
+    setYtBridgeStatus('red', '❌ ' + e.message);
+    setPlatformStatus('youtube', false, '—');
+    toast('❌ YouTube: ' + e.message);
+  }
 }
 
-function disconnectYouTubeBrowser() {
-  ytBridge.active  = false;
-  ytBridge.videoId = null;
-  setPlatformStatus('youtube', false, '—');
-  setYtBridgeStatus('yellow', '📋 Pegá el link del live y presioná Conectar.');
-  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'youtube_disconnected' }));
-  closeChatVisor();
+async function reconnectYouTube() {
+  ytState.errorCount = 0;
+  ytState.active = true;
+  try {
+    var init = await fetchYtInitData(ytState.videoId);
+    ytState.apiKey       = init.apiKey;
+    ytState.continuation = init.continuation;
+    setYtBridgeStatus('green', '✅ Reconectado — ' + ytState.videoId);
+    setPlatformStatus('youtube', true, ytState.videoId);
+    ytState.pollTimer = setTimeout(pollYtChat, 1000);
+  } catch(e) {
+    setYtBridgeStatus('red', '❌ Reconexión fallida: ' + e.message);
+  }
+}
+
+function disconnectYouTube(silent) {
+  ytState.active = false;
+  if (ytState.pollTimer) { clearTimeout(ytState.pollTimer); ytState.pollTimer = null; }
+  if (!silent) {
+    setPlatformStatus('youtube', false, '—');
+    setYtBridgeStatus('yellow', '📋 Pegá el link del live y presioná Conectar.');
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'youtube_disconnected' }));
+    document.getElementById('yt-stats').style.display = 'none';
+    toast('⏹ YouTube detenido');
+  }
 }
 
 function setYtBridgeStatus(color, html) {
@@ -893,7 +1195,6 @@ function appendMessage(data){
   var platformBadge='<span class="msg-platform '+platform+'"><span style="width:10px;height:10px;display:inline-flex;">'+logo+'</span>'+platform.charAt(0).toUpperCase()+platform.slice(1)+'</span>';
   var badgesHTML='';
   if(data.roles&&data.roles.length) data.roles.forEach(function(r){badgesHTML+='<span style="font-size:9px;padding:1px 5px;background:rgba(0,255,157,0.08);border:1px solid rgba(0,255,157,0.3);border-radius:3px;color:#5eead4;">'+esc(r.label||r.type)+'</span>';});
-  if(data.chatbadges&&data.chatbadges.length) data.chatbadges.forEach(function(b){if(typeof b==='string')badgesHTML+='<img class="msg-badge" src="'+esc(b)+'">';else if(b.src)badgesHTML+='<img class="msg-badge" src="'+esc(b.src)+'">';});
   var nameStyle=data.nameColor?'color:'+data.nameColor+';text-shadow:0 0 8px '+data.nameColor+';':'';
   var msgHTML=processMessageHTML(data);
   var donHTML='';
@@ -1022,7 +1323,7 @@ async function sendKickId(idParam){
 }
 async function restartTikTok(){var su=store.get('serverUrl');if(!su)return toast('Configura la URL del servidor primero');var hu=su.replace(/^wss?/,'https').replace(/\/$/,'');try{var r=await fetch(hu+'/api/tiktok/restart',{method:'POST'});var d=await r.json();toast(d.ok?'🔄 TikTok reconectando...':'❌ Error');}catch(e){toast('❌ No se pudo contactar el servidor');}}
 function openTikTokLive(){var u=currentChannels.tiktok||'';if(!u)return toast('TikTok no configurado');window.open('https://www.tiktok.com/@'+u+'/live','_blank','noopener');}
-function openYouTubeLive(){var vid=ytBridge.videoId||'';if(vid){window.open('https://www.youtube.com/watch?v='+vid,'_blank','noopener');}else{toast('Pegá el link del live primero');}}
+function openYouTubeLive(){var vid=ytState.videoId||'';if(vid){window.open('https://www.youtube.com/watch?v='+vid,'_blank','noopener');}else{toast('Pegá el link del live primero');}}
 function sendCustomMessage(){var input=document.getElementById('custom-msg-input'),text=input.value.trim();if(!text)return;if(!isConnected||!ws)return toast('⚠️ No hay conexión');ws.send(JSON.stringify({type:'custom_message',user:'Tú (dashboard)',text:text}));input.value='';}
 
 // ═══ OVERLAY URLs ═══
