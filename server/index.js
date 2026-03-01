@@ -1,8 +1,12 @@
 // ============================================================
-//  MEEVE MULTICHAT SERVER v2 — MASTERCHAT EDITION
-//  ✅ YouTube via masterchat — SIN API KEY, SIN CUOTA
-//  ✅ VideoId manual via /api/youtube/video-id o YOUTUBE_VIDEO_ID env
-//  ✅ Auto-reconexión cuando termina el live
+//  MEEVE MULTICHAT SERVER v2
+//  ✅ Twitch via tmi.js
+//  ✅ Kick via Pusher WebSocket
+//  ✅ TikTok via tiktok-live-connector
+//  ✅ YouTube via PUENTE NAVEGADOR (sin API key, sin cuota, sin 429)
+//     El dashboard fetchea YouTube directamente y manda los
+//     mensajes al servidor. Este servidor actúa de proxy HTTP
+//     para evitar CORS en el navegador.
 // ============================================================
 
 const express    = require('express');
@@ -16,23 +20,17 @@ try {
   ({ WebcastPushConnection } = require('tiktok-live-connector'));
 } catch(e) { console.log('[TikTok] tiktok-live-connector no disponible'); }
 
-let Masterchat, stringify_mc;
-try {
-  ({ Masterchat, stringify: stringify_mc } = require('@stu43005/masterchat'));
-} catch(e) { console.log('[YouTube] ⚠️  masterchat no instalado — corré: npm i masterchat'); }
-
 const app    = express();
 const server = http.createServer(app);
 const wss    = new WebSocketServer({ server });
 
+// ── CONFIG ───────────────────────────────────────────────────
 const CONFIG = {
   twitch:           process.env.TWITCH_CHANNEL      || '',
   kick:             process.env.KICK_CHANNEL        || '',
   kickId:           process.env.KICK_CHANNEL_ID     || '',
   tiktok:           process.env.TIKTOK_USERNAME     || '',
   youtubeHandle:    (process.env.YOUTUBE_HANDLE     || '').trim(),
-  youtubeChannelId: (process.env.YOUTUBE_CHANNEL_ID || '').trim(),
-  youtubeVideoId:   (process.env.YOUTUBE_VIDEO_ID   || '').trim(),
   port:             process.env.PORT                || 3000,
   tiktokMode:       process.env.TIKTOK_MODE         || 'connector',
 };
@@ -46,20 +44,17 @@ app.use((req, res, next) => {
   next();
 });
 
+// ── ESTADO ───────────────────────────────────────────────────
 const state = {
   clients:  new Set(),
   tiktok:   { connected: false, lastMsg: 0, instance: null, restartCount: 0 },
   twitch:   { connected: false },
   kick:     { connected: false },
-  youtube:  {
-    connected:  false,
-    videoId:    CONFIG.youtubeVideoId || null,
-    mcInstance: null,
-    retryTimer: null,
-  },
+  youtube:  { connected: false, videoId: null },
   msgCount: 0,
 };
 
+// ── PARSEAR EMOTES TWITCH ────────────────────────────────────
 function parseTwitchEmotes(message, emotesTag) {
   if (!emotesTag || typeof emotesTag !== 'object') return [];
   const result = [];
@@ -72,6 +67,7 @@ function parseTwitchEmotes(message, emotesTag) {
   return result.sort((a, b) => a.start - b.start);
 }
 
+// ── AVATAR CACHES ────────────────────────────────────────────
 const kickAvatarCache = {}, kickAvatarPending = {};
 const twitchAvatarCache = {}, twitchAvatarPending = {};
 
@@ -114,6 +110,7 @@ function getKickAvatar(username, callback) {
   req.setTimeout(8000, () => req.destroy());
 }
 
+// ── BROADCAST ────────────────────────────────────────────────
 function broadcast(msg) {
   const raw = JSON.stringify(msg);
   state.clients.forEach(ws => { if (ws.readyState === 1) ws.send(raw); });
@@ -123,14 +120,22 @@ function broadcast(msg) {
 function broadcastStatus() {
   broadcast({
     type: 'status',
-    twitch: state.twitch.connected, kick: state.kick.connected,
-    tiktok: state.tiktok.connected, youtube: state.youtube.connected,
+    twitch: state.twitch.connected,
+    kick:   state.kick.connected,
+    tiktok: state.tiktok.connected,
+    youtube: state.youtube.connected,
     youtubeVideoId: state.youtube.videoId || null,
     tiktokMode: CONFIG.tiktokMode,
-    channels: { twitch: CONFIG.twitch, kick: CONFIG.kick, tiktok: CONFIG.tiktok, youtube: CONFIG.youtubeHandle || CONFIG.youtubeChannelId }
+    channels: {
+      twitch:  CONFIG.twitch,
+      kick:    CONFIG.kick,
+      tiktok:  CONFIG.tiktok,
+      youtube: CONFIG.youtubeHandle,
+    }
   });
 }
 
+// ── WEBSOCKET CLIENTS ────────────────────────────────────────
 wss.on('connection', (ws) => {
   state.clients.add(ws);
   ws.send(JSON.stringify({
@@ -139,27 +144,46 @@ wss.on('connection', (ws) => {
     tiktok: state.tiktok.connected, youtube: state.youtube.connected,
     youtubeVideoId: state.youtube.videoId || null,
     tiktokMode: CONFIG.tiktokMode,
-    channels: { twitch: CONFIG.twitch, kick: CONFIG.kick, tiktok: CONFIG.tiktok, youtube: CONFIG.youtubeHandle || CONFIG.youtubeChannelId }
+    channels: { twitch: CONFIG.twitch, kick: CONFIG.kick, tiktok: CONFIG.tiktok, youtube: CONFIG.youtubeHandle }
   }));
   ws.on('close', () => state.clients.delete(ws));
   ws.on('message', (data) => {
     try {
       const msg = JSON.parse(data);
-      if (msg.type === 'custom_message') broadcast({ type: 'custom', platform: 'custom', chatname: msg.user || 'Tú', chatmessage: msg.text, nameColor: '#FF6B9D', mid: 'custom-' + Date.now() });
-      if (msg.type === 'highlight') broadcast({ type: 'highlight', platform: msg.platform || 'custom', chatname: msg.chatname || '', chatmessage: msg.chatmessage || '', chatimg: msg.chatimg || null, nameColor: msg.nameColor || '#FF6B9D', roles: msg.roles || [], chatemotes: msg.chatemotes || [], mid: msg.mid || ('hl-' + Date.now()) });
-      if (msg.type === 'highlight_clear') broadcast({ type: 'highlight_clear' });
+      if (msg.type === 'custom_message')    broadcast({ type: 'custom', platform: 'custom', chatname: msg.user || 'Tú', chatmessage: msg.text, nameColor: '#FF6B9D', mid: 'custom-' + Date.now() });
+      if (msg.type === 'highlight')         broadcast({ type: 'highlight', platform: msg.platform || 'custom', chatname: msg.chatname || '', chatmessage: msg.chatmessage || '', chatimg: msg.chatimg || null, nameColor: msg.nameColor || '#FF6B9D', roles: msg.roles || [], chatemotes: msg.chatemotes || [], mid: msg.mid || ('hl-' + Date.now()) });
+      if (msg.type === 'highlight_clear')   broadcast({ type: 'highlight_clear' });
       if (msg.type === 'kick_message')      handleKickMessageFromBrowser(msg);
       if (msg.type === 'kick_donation')     handleKickDonationFromBrowser(msg);
       if (msg.type === 'kick_disconnected') { state.kick.connected = false; broadcastStatus(); }
       if (msg.type === 'kick_connected')    { state.kick.connected = true;  broadcastStatus(); }
-      if (msg.type === 'youtube_set_video') {
-        const vid = extractVideoId(msg.videoId || msg.url || '');
-        if (vid) { state.youtube.videoId = vid; connectYouTube(); }
+      // ✅ YouTube: el navegador manda los mensajes directamente
+      if (msg.type === 'youtube_message') {
+        state.youtube.connected = true;
+        state.youtube.videoId   = msg.videoId || state.youtube.videoId;
+        broadcast({ type: 'youtube', platform: 'youtube', chatname: msg.chatname || 'YouTuber', chatmessage: msg.chatmessage || '', chatimg: msg.chatimg || null, nameColor: '#FF0000', roles: msg.roles || [], mid: msg.mid || ('yt-' + Date.now()) });
+      }
+      if (msg.type === 'youtube_donation') {
+        state.youtube.connected = true;
+        broadcast({ type: 'donation', platform: 'youtube', donationType: msg.donationType || 'superchat', chatname: msg.chatname || 'YouTuber', chatmessage: msg.chatmessage || '', chatimg: msg.chatimg || null, nameColor: '#FF0000', amount: msg.amount || 0, amountDisplay: msg.amountDisplay || '', roles: msg.roles || [], mid: msg.mid || ('yt-don-' + Date.now()) });
+      }
+      if (msg.type === 'youtube_connected') {
+        state.youtube.connected = true;
+        state.youtube.videoId   = msg.videoId || null;
+        broadcastStatus();
+      }
+      if (msg.type === 'youtube_disconnected') {
+        state.youtube.connected = false;
+        state.youtube.videoId   = null;
+        broadcastStatus();
       }
     } catch(e) {}
   });
 });
 
+// ══════════════════════════════════════════════════════════════
+//  TWITCH
+// ══════════════════════════════════════════════════════════════
 function connectTwitch() {
   if (!CONFIG.twitch) return;
   const client = new tmi.Client({ options: { debug: false }, channels: [CONFIG.twitch] });
@@ -175,8 +199,7 @@ function connectTwitch() {
     if (badges.subscriber)  roles.push({ type: 'subscriber',  label: 'Sub' });
     if (badges.founder)     roles.push({ type: 'founder',     label: 'Founder' });
     const chatemotes = parseTwitchEmotes(message, tags.emotes);
-    const bitsMatch  = message.match(/cheer(\d+)/i);
-    const bitsAmount = tags.bits ? parseInt(tags.bits) : (bitsMatch ? parseInt(bitsMatch[1]) : 0);
+    const bitsAmount = tags.bits ? parseInt(tags.bits) : 0;
     const twitchUser = tags['display-name'] || tags.username || '';
     getTwitchAvatar(twitchUser, (avatar) => {
       if (bitsAmount > 0) {
@@ -186,17 +209,21 @@ function connectTwitch() {
       }
     });
   });
-  client.on('subscription',   (ch, u, method, msg, us) => broadcast({ type: 'donation', platform: 'twitch', donationType: 'sub',     chatname: us['display-name'] || u, chatmessage: msg || '¡Nuevo suscriptor!',            subPlan: method?.plan || 'Prime', nameColor: us?.color || '#9146FF', chatimg: null, mid: 'tw-sub-'     + Date.now() }));
-  client.on('resub',          (ch, u, months, msg, us, methods) => broadcast({ type: 'donation', platform: 'twitch', donationType: 'resub',   chatname: us['display-name'] || u, chatmessage: msg || `¡${months} meses!`,            months, subPlan: methods?.plan || 'Prime', nameColor: us?.color || '#9146FF', chatimg: null, mid: 'tw-resub-'   + Date.now() }));
-  client.on('subgift',        (ch, u, s, recipient, methods, us) => broadcast({ type: 'donation', platform: 'twitch', donationType: 'subgift', chatname: us['display-name'] || u, chatmessage: `¡Regaló una sub a ${recipient}!`, recipient, subPlan: methods?.plan || '1000', nameColor: us?.color || '#9146FF', chatimg: null, mid: 'tw-gift-'    + Date.now() }));
-  client.on('submysterygift', (ch, u, num, methods, us) => broadcast({ type: 'donation', platform: 'twitch', donationType: 'subgift', chatname: us['display-name'] || u, chatmessage: `¡Regaló ${num} subs!`,               amount: num,                            nameColor: us?.color || '#9146FF', chatimg: null, mid: 'tw-massgift-' + Date.now() }));
+  client.on('subscription',   (ch, u, method, msg, us) => broadcast({ type: 'donation', platform: 'twitch', donationType: 'sub',      chatname: us['display-name'] || u, chatmessage: msg || '¡Nuevo suscriptor!',            subPlan: method?.plan || 'Prime', nameColor: us?.color || '#9146FF', chatimg: null, mid: 'tw-sub-'      + Date.now() }));
+  client.on('resub',          (ch, u, months, msg, us, methods) => broadcast({ type: 'donation', platform: 'twitch', donationType: 'resub',    chatname: us['display-name'] || u, chatmessage: msg || `¡${months} meses!`,            months, subPlan: methods?.plan || 'Prime', nameColor: us?.color || '#9146FF', chatimg: null, mid: 'tw-resub-'    + Date.now() }));
+  client.on('subgift',        (ch, u, s, recipient, methods, us) => broadcast({ type: 'donation', platform: 'twitch', donationType: 'subgift',  chatname: us['display-name'] || u, chatmessage: `¡Regaló una sub a ${recipient}!`, recipient, subPlan: methods?.plan || '1000',  nameColor: us?.color || '#9146FF', chatimg: null, mid: 'tw-gift-'     + Date.now() }));
+  client.on('submysterygift', (ch, u, num, methods, us) =>         broadcast({ type: 'donation', platform: 'twitch', donationType: 'subgift',  chatname: us['display-name'] || u, chatmessage: `¡Regaló ${num} subs!`,               amount: num,                             nameColor: us?.color || '#9146FF', chatimg: null, mid: 'tw-massgift-' + Date.now() }));
 }
 
-app.get('/api/kick/channel-id', (req, res) => res.json({ kickId: CONFIG.kickId || null, channel: CONFIG.kick }));
+// ══════════════════════════════════════════════════════════════
+//  KICK
+// ══════════════════════════════════════════════════════════════
+app.get('/api/kick/channel-id',  (req, res) => res.json({ kickId: CONFIG.kickId || null, channel: CONFIG.kick }));
 app.post('/api/kick/channel-id', (req, res) => {
   const { channelId } = req.body;
   if (!channelId) return res.status(400).json({ error: 'channelId requerido' });
-  CONFIG.kickId = String(channelId); res.json({ ok: true, kickId: CONFIG.kickId });
+  CONFIG.kickId = String(channelId);
+  res.json({ ok: true, kickId: CONFIG.kickId });
 });
 function handleKickMessageFromBrowser(data) {
   if (!data.chatname && !data.chatmessage) return;
@@ -221,7 +248,8 @@ async function resolveKickChannelId(channelName) {
       let body = ''; res.on('data', c => body += c);
       res.on('end', () => { try { const d = JSON.parse(body); resolve(String((d.chatroom && d.chatroom.id) || d.id || '') || null); } catch(e) { resolve(null); } });
     });
-    req.on('error', () => resolve(null)); req.setTimeout(10000, () => { req.destroy(); resolve(null); });
+    req.on('error', () => resolve(null));
+    req.setTimeout(10000, () => { req.destroy(); resolve(null); });
   });
 }
 async function connectKick() {
@@ -229,7 +257,8 @@ async function connectKick() {
   if (!CONFIG.kickId) {
     const id = await resolveKickChannelId(CONFIG.kick);
     if (!id) { kickRetryTimeout = setTimeout(connectKick, 60000); return; }
-    CONFIG.kickId = id; console.log(`[Kick] ✅ Chatroom ID: ${CONFIG.kickId}`);
+    CONFIG.kickId = id;
+    console.log(`[Kick] ✅ Chatroom ID: ${CONFIG.kickId}`);
   }
   tryKickPusher(CONFIG.kickId);
 }
@@ -237,7 +266,9 @@ function tryKickPusher(channelId) {
   if (kickPusherWs) { try { kickPusherWs.terminate(); } catch(e) {} kickPusherWs = null; }
   if (kickPingInterval) { clearInterval(kickPingInterval); kickPingInterval = null; }
   const url = PUSHER_URLS[kickUrlIndex % PUSHER_URLS.length];
-  let ws; try { ws = new NodeWS(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }); } catch(e) { kickRetryTimeout = setTimeout(() => { kickUrlIndex++; tryKickPusher(channelId); }, kickRetryDelay); return; }
+  let ws;
+  try { ws = new NodeWS(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }); }
+  catch(e) { kickRetryTimeout = setTimeout(() => { kickUrlIndex++; tryKickPusher(channelId); }, kickRetryDelay); return; }
   kickPusherWs = ws;
   ws.on('open', () => {
     kickRetryDelay = 5000;
@@ -259,13 +290,27 @@ function tryKickPusher(channelId) {
       badges.forEach(b => { const bt = (b.type || '').toLowerCase(); if (bt === 'broadcaster' || bt === 'owner') kickRoles.push({ type: 'broadcaster', label: 'Owner' }); else if (bt === 'moderator' || bt === 'mod') kickRoles.push({ type: 'moderator', label: 'Mod' }); else if (bt === 'vip') kickRoles.push({ type: 'vip', label: 'VIP' }); else if (bt === 'subscriber' || bt === 'sub') kickRoles.push({ type: 'subscriber', label: 'Sub' }); else kickRoles.push({ type: bt, label: b.type }); });
       getKickAvatar(username, (avatar) => broadcast({ type: 'kick', platform: 'kick', chatname: username, chatmessage: content, nameColor, chatimg: avatar || null, roles: kickRoles, mid: d.id || ('kick-' + Date.now()) }));
     }
-    if (event === 'App\\Events\\GiftedSubscriptionsEvent' || event === 'App.Events.GiftedSubscriptionsEvent') { const gifter = (d.gifted_by && d.gifted_by.username) || 'Anónimo', qty = (d.gifted_usernames && d.gifted_usernames.length) || 1; getKickAvatar(gifter, (avatar) => broadcast({ type: 'donation', platform: 'kick', donationType: 'giftedsub', chatname: gifter, chatmessage: `¡Regaló ${qty} sub(s)!`, amount: qty, chatimg: avatar || null, nameColor: '#53FC18', roles: [], mid: 'kick-gift-' + Date.now() })); }
-    if (event === 'App\\Events\\SubscriptionEvent' || event === 'App.Events.SubscriptionEvent') { const username = (d.user_ids && d.usernames && d.usernames[0]) || d.username || 'KickUser'; getKickAvatar(username, (avatar) => broadcast({ type: 'donation', platform: 'kick', donationType: 'sub', chatname: username, chatmessage: '¡Se suscribió!', chatimg: avatar || null, nameColor: '#53FC18', roles: [], mid: 'kick-sub-' + Date.now() })); }
+    if (event === 'App\\Events\\GiftedSubscriptionsEvent' || event === 'App.Events.GiftedSubscriptionsEvent') {
+      const gifter = (d.gifted_by && d.gifted_by.username) || 'Anónimo', qty = (d.gifted_usernames && d.gifted_usernames.length) || 1;
+      getKickAvatar(gifter, (avatar) => broadcast({ type: 'donation', platform: 'kick', donationType: 'giftedsub', chatname: gifter, chatmessage: `¡Regaló ${qty} sub(s)!`, amount: qty, chatimg: avatar || null, nameColor: '#53FC18', roles: [], mid: 'kick-gift-' + Date.now() }));
+    }
+    if (event === 'App\\Events\\SubscriptionEvent' || event === 'App.Events.SubscriptionEvent') {
+      const uname = (d.usernames && d.usernames[0]) || d.username || 'KickUser';
+      getKickAvatar(uname, (avatar) => broadcast({ type: 'donation', platform: 'kick', donationType: 'sub', chatname: uname, chatmessage: '¡Se suscribió!', chatimg: avatar || null, nameColor: '#53FC18', roles: [], mid: 'kick-sub-' + Date.now() }));
+    }
   });
-  ws.on('close', () => { if (kickPingInterval) { clearInterval(kickPingInterval); kickPingInterval = null; } state.kick.connected = false; broadcastStatus(); kickUrlIndex++; kickRetryDelay = Math.min(kickRetryDelay * 1.5, 60000); kickRetryTimeout = setTimeout(() => tryKickPusher(channelId), kickRetryDelay); });
+  ws.on('close', () => {
+    if (kickPingInterval) { clearInterval(kickPingInterval); kickPingInterval = null; }
+    state.kick.connected = false; broadcastStatus();
+    kickUrlIndex++; kickRetryDelay = Math.min(kickRetryDelay * 1.5, 60000);
+    kickRetryTimeout = setTimeout(() => tryKickPusher(channelId), kickRetryDelay);
+  });
   ws.on('error', (e) => console.error('[Kick] WS error:', e.message));
 }
 
+// ══════════════════════════════════════════════════════════════
+//  TIKTOK
+// ══════════════════════════════════════════════════════════════
 async function connectTikTokConnector() {
   if (!CONFIG.tiktok || !WebcastPushConnection) return;
   const username = CONFIG.tiktok.startsWith('@') ? CONFIG.tiktok : '@' + CONFIG.tiktok;
@@ -282,111 +327,75 @@ async function connectTikTokConnector() {
 }
 setInterval(() => { if (state.tiktok.connected && state.tiktok.lastMsg > 0 && Date.now() - state.tiktok.lastMsg > 3 * 60 * 1000) { state.tiktok.connected = false; broadcastStatus(); connectTikTokConnector(); } }, 60000);
 
-function extractVideoId(input) {
-  if (!input) return null;
-  input = input.trim();
-  if (/^[a-zA-Z0-9_-]{11}$/.test(input)) return input;
-  const m = input.match(/(?:v=|youtu\.be\/|\/live\/|\/shorts\/)([a-zA-Z0-9_-]{11})/);
-  return m ? m[1] : null;
-}
+// ══════════════════════════════════════════════════════════════
+//  YOUTUBE — PROXY para el puente del navegador
+//  El navegador (dashboard) hace fetch a estos endpoints.
+//  El servidor reenvía la request a YouTube con headers reales.
+// ══════════════════════════════════════════════════════════════
 
-async function connectYouTube() {
-  if (!Masterchat) {
-    console.log('[YouTube] ❌ masterchat no instalado.');
-    return;
+// GET /api/yt-proxy?url=... → devuelve HTML crudo de YouTube
+app.get('/api/yt-proxy', (req, res) => {
+  const target = req.query.url;
+  if (!target || !target.startsWith('https://www.youtube.com/')) {
+    return res.status(400).json({ error: 'URL inválida' });
   }
-  if (state.youtube.mcInstance) {
-    try { state.youtube.mcInstance.stop(); } catch(e) {}
-    state.youtube.mcInstance = null;
-  }
-  if (state.youtube.retryTimer) { clearTimeout(state.youtube.retryTimer); state.youtube.retryTimer = null; }
+  const options = {
+    headers: {
+      'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+      'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+      'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Encoding': 'identity',
+      'Cache-Control':   'no-cache',
+    }
+  };
+  const ytReq = https.get(target, options, (ytRes) => {
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    ytRes.pipe(res);
+  });
+  ytReq.on('error', (e) => { if (!res.headersSent) res.status(500).json({ error: e.message }); });
+  ytReq.setTimeout(12000, () => { ytReq.destroy(); if (!res.headersSent) res.status(504).json({ error: 'timeout' }); });
+});
 
-  const videoId = state.youtube.videoId;
-  if (!videoId) {
-    console.log('[YouTube] ⏳ Sin videoId.');
-    state.youtube.connected = false;
-    broadcastStatus();
-    return;
-  }
+// POST /api/yt-chat → llama a la API interna de YouTube Live Chat
+app.post('/api/yt-chat', (req, res) => {
+  const { apiKey, continuation } = req.body;
+  if (!apiKey || !continuation) return res.status(400).json({ error: 'apiKey y continuation requeridos' });
 
-  console.log(`[YouTube] 🔄 Conectando a videoId: ${videoId}...`);
+  const bodyStr = JSON.stringify({
+    context: { client: { clientName: 'WEB', clientVersion: '2.20240101.00.00' } },
+    continuation
+  });
 
-  // ✅ COOKIE FIX: pasar credenciales para evitar 429
-  const rawCookie = (process.env.YOUTUBE_COOKIE || '').trim();
-  let credentials;
-  if (rawCookie) {
-    // Soporta tanto el valor crudo como "NombreCookie=valor"
-    const cookieValue = rawCookie.includes('=') ? rawCookie.split('=').slice(1).join('=') : rawCookie;
-    credentials = { DELEGATED_SESSION_ID: cookieValue, SESSION_ORIGIN: 'CLIENT_SETTINGS' };
-    console.log('[YouTube] 🍪 Usando YOUTUBE_COOKIE para autenticación');
-  }
+  const options = {
+    hostname: 'www.youtube.com',
+    path:     `/youtubei/v1/live_chat/get_live_chat?key=${apiKey}`,
+    method:   'POST',
+    headers: {
+      'Content-Type':    'application/json',
+      'Content-Length':  Buffer.byteLength(bodyStr),
+      'User-Agent':      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+      'Accept-Language': 'es-ES,es;q=0.9',
+      'Origin':          'https://www.youtube.com',
+      'Referer':         'https://www.youtube.com/',
+      'Accept-Encoding': 'identity',
+    }
+  };
 
-  try {
-    const mc = await Masterchat.init(videoId, '', { mode: 'live', ...(credentials ? { credentials } : {}) });
-    state.youtube.mcInstance = mc;
-
-    mc.on('chat', (action) => {
-      if (action.type !== 'addChatItemAction') return;
-      const item = action.item;
-      if (!item) return;
-
-      const authorName  = item.authorName || 'YouTuber';
-      const authorPhoto = item.authorPhoto?.url || null;
-      const roles = [];
-      if (item.isOwner)     roles.push({ type: 'broadcaster', label: 'Streamer' });
-      if (item.isModerator) roles.push({ type: 'moderator',   label: 'Mod' });
-      if (item.membership)  roles.push({ type: 'member',      label: 'Miembro' });
-
-      const getText = (msg) => {
-        if (!msg) return '';
-        if (stringify_mc) return stringify_mc(msg);
-        return Array.isArray(msg) ? msg.map(r => r.text || '').join('') : '';
-      };
-
-      if (!item.superchat && !item.isMembership) {
-        const text = getText(item.message);
-        if (!text) return;
-        broadcast({ type: 'youtube', platform: 'youtube', chatname: authorName, chatmessage: text, chatimg: authorPhoto, nameColor: '#FF0000', roles, mid: 'yt-' + (item.id || Date.now()) });
-      }
-      if (item.superchat) {
-        const sc = item.superchat;
-        broadcast({ type: 'donation', platform: 'youtube', donationType: 'superchat', chatname: authorName, chatmessage: getText(item.message) || '¡Super Chat!', chatimg: authorPhoto, nameColor: '#FF0000', amount: sc.amount || 0, amountDisplay: sc.displayString || String(sc.amount || ''), currency: sc.currency || 'USD', roles, mid: 'yt-sc-' + (item.id || Date.now()) });
-      }
-      if (item.isMembership) {
-        broadcast({ type: 'donation', platform: 'youtube', donationType: 'member', chatname: authorName, chatmessage: getText(item.message) || '¡Nuevo miembro!', chatimg: authorPhoto, nameColor: '#FF0000', roles, mid: 'yt-mem-' + (item.id || Date.now()) });
-      }
+  const ytReq = https.request(options, (ytRes) => {
+    let body = '';
+    ytRes.on('data', c => body += c);
+    ytRes.on('end', () => {
+      try { res.json(JSON.parse(body)); }
+      catch(e) { res.status(502).json({ error: 'Respuesta inválida de YouTube' }); }
     });
+  });
+  ytReq.on('error', (e) => { if (!res.headersSent) res.status(500).json({ error: e.message }); });
+  ytReq.setTimeout(12000, () => { ytReq.destroy(); if (!res.headersSent) res.status(504).json({ error: 'timeout' }); });
+  ytReq.write(bodyStr);
+  ytReq.end();
+});
 
-    mc.on('end', (reason) => {
-      console.log(`[YouTube] 🔴 Live terminado: ${reason || 'desconocido'}`);
-      state.youtube.connected  = false;
-      state.youtube.videoId    = CONFIG.youtubeVideoId || null;
-      state.youtube.mcInstance = null;
-      broadcastStatus();
-    });
-
-    mc.on('error', (err) => {
-      console.error('[YouTube] ❌ Error masterchat:', err?.message || err);
-      // Si es 429, reintenta en 30s
-      const delay = (err?.message || '').includes('429') ? 30000 : 15000;
-      state.youtube.retryTimer = setTimeout(connectYouTube, delay);
-    });
-
-    mc.listen();
-    state.youtube.connected = true;
-    console.log(`[YouTube] ✅ Conectado al chat sin API key 🎉`);
-    broadcastStatus();
-
-  } catch(err) {
-    console.error('[YouTube] ❌ Error conectando:', err?.message || err);
-    state.youtube.connected  = false;
-    state.youtube.mcInstance = null;
-    broadcastStatus();
-    const delay = (err?.message || '').includes('429') ? 60000 : 15000;
-    state.youtube.retryTimer = setTimeout(connectYouTube, delay);
-  }
-}
-
+// ── HTTP ENDPOINTS ───────────────────────────────────────────
 app.get('/health', (req, res) => res.json({
   ok: true, uptime: Math.floor(process.uptime()), messages: state.msgCount,
   clients: state.clients.size, twitch: state.twitch.connected, kick: state.kick.connected,
@@ -396,59 +405,29 @@ app.get('/health', (req, res) => res.json({
 
 app.get('/tiktok-preview', (req, res) => {
   const user = CONFIG.tiktok || req.query.user || '';
-  res.send(`<!DOCTYPE html><html><body style="background:#0f0f0f;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:system-ui;flex-direction:column;gap:20px"><div style="font-size:60px">🎵</div><h2>TikTok no permite embeds</h2>${user?`<a href="https://www.tiktok.com/@${user}/live" style="background:#FF0050;color:#fff;padding:12px 28px;border-radius:999px;text-decoration:none;font-weight:700">🔴 Ver @${user} en vivo</a>`:''}</body></html>`);
+  res.send(`<!DOCTYPE html><html><body style="background:#0f0f0f;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:system-ui;flex-direction:column;gap:20px"><div style="font-size:60px">🎵</div><h2>TikTok no permite embeds</h2>${user ? `<a href="https://www.tiktok.com/@${user}/live" style="background:#FF0050;color:#fff;padding:12px 28px;border-radius:999px;text-decoration:none;font-weight:700">🔴 Ver @${user} en vivo</a>` : ''}</body></html>`);
 });
 
 app.post('/api/tiktok/restart', (req, res) => { state.tiktok.connected = false; state.tiktok.restartCount++; broadcastStatus(); connectTikTokConnector(); res.json({ ok: true, restarts: state.tiktok.restartCount }); });
 app.post('/api/kick/restart',   (req, res) => { if (kickRetryTimeout) { clearTimeout(kickRetryTimeout); kickRetryTimeout = null; } state.kick.connected = false; CONFIG.kickId = process.env.KICK_CHANNEL_ID || ''; broadcastStatus(); connectKick(); res.json({ ok: true }); });
 
-app.post('/api/youtube/connect', (req, res) => {
-  const input = req.body.url || req.body.videoId || '';
-  const videoId = extractVideoId(input);
-  if (!videoId) return res.status(400).json({ error: 'URL o videoId inválido.' });
-  state.youtube.videoId = videoId;
-  connectYouTube();
-  res.json({ ok: true, videoId });
-});
-
-app.post('/api/youtube/video-id', (req, res) => {
-  const input = req.body.videoId || req.body.url || '';
-  const videoId = extractVideoId(input);
-  if (!videoId) return res.status(400).json({ error: 'videoId inválido' });
-  state.youtube.videoId = videoId;
-  connectYouTube();
-  res.json({ ok: true, videoId });
-});
-
-app.post('/api/youtube/restart', (req, res) => {
-  const input = (req.body && (req.body.videoId || req.body.url)) || '';
-  const videoId = extractVideoId(input);
-  if (videoId) state.youtube.videoId = videoId;
-  else state.youtube.videoId = CONFIG.youtubeVideoId || null;
-  connectYouTube();
-  res.json({ ok: true, videoId: state.youtube.videoId });
-});
-
 app.get('/api/status', (req, res) => res.json({
   twitch:  { connected: state.twitch.connected,  channel: CONFIG.twitch },
   kick:    { connected: state.kick.connected,    channel: CONFIG.kick },
   tiktok:  { connected: state.tiktok.connected,  user: CONFIG.tiktok },
-  youtube: { connected: state.youtube.connected, videoId: state.youtube.videoId, handle: CONFIG.youtubeHandle || CONFIG.youtubeChannelId },
+  youtube: { connected: state.youtube.connected, videoId: state.youtube.videoId, handle: CONFIG.youtubeHandle },
   clients: state.clients.size, messages: state.msgCount, uptime: Math.floor(process.uptime()),
 }));
 
+// ── ARRANCAR ─────────────────────────────────────────────────
 server.listen(CONFIG.port, () => {
-  console.log(`\n🎮 MEEVE MULTICHAT SERVER v2 — MASTERCHAT EDITION`);
-  console.log(`   Puerto         : ${CONFIG.port}`);
-  console.log(`   Twitch         : ${CONFIG.twitch || '(no config)'}`);
-  console.log(`   Kick           : ${CONFIG.kick   || '(no config)'}`);
-  console.log(`   TikTok         : ${CONFIG.tiktok || '(no config)'}`);
-  console.log(`   YouTube handle : ${CONFIG.youtubeHandle || CONFIG.youtubeChannelId || '(no config)'}`);
-  console.log(`   YouTube videoId: ${CONFIG.youtubeVideoId || '(pegar desde el panel cuando arranques el live)'}`);
-  console.log(`   YouTube cookie : ${process.env.YOUTUBE_COOKIE ? '✅ configurada' : '⚠️  no configurada (puede dar 429)'}`);
-  console.log(`   ⚡ YouTube mode : masterchat — SIN API KEY, SIN CUOTA\n`);
+  console.log(`\n🎮 MEEVE MULTICHAT SERVER v2 — BROWSER BRIDGE EDITION`);
+  console.log(`   Puerto  : ${CONFIG.port}`);
+  console.log(`   Twitch  : ${CONFIG.twitch || '(no config)'}`);
+  console.log(`   Kick    : ${CONFIG.kick   || '(no config)'}`);
+  console.log(`   TikTok  : ${CONFIG.tiktok || '(no config)'}`);
+  console.log(`   YouTube : puente navegador (sin API key, sin 429) ✅\n`);
   connectTwitch();
   connectKick();
   connectTikTokConnector();
-  connectYouTube();
 });
