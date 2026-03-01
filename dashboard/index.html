@@ -468,7 +468,7 @@
       <div class="card-header"><span class="card-title-text">▶️ YouTube — Puente Navegador</span></div>
       <div class="card-body">
         <div id="yt-bridge-status" class="info-box info-yellow">
-          🌐 Proxy local activo — corré <strong>proxy-local.js</strong> en tu PC.
+          📋 Pegá el link del live y presioná Conectar.
         </div>
         <div style="display:flex;gap:6px;align-items:center;margin-bottom:2px;">
           <label style="margin:0;white-space:nowrap;">Proxy:</label>
@@ -735,9 +735,14 @@ var VISOR_CONFIG = {
   },
   youtube: {
     label: 'YouTube Live Chat', badge: 'YOUTUBE',
-    getUrl: function(ch) { return null; },
-    noChMsg: 'YouTube no soporta chat embebido',
-    noChSub: 'YouTube bloquea los iframes de chat. Usá el botón "📺 Live" del panel lateral para abrir en nueva pestaña.'
+    getUrl: function(ch) {
+      // ch aquí es el videoId guardado en ytBridge
+      var vid = (typeof ytBridge !== 'undefined' && ytBridge.videoId) ? ytBridge.videoId : ch;
+      if (!vid) return null;
+      return 'https://www.youtube.com/live_chat?v=' + vid + '&embed_domain=' + window.location.hostname;
+    },
+    noChMsg: 'Sin video ID configurado',
+    noChSub: 'Pegá el link del live en el panel de YouTube y presioná Conectar primero.'
   },
   tiktok: {
     label: 'TikTok Live', badge: 'TIKTOK',
@@ -826,16 +831,7 @@ function handleStatus(data){
 function setPlatformStatus(p,c,ch){var dot=document.getElementById('dot-'+p),el=document.getElementById('ch-'+p);if(dot)dot.className='platform-dot'+(c?' ok':'');if(el)el.textContent=ch||'—';}
 
 // ═══ YOUTUBE BROWSER BRIDGE ═══
-var ytBridge = {
-  active: false,
-  videoId: null,
-  pollInterval: null,
-  continuation: null,
-  apiKey: null,
-  seenIds: new Set(),
-  retryCount: 0,
-  MAX_RETRY: 5
-};
+var ytBridge = { videoId: null, active: false };
 
 function extractVideoId(input) {
   if (!input) return null;
@@ -853,26 +849,25 @@ function connectYouTubeBrowser() {
     return;
   }
   store.set('ytVideoUrl', input);
-  disconnectYouTubeBrowser();
   ytBridge.videoId = videoId;
-  ytBridge.active = true;
-  ytBridge.retryCount = 0;
-  ytBridge.seenIds = new Set();
-  ytBridge.continuation = null;
-  ytBridge.apiKey = null;
-  setYtBridgeStatus('yellow', '⏳ Obteniendo chat en vivo...');
-  setPlatformStatus('youtube', false, videoId);
-  fetchYtInitialPage(videoId);
+  ytBridge.active  = true;
+  setPlatformStatus('youtube', true, videoId);
+  document.getElementById('ch-youtube').textContent = videoId;
+  setYtBridgeStatus('green', '✅ Video configurado: ' + videoId + ' — Abrí el visor con el botón YouTube abajo.');
+  // Notificar al servidor
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'youtube_connected', videoId: videoId }));
+  // Abrir visor automáticamente
+  openChatVisor('youtube');
+  toast('▶️ YouTube chat abierto');
 }
 
 function disconnectYouTubeBrowser() {
-  ytBridge.active = false;
-  if (ytBridge.pollInterval) { clearInterval(ytBridge.pollInterval); ytBridge.pollInterval = null; }
-  ytBridge.continuation = null;
-  ytBridge.apiKey = null;
-  ytBridge.seenIds = new Set();
+  ytBridge.active  = false;
+  ytBridge.videoId = null;
   setPlatformStatus('youtube', false, '—');
-  setYtBridgeStatus('yellow', '🌐 Tu navegador leerá el chat directamente (sin API key, sin cuota).');
+  setYtBridgeStatus('yellow', '📋 Pegá el link del live y presioná Conectar.');
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'youtube_disconnected' }));
+  closeChatVisor();
 }
 
 function setYtBridgeStatus(color, html) {
@@ -880,162 +875,6 @@ function setYtBridgeStatus(color, html) {
   if (!box) return;
   box.className = 'info-box info-' + color;
   box.innerHTML = html;
-}
-
-async function fetchYtInitialPage(videoId) {
-  if (!ytBridge.active) return;
-  try {
-    var ytUrl = 'https://www.youtube.com/watch?v=' + videoId;
-    // Primero intenta proxy local (tu PC), luego el servidor de Render
-    var proxyBase = ytBridge.proxyBase || 'http://localhost:3001';
-    var r = await fetch(proxyBase + '/yt-proxy?url=' + encodeURIComponent(ytUrl));
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    var html = await r.text();
-
-    // Extraer API key (INNERTUBE_API_KEY)
-    var keyMatch = html.match(/"INNERTUBE_API_KEY"\s*:\s*"([^"]+)"/);
-    if (keyMatch) ytBridge.apiKey = keyMatch[1];
-
-    // Extraer continuation token del live chat
-    var contMatch = html.match(/"continuation"\s*:\s*"([^"]+)"[\s\S]{0,200}?"liveChatRenderer"/);
-    if (!contMatch) contMatch = html.match(/liveChatRenderer[\s\S]{0,500}?"continuation"\s*:\s*"([^"]+)"/);
-    if (!contMatch) contMatch = html.match(/"invalidationContinuationData"[\s\S]{0,200}?"continuation"\s*:\s*"([^"]+)"/);
-    // Fallback: buscar cualquier continuation cerca de "live_chat"
-    if (!contMatch) {
-      var lcIdx = html.indexOf('live_chat');
-      if (lcIdx > -1) {
-        var chunk = html.slice(Math.max(0, lcIdx - 200), lcIdx + 2000);
-        var cm2 = chunk.match(/"continuation"\s*:\s*"([^"]+)"/);
-        if (cm2) contMatch = cm2;
-      }
-    }
-
-    if (!ytBridge.apiKey || !contMatch) {
-      ytBridge.retryCount++;
-      if (ytBridge.retryCount <= ytBridge.MAX_RETRY) {
-        setYtBridgeStatus('yellow', '⏳ Intentando conectar... (' + ytBridge.retryCount + '/' + ytBridge.MAX_RETRY + ')');
-        setTimeout(function() { fetchYtInitialPage(videoId); }, 5000);
-      } else {
-        setYtBridgeStatus('red', '❌ No se pudo obtener el chat. ¿El live está activo y público?');
-        setPlatformStatus('youtube', false, '—');
-      }
-      return;
-    }
-
-    ytBridge.continuation = contMatch[1] || contMatch[0];
-    setYtBridgeStatus('green', '✅ Chat de YouTube conectado (puente navegador) — video: ' + videoId);
-    setPlatformStatus('youtube', true, videoId);
-    document.getElementById('ch-youtube').textContent = videoId;
-
-    // Iniciar polling
-    pollYtChat();
-    ytBridge.pollInterval = setInterval(pollYtChat, 5000);
-
-  } catch(err) {
-    ytBridge.retryCount++;
-    if (ytBridge.retryCount <= ytBridge.MAX_RETRY) {
-      setYtBridgeStatus('yellow', '⏳ Reintentando... (' + ytBridge.retryCount + '/' + ytBridge.MAX_RETRY + ') — ' + (err.message||''));
-      setTimeout(function() { fetchYtInitialPage(videoId); }, 6000);
-    } else {
-      setYtBridgeStatus('red', '❌ Error: ' + (err.message || err));
-      setPlatformStatus('youtube', false, '—');
-    }
-  }
-}
-
-async function pollYtChat() {
-  if (!ytBridge.active || !ytBridge.continuation || !ytBridge.apiKey) return;
-  var proxyBase = ytBridge.proxyBase || 'http://localhost:3001';
-  try {
-    var r = await fetch(proxyBase + '/yt-chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ apiKey: ytBridge.apiKey, continuation: ytBridge.continuation })
-    });
-    if (!r.ok) return;
-    var data = await r.json();
-
-    // Actualizar continuation para el siguiente poll
-    var lcc = data.continuationContents && data.continuationContents.liveChatContinuation;
-    if (!lcc) return;
-
-    var newCont = null;
-    if (lcc.continuations && lcc.continuations[0]) {
-      var c0 = lcc.continuations[0];
-      newCont = (c0.invalidationContinuationData && c0.invalidationContinuationData.continuation) ||
-                (c0.timedContinuationData && c0.timedContinuationData.continuation) ||
-                (c0.liveChatReplayContinuationData && c0.liveChatReplayContinuationData.continuation);
-    }
-    if (newCont) ytBridge.continuation = newCont;
-
-    var actions = lcc.actions || [];
-    actions.forEach(function(action) {
-      var item = action.addChatItemAction && action.addChatItemAction.item;
-      if (!item) return;
-      var renderer = item.liveChatTextMessageRenderer || item.liveChatPaidMessageRenderer || item.liveChatMembershipItemRenderer;
-      if (!renderer) return;
-      var msgId = renderer.id;
-      if (msgId && ytBridge.seenIds.has(msgId)) return;
-      if (msgId) ytBridge.seenIds.add(msgId);
-      if (ytBridge.seenIds.size > 500) {
-        var arr = Array.from(ytBridge.seenIds);
-        ytBridge.seenIds = new Set(arr.slice(arr.length - 300));
-      }
-
-      var authorName = renderer.authorName && renderer.authorName.simpleText || 'YouTuber';
-      var authorPhoto = null;
-      if (renderer.authorPhoto && renderer.authorPhoto.thumbnails && renderer.authorPhoto.thumbnails.length) {
-        authorPhoto = renderer.authorPhoto.thumbnails[renderer.authorPhoto.thumbnails.length - 1].url;
-      }
-
-      var roles = [];
-      var badges = renderer.authorBadges || [];
-      badges.forEach(function(b) {
-        var label = b.liveChatAuthorBadgeRenderer && (b.liveChatAuthorBadgeRenderer.tooltip || '');
-        if (label.toLowerCase().indexOf('owner') > -1 || label.toLowerCase().indexOf('streamer') > -1)
-          roles.push({ type: 'broadcaster', label: 'Streamer' });
-        else if (label.toLowerCase().indexOf('moderator') > -1 || label.toLowerCase().indexOf('mod') > -1)
-          roles.push({ type: 'moderator', label: 'Mod' });
-        else if (label.toLowerCase().indexOf('member') > -1)
-          roles.push({ type: 'member', label: 'Miembro' });
-      });
-
-      // Texto del mensaje
-      var text = '';
-      if (renderer.message && renderer.message.runs) {
-        text = renderer.message.runs.map(function(r) { return r.text || ''; }).join('');
-      }
-
-      // Superchat
-      if (item.liveChatPaidMessageRenderer) {
-        var sc = renderer;
-        var amount = sc.purchaseAmountText && sc.purchaseAmountText.simpleText || '';
-        var scText = text || '¡Super Chat!';
-        var msg = { type: 'donation', platform: 'youtube', donationType: 'superchat', chatname: authorName, chatmessage: scText, chatimg: authorPhoto, nameColor: '#FF0000', amount: amount, amountDisplay: amount, roles: roles, mid: 'yt-sc-' + (msgId || Date.now()) };
-        if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
-        appendMessage(msg);
-        return;
-      }
-
-      // Membresía
-      if (item.liveChatMembershipItemRenderer) {
-        var memText = text || '¡Nuevo miembro!';
-        var msg = { type: 'donation', platform: 'youtube', donationType: 'member', chatname: authorName, chatmessage: memText, chatimg: authorPhoto, nameColor: '#FF0000', roles: roles, mid: 'yt-mem-' + (msgId || Date.now()) };
-        if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
-        appendMessage(msg);
-        return;
-      }
-
-      // Mensaje normal
-      if (!text) return;
-      var msg = { type: 'youtube', platform: 'youtube', chatname: authorName, chatmessage: text, chatimg: authorPhoto, nameColor: '#FF0000', roles: roles, mid: 'yt-' + (msgId || Date.now()) };
-      if (ws && ws.readyState === 1) ws.send(JSON.stringify(msg));
-      appendMessage(msg);
-    });
-
-  } catch(err) {
-    // Error silencioso en polling, reintenta solo
-  }
 }
 
 // ═══ APPEND MESSAGE ═══
@@ -1183,7 +1022,7 @@ async function sendKickId(idParam){
 }
 async function restartTikTok(){var su=store.get('serverUrl');if(!su)return toast('Configura la URL del servidor primero');var hu=su.replace(/^wss?/,'https').replace(/\/$/,'');try{var r=await fetch(hu+'/api/tiktok/restart',{method:'POST'});var d=await r.json();toast(d.ok?'🔄 TikTok reconectando...':'❌ Error');}catch(e){toast('❌ No se pudo contactar el servidor');}}
 function openTikTokLive(){var u=currentChannels.tiktok||'';if(!u)return toast('TikTok no configurado');window.open('https://www.tiktok.com/@'+u+'/live','_blank','noopener');}
-function openYouTubeLive(){var vid=ytBridge.videoId||'';if(vid){window.open('https://www.youtube.com/watch?v='+vid,'_blank','noopener');}else{var c=currentChannels.youtube||'';if(!c)return toast('YouTube no configurado');var h=c.startsWith('@')?c:'@'+c;window.open('https://www.youtube.com/'+h+'/live','_blank','noopener');}}
+function openYouTubeLive(){var vid=ytBridge.videoId||'';if(vid){window.open('https://www.youtube.com/watch?v='+vid,'_blank','noopener');}else{toast('Pegá el link del live primero');}}
 function sendCustomMessage(){var input=document.getElementById('custom-msg-input'),text=input.value.trim();if(!text)return;if(!isConnected||!ws)return toast('⚠️ No hay conexión');ws.send(JSON.stringify({type:'custom_message',user:'Tú (dashboard)',text:text}));input.value='';}
 
 // ═══ OVERLAY URLs ═══
