@@ -17,7 +17,7 @@ try {
   ({ WebcastPushConnection } = require('tiktok-live-connector'));
 } catch(e) { console.log('[TikTok] tiktok-live-connector no disponible'); }
 
-// YouTube: bridge desde el navegador (sin youtube-chat, sin API key)
+// YouTube: API v3 — polling desde el servidor (sin límites de IP, sin CORS)
 
 const app    = express();
 const server = http.createServer(app);
@@ -150,25 +150,12 @@ wss.on('connection', (ws) => {
       if (msg.type === 'kick_donation')     handleKickDonationFromBrowser(msg);
       if (msg.type === 'kick_disconnected') { state.kick.connected = false; broadcastStatus(); }
       if (msg.type === 'kick_connected')    { state.kick.connected = true;  broadcastStatus(); }
-      // YouTube bridge: mensajes enviados desde el navegador del streamer
-      if (msg.type === 'youtube_message') {
-        state.youtube.connected = true;
-        state.youtube.videoId   = msg.videoId || state.youtube.videoId;
-        broadcast({ type: 'youtube', platform: 'youtube', chatname: msg.chatname || 'YouTuber', chatmessage: msg.chatmessage || '', chatimg: msg.chatimg || null, nameColor: '#FF0000', roles: msg.roles || [], mid: msg.mid || ('yt-' + Date.now()) });
-      }
-      if (msg.type === 'youtube_donation') {
-        state.youtube.connected = true;
-        broadcast({ type: 'donation', platform: 'youtube', donationType: msg.donationType || 'superchat', chatname: msg.chatname || 'YouTuber', chatmessage: msg.chatmessage || '', chatimg: msg.chatimg || null, nameColor: '#FF0000', amount: msg.amount || 0, amountDisplay: msg.amountDisplay || '', roles: msg.roles || [], mid: msg.mid || ('yt-don-' + Date.now()) });
-      }
-      if (msg.type === 'youtube_connected') {
-        state.youtube.connected = true;
-        state.youtube.videoId   = msg.videoId || null;
-        broadcastStatus();
+      // YouTube API v3 — conectar/desconectar desde el dashboard
+      if (msg.type === 'youtube_connect') {
+        if (msg.videoId) connectYouTubeApi(msg.videoId);
       }
       if (msg.type === 'youtube_disconnected') {
-        state.youtube.connected = false;
-        state.youtube.videoId   = null;
-        broadcastStatus();
+        disconnectYouTubeApi();
       }
     } catch(e) {}
   });
@@ -314,9 +301,195 @@ async function connectTikTokConnector() {
 }
 setInterval(() => { if (state.tiktok.connected && state.tiktok.lastMsg > 0 && Date.now() - state.tiktok.lastMsg > 3 * 60 * 1000) { state.tiktok.connected = false; broadcastStatus(); connectTikTokConnector(); } }, 60000);
 
-// ══ YOUTUBE — puente navegador (el browser hace el polling, el servidor recibe por WS) ══
-// Los mensajes llegan por WebSocket desde el dashboard del streamer
-// El navegador tiene IP residencial → sin 429, sin bloqueos de datacenter
+// ══ YOUTUBE — API v3 polling desde el servidor ══
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || '';
+
+let ytPollState = {
+  active: false,
+  videoId: null,
+  liveChatId: null,
+  pageToken: null,
+  pollTimer: null,
+  errorCount: 0,
+  seenIds: new Set(),
+};
+
+async function ytApiGet(path) {
+  return new Promise((resolve, reject) => {
+    const url = `https://www.googleapis.com/youtube/v3/${path}&key=${YOUTUBE_API_KEY}`;
+    const req = https.get(url, { headers: { 'Accept': 'application/json' } }, (res) => {
+      let body = '';
+      res.on('data', c => body += c);
+      res.on('end', () => {
+        try { resolve({ status: res.statusCode, data: JSON.parse(body) }); }
+        catch(e) { reject(new Error('JSON parse error')); }
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(10000, () => { req.destroy(); reject(new Error('timeout')); });
+  });
+}
+
+async function getLiveChatId(videoId) {
+  const r = await ytApiGet(`videos?part=liveStreamingDetails&id=${videoId}`);
+  if (r.status !== 200) throw new Error(`API error ${r.status}: ${JSON.stringify(r.data.error)}`);
+  const items = r.data.items;
+  if (!items || !items.length) throw new Error('Video no encontrado');
+  const details = items[0].liveStreamingDetails;
+  if (!details || !details.activeLiveChatId) throw new Error('El video no tiene chat en vivo activo');
+  return details.activeLiveChatId;
+}
+
+async function pollYouTubeChat() {
+  if (!ytPollState.active || !ytPollState.liveChatId) return;
+  if (!YOUTUBE_API_KEY) {
+    console.error('[YouTube] YOUTUBE_API_KEY no configurada');
+    return;
+  }
+
+  try {
+    let path = `liveChat/messages?part=snippet,authorDetails&liveChatId=${ytPollState.liveChatId}&maxResults=200`;
+    if (ytPollState.pageToken) path += `&pageToken=${ytPollState.pageToken}`;
+
+    const r = await ytApiGet(path);
+
+    if (r.status === 403) {
+      console.error('[YouTube] API key inválida o cuota agotada:', r.data.error?.message);
+      state.youtube.connected = false;
+      broadcastStatus();
+      ytPollState.active = false;
+      broadcast({ type: 'system', platform: 'system', chatname: 'Sistema', chatmessage: '⚠️ YouTube API: ' + (r.data.error?.message || 'error 403'), nameColor: '#ffaa00', mid: 'sys-yt-' + Date.now() });
+      return;
+    }
+    if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
+
+    ytPollState.errorCount = 0;
+    const data = r.data;
+
+    // Actualizar pageToken para el próximo poll
+    if (data.nextPageToken) ytPollState.pageToken = data.nextPageToken;
+
+    // Procesar mensajes
+    const items = data.items || [];
+    items.forEach(item => {
+      const id = item.id;
+      if (!id || ytPollState.seenIds.has(id)) return;
+      ytPollState.seenIds.add(id);
+      if (ytPollState.seenIds.size > 1000) {
+        const arr = Array.from(ytPollState.seenIds);
+        ytPollState.seenIds = new Set(arr.slice(arr.length - 500));
+      }
+
+      const snippet = item.snippet || {};
+      const author  = item.authorDetails || {};
+      const msgType = snippet.type || '';
+
+      const name   = author.displayName || 'YouTuber';
+      const avatar = author.profileImageUrl || null;
+      const roles  = [];
+
+      if (author.isChatOwner)      roles.push({ type: 'broadcaster', label: 'Streamer' });
+      if (author.isChatModerator)  roles.push({ type: 'moderator',   label: 'Mod' });
+      if (author.isChatSponsor)    roles.push({ type: 'member',      label: '⭐ Miembro' });
+      if (author.isVerified)       roles.push({ type: 'verified',    label: '✓ Verificado' });
+
+      if (msgType === 'superChatEvent') {
+        const sc = snippet.superChatDetails || {};
+        broadcast({
+          type: 'donation', platform: 'youtube', donationType: 'superchat',
+          chatname: name, chatmessage: sc.userComment || '¡Superchat!',
+          chatimg: avatar, nameColor: '#FF0000', amount: (sc.amountMicros || 0) / 1000000,
+          amountDisplay: sc.amountDisplayString || '', roles,
+          mid: 'yt-sc-' + id
+        });
+        return;
+      }
+
+      if (msgType === 'memberMilestoneChatEvent' || msgType === 'newSponsorEvent') {
+        broadcast({
+          type: 'donation', platform: 'youtube', donationType: 'member',
+          chatname: name, chatmessage: snippet.memberMilestoneChatDetails?.userComment || '¡Nuevo Miembro!',
+          chatimg: avatar, nameColor: '#FF0000', roles, mid: 'yt-mb-' + id
+        });
+        return;
+      }
+
+      if (msgType === 'textMessageEvent') {
+        const msgText = snippet.textMessageDetails?.messageText || '';
+        if (!msgText) return;
+        broadcast({
+          type: 'youtube', platform: 'youtube',
+          chatname: name, chatmessage: msgText,
+          chatimg: avatar, nameColor: '#FF0000', roles,
+          mid: 'yt-' + id
+        });
+      }
+    });
+
+    // Respetar el intervalo recomendado por YouTube
+    const interval = Math.max((data.pollingIntervalMillis || 5000), 3000);
+    if (ytPollState.active) ytPollState.pollTimer = setTimeout(pollYouTubeChat, interval);
+
+  } catch(e) {
+    ytPollState.errorCount++;
+    console.error(`[YouTube] Error poll #${ytPollState.errorCount}:`, e.message);
+    if (ytPollState.errorCount > 5) {
+      console.error('[YouTube] Demasiados errores, deteniendo polling');
+      state.youtube.connected = false;
+      ytPollState.active = false;
+      broadcastStatus();
+      return;
+    }
+    if (ytPollState.active) ytPollState.pollTimer = setTimeout(pollYouTubeChat, 15000);
+  }
+}
+
+async function connectYouTubeApi(videoId) {
+  // Detener polling anterior
+  if (ytPollState.pollTimer) { clearTimeout(ytPollState.pollTimer); ytPollState.pollTimer = null; }
+  ytPollState.active    = false;
+  ytPollState.pageToken = null;
+  ytPollState.errorCount = 0;
+
+  if (!YOUTUBE_API_KEY) {
+    console.error('[YouTube] YOUTUBE_API_KEY no configurada en variables de entorno');
+    broadcast({ type: 'system', platform: 'system', chatname: 'Sistema', chatmessage: '⚠️ Falta YOUTUBE_API_KEY en las variables de entorno de Render', nameColor: '#ffaa00', mid: 'sys-yt-' + Date.now() });
+    return;
+  }
+
+  console.log(`[YouTube] Conectando a video ${videoId}...`);
+  state.youtube.videoId = videoId;
+
+  try {
+    const liveChatId = await getLiveChatId(videoId);
+    ytPollState.liveChatId = liveChatId;
+    ytPollState.videoId    = videoId;
+    ytPollState.active     = true;
+    state.youtube.connected = true;
+    state.youtube.videoId   = videoId;
+    console.log(`[YouTube] ✅ Live chat conectado: ${liveChatId}`);
+    broadcastStatus();
+    // Primera poll con delay para obtener solo mensajes nuevos
+    ytPollState.pollTimer = setTimeout(pollYouTubeChat, 2000);
+  } catch(e) {
+    console.error('[YouTube] Error al conectar:', e.message);
+    state.youtube.connected = false;
+    state.youtube.videoId   = null;
+    broadcastStatus();
+    broadcast({ type: 'system', platform: 'system', chatname: 'Sistema', chatmessage: '❌ YouTube: ' + e.message, nameColor: '#ff4444', mid: 'sys-yt-' + Date.now() });
+  }
+}
+
+function disconnectYouTubeApi() {
+  ytPollState.active = false;
+  if (ytPollState.pollTimer) { clearTimeout(ytPollState.pollTimer); ytPollState.pollTimer = null; }
+  ytPollState.liveChatId = null;
+  ytPollState.pageToken  = null;
+  ytPollState.videoId    = null;
+  state.youtube.connected = false;
+  state.youtube.videoId   = null;
+  broadcastStatus();
+}
 
 // ══ ENDPOINTS VARIOS ══
 app.get('/health', (req, res) => res.json({
@@ -342,13 +515,26 @@ app.get('/api/status', (req, res) => res.json({
   clients: state.clients.size, messages: state.msgCount, uptime: Math.floor(process.uptime()),
 }));
 
+// ══ ENDPOINTS YOUTUBE API v3 ══
+app.post('/api/youtube/connect', (req, res) => {
+  const { videoId } = req.body;
+  if (!videoId) return res.status(400).json({ error: 'videoId requerido' });
+  connectYouTubeApi(videoId);
+  res.json({ ok: true, videoId });
+});
+
+app.post('/api/youtube/disconnect', (req, res) => {
+  disconnectYouTubeApi();
+  res.json({ ok: true });
+});
+
 server.listen(CONFIG.port, () => {
   console.log(`\n🎮 MEEVE MULTICHAT SERVER v2 — BROWSER BRIDGE EDITION`);
   console.log(`   Puerto  : ${CONFIG.port}`);
   console.log(`   Twitch  : ${CONFIG.twitch || '(no config)'}`);
   console.log(`   Kick    : ${CONFIG.kick   || '(no config)'}`);
   console.log(`   TikTok  : ${CONFIG.tiktok || '(no config)'}`);
-  console.log(`   YouTube : puente navegador (sin API key, sin 429) ✅\n`);
+  console.log(`   YouTube : API v3 ${YOUTUBE_API_KEY ? '✅ key configurada' : '❌ falta YOUTUBE_API_KEY'}\n`);
   connectTwitch();
   connectKick();
   connectTikTokConnector();
