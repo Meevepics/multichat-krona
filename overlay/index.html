@@ -85,10 +85,6 @@
     var SERVER_URL  = urlParams.get('server') || 'wss://localhost:3000';
     var MAX_MESSAGES = urlParams.has('limit') ? parseInt(urlParams.get('limit')) : 50;
     var MAX_SPACER   = 5000;
-    // msgtime=0 => no desaparece; msgtime=N => desaparece tras N segundos
-    var MSG_TIME_MS = urlParams.has('msgtime') ? (parseInt(urlParams.get('msgtime')) * 1000) : 0;
-
-    var msgTimers = {};
 
     (function(){
       var c=document.getElementById('particles');
@@ -205,24 +201,6 @@
         gsap.to(old,{opacity:0,duration:0.3,onComplete:function(){old.remove();}});
       }
       setTimeout(adjustScroll, 80);
-
-      // Auto-desaparición si msgtime > 0
-      if (MSG_TIME_MS > 0) {
-        var mid = msgDiv.id;
-        if (msgTimers[mid]) clearTimeout(msgTimers[mid]);
-        msgTimers[mid] = setTimeout(function() {
-          delete msgTimers[mid];
-          gsap.to(msgDiv, {opacity:0, y:-20, duration:0.5, onComplete:function(){
-            if(msgDiv.parentNode) {
-              var oldH = msgDiv.offsetHeight + (parseFloat(getComputedStyle(msgDiv).marginBottom)||12);
-              var cur = parseFloat(topSpacer.style.height)||0;
-              topSpacer.style.height = Math.max(0, cur - oldH) + 'px';
-              msgDiv.remove();
-              adjustScroll();
-            }
-          }});
-        }, MSG_TIME_MS);
-      }
     }
 
     var ws, retryDelay=1000;
