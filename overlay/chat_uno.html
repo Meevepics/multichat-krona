@@ -24,6 +24,10 @@
     .bubble-inner{position:relative;background:rgba(0,15,15,0.75);border:2px solid var(--green);border-radius:6px;padding:20px 24px;box-shadow:var(--glow),inset 0 0 30px rgba(0,255,157,0.03);overflow:hidden;}
     .bubble-inner::before{content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(0,255,157,0.08),transparent);animation:specSweep 3s ease-in-out infinite;}
     @keyframes specSweep{0%{left:-100%;}50%{left:100%;}100%{left:100%;}}
+
+    /* Progress bar for auto-hide */
+    .msg-progress{position:absolute;bottom:0;left:0;height:3px;background:var(--green);box-shadow:0 0 8px var(--green),0 0 16px rgba(0,255,157,0.4);width:100%;transform-origin:left;border-radius:0 0 0 6px;opacity:0.85;}
+
     .bubble-inner.twitch{border-color:#9146FF;box-shadow:0 0 15px rgba(145,70,255,0.3);}
     .bubble-inner.kick  {border-color:#53FC18;box-shadow:0 0 15px rgba(83,252,24,0.3);}
     .bubble-inner.tiktok{border-color:#FF0050;box-shadow:0 0 15px rgba(255,0,80,0.3);}
@@ -64,6 +68,13 @@
   <script>
     var urlParams  = new URLSearchParams(window.location.search);
     var SERVER_URL = urlParams.get('server') || 'wss://localhost:3000';
+
+    // ── Auto-hide config ──────────────────────────────────────────────────────
+    // autohide=0 → desactivar (default chat uno: activo)
+    var AUTO_HIDE    = urlParams.get('autohide') !== '0';
+    // showtime en segundos (default: 12s)
+    var SHOW_TIME_MS = (parseInt(urlParams.get('showtime')) || 12) * 1000;
+    // ─────────────────────────────────────────────────────────────────────────
 
     (function(){
       var c=document.getElementById('particles');
@@ -118,6 +129,41 @@
     var processingMsg=false, pendingMsg=null, lastHash='';
     function msgHash(d){return(d.chatname||'')+'_'+(d.chatmessage||'')+'_'+(d.mid||'');}
 
+    var hideTimer=null, hideProgressTween=null;
+    function clearHideTimer(){
+      if(hideTimer){clearTimeout(hideTimer);hideTimer=null;}
+      if(hideProgressTween){hideProgressTween.kill();hideProgressTween=null;}
+    }
+
+    function scheduleHide(msgDiv){
+      if(!AUTO_HIDE){
+        processingMsg=false;
+        drainPending();
+        return;
+      }
+      clearHideTimer();
+      var bar=msgDiv.querySelector('.msg-progress');
+      if(bar){
+        hideProgressTween=gsap.to(bar,{scaleX:0,duration:SHOW_TIME_MS/1000,ease:'none'});
+      }
+      hideTimer=setTimeout(function(){
+        if(!msgDiv.parentNode){processingMsg=false;drainPending();return;}
+        gsap.to(msgDiv,{
+          opacity:0,y:-30,scale:0.9,
+          duration:0.4,ease:'power2.in',
+          onComplete:function(){
+            if(msgDiv.parentNode) msgDiv.remove();
+            processingMsg=false;
+            drainPending();
+          }
+        });
+      }, SHOW_TIME_MS);
+    }
+
+    function drainPending(){
+      if(pendingMsg){var n=pendingMsg;pendingMsg=null;setTimeout(function(){showMessage(n);},100);}
+    }
+
     function addMessage(data) {
       if (!data.chatname&&!data.chatmessage) return;
       var h=msgHash(data);
@@ -128,6 +174,7 @@
 
     function showMessage(data) {
       processingMsg=true;
+      clearHideTimer();
       var old=chatContainer.querySelector('.message-bubble');
       if (old) {
         gsap.to(old,{opacity:0,y:-30,scale:0.85,duration:0.3,onComplete:function(){old.remove();render(data);}});
@@ -162,7 +209,9 @@
         donHTML='<div class="donation-box">'+dl+'</div>';
       }
 
-      msgDiv.innerHTML='<div class="bubble-inner '+platform+'"><div class="msg-header">'+avatarHTML+'<div class="username-box"><span class="username" style="'+nameStyle+'">'+esc(data.chatname||'')+'</span>'+platBadge+rolesHTML+badgesHTML+'</div></div><div class="msg-content">'+msgHTML+'</div>'+donHTML+'</div>';
+      var progressBar = AUTO_HIDE ? '<div class="msg-progress"></div>' : '';
+
+      msgDiv.innerHTML='<div class="bubble-inner '+platform+'"><div class="msg-header">'+avatarHTML+'<div class="username-box"><span class="username" style="'+nameStyle+'">'+esc(data.chatname||'')+'</span>'+platBadge+rolesHTML+badgesHTML+'</div></div><div class="msg-content">'+msgHTML+'</div>'+donHTML+progressBar+'</div>';
 
       chatContainer.appendChild(msgDiv);
       gsap.fromTo(msgDiv,
@@ -170,8 +219,7 @@
         {opacity:1,y:0,scale:1,rotation:0,duration:0.7,ease:'back.out(2)',
           onComplete:function(){
             if(isDonation){ gsap.to(msgDiv.querySelector('.bubble-inner'),{boxShadow:'0 0 30px rgba(0,255,157,0.5)',yoyo:true,repeat:3,duration:0.4}); }
-            processingMsg=false;
-            if(pendingMsg){var n=pendingMsg;pendingMsg=null;setTimeout(function(){showMessage(n);},100);}
+            scheduleHide(msgDiv);
           }
         }
       );
@@ -184,7 +232,6 @@
       ws.onmessage=function(e){
         try{
           var d=JSON.parse(e.data);
-          // ✅ filtrar status, highlight y highlight_clear — no mostrar como mensajes
           if(d.type==='status'||d.type==='highlight'||d.type==='highlight_clear')return;
           addMessage(d);
         }catch(err){}
