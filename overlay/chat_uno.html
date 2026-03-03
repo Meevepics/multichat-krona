@@ -64,9 +64,6 @@
   <script>
     var urlParams  = new URLSearchParams(window.location.search);
     var SERVER_URL = urlParams.get('server') || 'wss://localhost:3000';
-    // msgtime=0 => no desaparece; msgtime=N => se va tras N segundos
-    var MSG_TIME_MS = urlParams.has('msgtime') ? (parseInt(urlParams.get('msgtime')) * 1000) : 0;
-    var autoHideTimer = null;
 
     (function(){
       var c=document.getElementById('particles');
@@ -173,13 +170,6 @@
         {opacity:1,y:0,scale:1,rotation:0,duration:0.7,ease:'back.out(2)',
           onComplete:function(){
             if(isDonation){ gsap.to(msgDiv.querySelector('.bubble-inner'),{boxShadow:'0 0 30px rgba(0,255,157,0.5)',yoyo:true,repeat:3,duration:0.4}); }
-            // Auto-desaparición
-            if (autoHideTimer) clearTimeout(autoHideTimer);
-            if (MSG_TIME_MS > 0) {
-              autoHideTimer = setTimeout(function(){
-                gsap.to(msgDiv,{opacity:0,y:-30,scale:0.9,duration:0.5,onComplete:function(){msgDiv.remove();}});
-              }, MSG_TIME_MS);
-            }
             processingMsg=false;
             if(pendingMsg){var n=pendingMsg;pendingMsg=null;setTimeout(function(){showMessage(n);},100);}
           }
