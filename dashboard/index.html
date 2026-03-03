@@ -229,13 +229,6 @@
     .value-display { color: var(--green); font-size: 10px; }
     .config-row { display: flex; align-items: center; gap: 8px; }
 
-    /* Msgtime config row */
-    .msgtime-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; }
-    .msgtime-row label { margin-bottom: 0; flex-shrink: 0; font-size: 10px; }
-    .msgtime-row input[type=number] { width: 56px; flex: none; padding: 5px 8px; }
-    .msgtime-row .toggle-switch { flex-shrink: 0; }
-    .msgtime-info { font-size: 10px; color: rgba(0,255,157,0.5); font-style: italic; }
-
     /* ══ MAIN / CHAT ══ */
     .main {
       flex: 1; min-width: 0;
@@ -502,45 +495,6 @@
     <div class="card">
       <div class="card-header"><span class="card-title-text">📺 URLs para OBS</span></div>
       <div class="card-body">
-
-        <!-- ══ DURACIÓN DE MENSAJES ══ -->
-        <div style="background:rgba(0,255,157,0.05);border:1px solid rgba(0,255,157,0.2);border-radius:4px;padding:9px 10px;margin-bottom:4px;">
-          <div style="font-family:var(--font-title);font-size:12px;color:var(--green);letter-spacing:1px;margin-bottom:8px;">⏱ Duración de mensajes</div>
-
-          <div style="margin-bottom:6px;">
-            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px;">💬 Chat multichat</div>
-            <div class="toggle-row" style="padding:2px 0;">
-              <span class="toggle-label" style="font-size:10px;">No desaparecen</span>
-              <label class="toggle-switch">
-                <input type="checkbox" id="chat-permanent" onchange="onMsgtimeToggle('chat',this.checked)">
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
-            <div id="chat-time-wrap" class="msgtime-row">
-              <span style="font-size:10px;color:var(--muted);">Duración:</span>
-              <input type="number" id="chat-msgtime" value="0" min="0" max="600" step="1" onchange="updateOverlayUrls()" style="width:60px;flex:none;padding:4px 7px;">
-              <span style="font-size:10px;color:var(--muted);">seg <span id="chat-time-preview" class="value-display"></span></span>
-            </div>
-          </div>
-
-          <div>
-            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.8px;margin-bottom:4px;">🗨️ Chat un mensaje</div>
-            <div class="toggle-row" style="padding:2px 0;">
-              <span class="toggle-label" style="font-size:10px;">No desaparece</span>
-              <label class="toggle-switch">
-                <input type="checkbox" id="chatuno-permanent" onchange="onMsgtimeToggle('chatuno',this.checked)">
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
-            <div id="chatuno-time-wrap" class="msgtime-row">
-              <span style="font-size:10px;color:var(--muted);">Duración:</span>
-              <input type="number" id="chatuno-msgtime" value="8" min="0" max="600" step="1" onchange="updateOverlayUrls()" style="width:60px;flex:none;padding:4px 7px;">
-              <span style="font-size:10px;color:var(--muted);">seg <span id="chatuno-time-preview" class="value-display"></span></span>
-            </div>
-          </div>
-        </div>
-        <!-- /duración -->
-
         <label>💬 Chat multichat (burbujas)</label>
         <div class="url-box" id="url-chat" onclick="copyUrl('url-chat')" title="Click para copiar">Configura el servidor primero...</div>
         <div style="display:flex;gap:5px;margin-top:4px;">
@@ -560,7 +514,7 @@
           <button class="btn btn-secondary btn-full" style="font-size:10px;padding:4px 8px;" onclick="openUrl('url-destacador')">🔗 Abrir</button>
         </div>
         <div class="hint" style="margin-top:6px;">
-          Tiempo visible destacador:
+          Tiempo visible:
           <input id="showtime-input" type="number" style="width:52px;padding:2px 5px;font-size:10px;" value="12" min="1" max="120" onchange="updateOverlayUrls()"> seg
         </div>
       </div>
@@ -843,20 +797,6 @@ function closeChatVisor(){
 document.addEventListener('DOMContentLoaded',function(){
   var saved=store.get('serverUrl');
   document.getElementById('serverUrl').value=saved;
-
-  // Restaurar configuración de msgtime
-  var savedChatTime = store.get('chatMsgtime', '0');
-  var savedChatunoTime = store.get('chatunoMsgtime', '8');
-  var savedChatPerm = store.get('chatPermanent', '0') === '1';
-  var savedChatunoPerm = store.get('chatunoPermanent', '0') === '1';
-
-  document.getElementById('chat-msgtime').value = savedChatTime;
-  document.getElementById('chatuno-msgtime').value = savedChatunoTime;
-  document.getElementById('chat-permanent').checked = savedChatPerm;
-  document.getElementById('chatuno-permanent').checked = savedChatunoPerm;
-  document.getElementById('chat-time-wrap').style.display = savedChatPerm ? 'none' : 'flex';
-  document.getElementById('chatuno-time-wrap').style.display = savedChatunoPerm ? 'none' : 'flex';
-
   updateOverlayUrls();
   if(saved) connectWS(saved);
   if(store.get('sidebarCollapsed')==='1'){document.querySelector('.sidebar').classList.add('collapsed');document.getElementById('sidebar-toggle').classList.add('collapsed');}
@@ -870,23 +810,6 @@ document.addEventListener('DOMContentLoaded',function(){
   var panel=document.getElementById('chat-panel');
   panel.addEventListener('scroll',function(){autoScroll=(panel.scrollHeight-panel.scrollTop-panel.clientHeight)<80;});
 });
-
-// ═══ MSGTIME CONTROLS ═══
-function onMsgtimeToggle(which, isPermanent) {
-  var wrapId = which + '-time-wrap';
-  var storeKey = which + 'Permanent';
-  document.getElementById(wrapId).style.display = isPermanent ? 'none' : 'flex';
-  store.set(storeKey, isPermanent ? '1' : '0');
-  updateOverlayUrls();
-}
-
-function getMsgtimeParam(which) {
-  var isPermanent = document.getElementById(which + '-permanent').checked;
-  if (isPermanent) return '&msgtime=0';
-  var val = parseInt(document.getElementById(which + '-msgtime').value) || 0;
-  store.set(which + 'Msgtime', String(val));
-  return val > 0 ? '&msgtime=' + val : '';
-}
 
 // ═══ FONT / GLOW / SINGLELINE ═══
 function applyFont(fontValue,silent){document.documentElement.style.setProperty('--font-body',fontValue);var preview=document.getElementById('font-preview');preview.style.fontFamily=fontValue;store.set('chatFont',fontValue);if(!silent)toast('🔤 Fuente cambiada');}
@@ -1147,24 +1070,12 @@ function updateOverlayUrls(){
   var serverUrl=store.get('serverUrl');
   var showtime=(parseInt(document.getElementById('showtime-input').value)||12)*1000;
   var base=(window.location.protocol!=='file:')?getBaseOverlayDir():'';
-
-  var chatMsgtime = getMsgtimeParam('chat');
-  var chatUnoMsgtime = getMsgtimeParam('chatuno');
-
-  // Update previews
-  var chatTimeVal = document.getElementById('chat-permanent').checked ? '∞' : (document.getElementById('chat-msgtime').value||'0')+'s';
-  var chatUnoTimeVal = document.getElementById('chatuno-permanent').checked ? '∞' : (document.getElementById('chatuno-msgtime').value||'0')+'s';
-  var chatPreview = document.getElementById('chat-time-preview');
-  var chatUnoPreview = document.getElementById('chatuno-time-preview');
-  if(chatPreview) chatPreview.textContent = document.getElementById('chat-permanent').checked ? '' : (parseInt(document.getElementById('chat-msgtime').value)>0 ? '' : '(sin límite)');
-  if(chatUnoPreview) chatUnoPreview.textContent = '';
-
-  var ids={'url-chat':{file:'index.html',extra:chatMsgtime},'url-chatuno':{file:'chat_uno.html',extra:chatUnoMsgtime},'url-destacador':{file:'destacador.html',extra:'&showtime='+showtime}};
+  var ids={'url-chat':{file:'index.html',params:''},'url-chatuno':{file:'chat_uno.html',params:''},'url-destacador':{file:'destacador.html',params:'&showtime='+showtime}};
   Object.keys(ids).forEach(function(id){
     var box=document.getElementById(id);if(!box)return;
     if(!serverUrl){box.textContent='Configura el servidor primero...';box.dataset.url='';return;}
     if(!base){box.textContent='No disponible en local (usa GitHub Pages)';box.dataset.url='';return;}
-    var url=base+'/'+ids[id].file+'?server='+encodeURIComponent(serverUrl)+(ids[id].extra||'');
+    var url=base+'/'+ids[id].file+'?server='+encodeURIComponent(serverUrl)+ids[id].params;
     box.textContent=url;box.dataset.url=url;
   });
 }
