@@ -35,6 +35,9 @@
     .message-bubble::before { content: ''; position: absolute; top:0; left:-100%; width:100%; height:100%; background: linear-gradient(90deg, transparent, rgba(0,255,157,0.07), transparent); animation: specSweep 4s ease-in-out infinite; }
     @keyframes specSweep { 0%{left:-100%;}50%{left:100%;}100%{left:100%;} }
 
+    /* Progress bar for auto-hide */
+    .msg-progress { position: absolute; bottom: 0; left: 0; height: 2px; background: var(--green); box-shadow: 0 0 6px var(--green); width: 100%; transform-origin: left; border-radius: 0 0 0 4px; opacity: 0.7; }
+
     .bubble-twitch  { border-left-color: #9146FF; }
     .bubble-kick    { border-left-color: #53FC18; }
     .bubble-tiktok  { border-left-color: #FF0050; }
@@ -85,6 +88,13 @@
     var SERVER_URL  = urlParams.get('server') || 'wss://localhost:3000';
     var MAX_MESSAGES = urlParams.has('limit') ? parseInt(urlParams.get('limit')) : 50;
     var MAX_SPACER   = 5000;
+
+    // ── Auto-hide config ──────────────────────────────────────────────────────
+    // autohide=1 → activar; autohide=0 → desactivar (default: 0 = no desaparece)
+    var AUTO_HIDE    = urlParams.get('autohide') === '1';
+    // showtime en segundos (default: 30s)
+    var SHOW_TIME_MS = (parseInt(urlParams.get('showtime')) || 30) * 1000;
+    // ─────────────────────────────────────────────────────────────────────────
 
     (function(){
       var c=document.getElementById('particles');
@@ -151,6 +161,39 @@
       });
     }
 
+    function scheduleHide(msgDiv) {
+      if (!AUTO_HIDE) return;
+
+      // Añadir barra de progreso visual
+      var bar = document.createElement('div');
+      bar.className = 'msg-progress';
+      msgDiv.appendChild(bar);
+
+      // Animar la barra retrocediendo
+      gsap.to(bar, {
+        scaleX: 0,
+        duration: SHOW_TIME_MS / 1000,
+        ease: 'none'
+      });
+
+      // Ocultar el mensaje al terminar
+      setTimeout(function() {
+        if (!msgDiv.parentNode) return;
+        var msgH = msgDiv.offsetHeight + (parseFloat(getComputedStyle(msgDiv).marginBottom) || 0);
+        gsap.to(msgDiv, {
+          opacity: 0,
+          x: 30,
+          filter: 'blur(4px)',
+          duration: 0.45,
+          ease: 'power2.in',
+          onComplete: function() {
+            if (msgDiv.parentNode) msgDiv.remove();
+            adjustScroll();
+          }
+        });
+      }, SHOW_TIME_MS);
+    }
+
     function addMessage(data) {
       if (!data.chatname && !data.chatmessage) return;
       var platform = data.platform||data.type||'custom';
@@ -188,7 +231,11 @@
 
       messageListWrapper.appendChild(msgDiv);
       gsap.set(msgDiv, {opacity:0, x:-20, filter:'blur(4px)'});
-      gsap.to(msgDiv, { opacity:1, x:0, filter:'blur(0px)', duration:0.55, ease:'power2.out', onStart: function(){ msgDiv.classList.add('visible'); } });
+      gsap.to(msgDiv, {
+        opacity:1, x:0, filter:'blur(0px)', duration:0.55, ease:'power2.out',
+        onStart: function(){ msgDiv.classList.add('visible'); },
+        onComplete: function() { scheduleHide(msgDiv); }
+      });
 
       var msgs=Array.from(messageListWrapper.children).filter(function(c){return c.id!=='spacer'&&c.classList.contains('message-bubble');});
       if (msgs.length>MAX_MESSAGES) {
@@ -210,7 +257,6 @@
       ws.onmessage=function(e){
         try{
           var d=JSON.parse(e.data);
-          // ✅ filtrar status, highlight y highlight_clear — no mostrar como mensajes
           if(d.type==='status'||d.type==='highlight'||d.type==='highlight_clear') return;
           addMessage(d);
         }catch(err){}
