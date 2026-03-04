@@ -302,7 +302,26 @@ async function connectTikTokConnector() {
 setInterval(() => { if (state.tiktok.connected && state.tiktok.lastMsg > 0 && Date.now() - state.tiktok.lastMsg > 3 * 60 * 1000) { state.tiktok.connected = false; broadcastStatus(); connectTikTokConnector(); } }, 60000);
 
 // ══ YOUTUBE — API v3 polling desde el servidor ══
-const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || '';
+// Soporta múltiples API keys: YOUTUBE_API_KEY, YOUTUBE_API_KEY_2, YOUTUBE_API_KEY_3, etc.
+const YOUTUBE_API_KEYS = (() => {
+  const keys = [];
+  if (process.env.YOUTUBE_API_KEY)   keys.push(process.env.YOUTUBE_API_KEY);
+  if (process.env.YOUTUBE_API_KEY_2) keys.push(process.env.YOUTUBE_API_KEY_2);
+  if (process.env.YOUTUBE_API_KEY_3) keys.push(process.env.YOUTUBE_API_KEY_3);
+  if (process.env.YOUTUBE_API_KEY_4) keys.push(process.env.YOUTUBE_API_KEY_4);
+  return keys.filter(Boolean);
+})();
+
+// Para compatibilidad, YOUTUBE_API_KEY apunta a la key activa actual
+let ytCurrentKeyIndex = 0;
+function getYouTubeApiKey() { return YOUTUBE_API_KEYS[ytCurrentKeyIndex] || ''; }
+function rotateYouTubeApiKey() {
+  if (YOUTUBE_API_KEYS.length <= 1) return false; // No hay más keys
+  const prevIndex = ytCurrentKeyIndex;
+  ytCurrentKeyIndex = (ytCurrentKeyIndex + 1) % YOUTUBE_API_KEYS.length;
+  console.log(`[YouTube] 🔄 Rotando API key [${prevIndex + 1}/${YOUTUBE_API_KEYS.length}] → [${ytCurrentKeyIndex + 1}/${YOUTUBE_API_KEYS.length}]`);
+  return true;
+}
 
 let ytPollState = {
   active: false,
@@ -312,11 +331,12 @@ let ytPollState = {
   pollTimer: null,
   errorCount: 0,
   seenIds: new Set(),
+  keyExhaustedCount: 0, // cuántas keys seguidas fallaron por 403
 };
 
 async function ytApiGet(path) {
   return new Promise((resolve, reject) => {
-    const url = `https://www.googleapis.com/youtube/v3/${path}&key=${YOUTUBE_API_KEY}`;
+    const url = `https://www.googleapis.com/youtube/v3/${path}&key=${getYouTubeApiKey()}`;
     const req = https.get(url, { headers: { 'Accept': 'application/json' } }, (res) => {
       let body = '';
       res.on('data', c => body += c);
@@ -342,7 +362,7 @@ async function getLiveChatId(videoId) {
 
 async function pollYouTubeChat() {
   if (!ytPollState.active || !ytPollState.liveChatId) return;
-  if (!YOUTUBE_API_KEY) {
+  if (!getYouTubeApiKey()) {
     console.error('[YouTube] YOUTUBE_API_KEY no configurada');
     return;
   }
@@ -354,16 +374,39 @@ async function pollYouTubeChat() {
     const r = await ytApiGet(path);
 
     if (r.status === 403) {
-      console.error('[YouTube] API key inválida o cuota agotada:', r.data.error?.message);
+      const errMsg = r.data.error?.message || 'error 403';
+      console.error(`[YouTube] ⚠️ API key [${ytCurrentKeyIndex + 1}/${YOUTUBE_API_KEYS.length}] cuota agotada o inválida:`, errMsg);
+
+      // Intentar con la siguiente key
+      if (rotateYouTubeApiKey()) {
+        ytPollState.keyExhaustedCount++;
+        // Si ya probamos todas las keys, detenemos
+        if (ytPollState.keyExhaustedCount >= YOUTUBE_API_KEYS.length) {
+          console.error('[YouTube] ❌ Todas las API keys agotadas. Deteniendo polling.');
+          state.youtube.connected = false;
+          broadcastStatus();
+          ytPollState.active = false;
+          ytPollState.keyExhaustedCount = 0;
+          broadcast({ type: 'system', platform: 'system', chatname: 'Sistema', chatmessage: `❌ YouTube: todas las API keys (${YOUTUBE_API_KEYS.length}) agotadas. Reinicia mañana.`, nameColor: '#ff4444', mid: 'sys-yt-' + Date.now() });
+          return;
+        }
+        broadcast({ type: 'system', platform: 'system', chatname: 'Sistema', chatmessage: `🔄 YouTube: key ${ytCurrentKeyIndex}/${YOUTUBE_API_KEYS.length} agotada, usando key ${ytCurrentKeyIndex + 1}...`, nameColor: '#ffaa00', mid: 'sys-yt-' + Date.now() });
+        // Reintenta inmediatamente con la nueva key
+        if (ytPollState.active) ytPollState.pollTimer = setTimeout(pollYouTubeChat, 1000);
+        return;
+      }
+
+      // Solo hay una key, comportamiento original
       state.youtube.connected = false;
       broadcastStatus();
       ytPollState.active = false;
-      broadcast({ type: 'system', platform: 'system', chatname: 'Sistema', chatmessage: '⚠️ YouTube API: ' + (r.data.error?.message || 'error 403'), nameColor: '#ffaa00', mid: 'sys-yt-' + Date.now() });
+      broadcast({ type: 'system', platform: 'system', chatname: 'Sistema', chatmessage: '⚠️ YouTube API: ' + errMsg, nameColor: '#ffaa00', mid: 'sys-yt-' + Date.now() });
       return;
     }
     if (r.status !== 200) throw new Error(`HTTP ${r.status}`);
 
     ytPollState.errorCount = 0;
+    ytPollState.keyExhaustedCount = 0; // Poll exitoso — resetear contador de keys fallidas
     const data = r.data;
 
     // Actualizar pageToken para el próximo poll
@@ -451,11 +494,16 @@ async function connectYouTubeApi(videoId) {
   ytPollState.pageToken = null;
   ytPollState.errorCount = 0;
 
-  if (!YOUTUBE_API_KEY) {
+  if (YOUTUBE_API_KEYS.length === 0) {
     console.error('[YouTube] YOUTUBE_API_KEY no configurada en variables de entorno');
     broadcast({ type: 'system', platform: 'system', chatname: 'Sistema', chatmessage: '⚠️ Falta YOUTUBE_API_KEY en las variables de entorno de Render', nameColor: '#ffaa00', mid: 'sys-yt-' + Date.now() });
     return;
   }
+
+  // Resetear rotación al conectar
+  ytCurrentKeyIndex = 0;
+  ytPollState.keyExhaustedCount = 0;
+  console.log(`[YouTube] Conectando con ${YOUTUBE_API_KEYS.length} API key(s) disponible(s)`);
 
   console.log(`[YouTube] Conectando a video ${videoId}...`);
   state.youtube.videoId = videoId;
@@ -534,7 +582,7 @@ server.listen(CONFIG.port, () => {
   console.log(`   Twitch  : ${CONFIG.twitch || '(no config)'}`);
   console.log(`   Kick    : ${CONFIG.kick   || '(no config)'}`);
   console.log(`   TikTok  : ${CONFIG.tiktok || '(no config)'}`);
-  console.log(`   YouTube : API v3 ${YOUTUBE_API_KEY ? '✅ key configurada' : '❌ falta YOUTUBE_API_KEY'}\n`);
+  console.log(`   YouTube : API v3 ${YOUTUBE_API_KEYS.length > 0 ? `✅ ${YOUTUBE_API_KEYS.length} key(s) configurada(s)` : '❌ falta YOUTUBE_API_KEY'}\n`);
   connectTwitch();
   connectKick();
   connectTikTokConnector();
