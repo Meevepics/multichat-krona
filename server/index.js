@@ -768,27 +768,38 @@ function disconnectYouTubeApi() {
 
 async function autoConnectYouTubeLive() {
   if (ytAutoDetectTimer) { clearTimeout(ytAutoDetectTimer); ytAutoDetectTimer = null; }
-  if (ytPollState.active && ytPollState.videoId) return;
+  if (ytPollState.active && ytPollState.videoId) { console.log('[YouTube] Auto-detect: live ya activo'); return; }
   const channelId = CONFIG.youtubeChannelId, handle = CONFIG.youtubeHandle.replace('@', '');
-  if (!channelId && !handle) return;
-  if (!getYouTubeApiKey()) return;
+  console.log('[YouTube] Auto-detect -> channelId="' + channelId + '" handle="' + handle + '" keys=' + YOUTUBE_API_KEYS.length);
+  if (!channelId && !handle) { console.log('[YouTube] Sin channelId ni handle'); return; }
+  if (!getYouTubeApiKey()) { console.log('[YouTube] Sin API key'); return; }
   try {
     let searchPath;
-    if (channelId) { searchPath = `search?part=snippet&channelId=${channelId}&eventType=live&type=video&maxResults=1&order=date`; }
-    else {
-      const rr = await ytApiGet(`channels?part=id&forHandle=${encodeURIComponent('@' + handle)}`);
-      if (rr.status !== 200 || !rr.data.items?.length) { ytAutoDetectTimer = setTimeout(autoConnectYouTubeLive, 10 * 60 * 1000); return; }
+    if (channelId) {
+      searchPath = 'search?part=snippet&channelId=' + channelId + '&eventType=live&type=video&maxResults=1&order=date';
+    } else {
+      const rr = await ytApiGet('channels?part=id&forHandle=' + encodeURIComponent('@' + handle));
+      console.log('[YouTube] Resolve handle status=' + rr.status + ' items=' + (rr.data.items && rr.data.items.length || 0));
+      if (rr.status !== 200 || !rr.data.items || !rr.data.items.length) { ytAutoDetectTimer = setTimeout(autoConnectYouTubeLive, 10 * 60 * 1000); return; }
       CONFIG.youtubeChannelId = rr.data.items[0].id;
-      searchPath = `search?part=snippet&channelId=${CONFIG.youtubeChannelId}&eventType=live&type=video&maxResults=1&order=date`;
+      searchPath = 'search?part=snippet&channelId=' + CONFIG.youtubeChannelId + '&eventType=live&type=video&maxResults=1&order=date';
     }
     const r = await ytApiGet(searchPath);
-    if (r.status !== 200 || !r.data.items?.length) { ytAutoDetectTimer = setTimeout(autoConnectYouTubeLive, 5 * 60 * 1000); return; }
-    const videoId = r.data.items[0].id?.videoId;
+    const errDetail = r.status !== 200 ? JSON.stringify((r.data && r.data.error && r.data.error.message) || r.data).slice(0,200) : '';
+    console.log('[YouTube] Search status=' + r.status + ' items=' + (r.data.items && r.data.items.length || 0) + (errDetail ? ' err=' + errDetail : ''));
+    if (r.status === 403) {
+      const reason = (r.data && r.data.error && r.data.error.errors && r.data.error.errors[0] && r.data.error.errors[0].reason) || 'quota';
+      broadcast({ type: 'system', platform: 'system', chatname: 'Sistema', chatmessage: 'YouTube 403 key ' + (ytCurrentKeyIndex+1) + '/' + YOUTUBE_API_KEYS.length + ': ' + reason, nameColor: '#ff4444', mid: 'sys-yt-' + Date.now() });
+      ytAutoDetectTimer = setTimeout(autoConnectYouTubeLive, 5 * 60 * 1000); return;
+    }
+    if (r.status !== 200 || !r.data.items || !r.data.items.length) { console.log('[YouTube] Sin live activo, reintentando en 5min'); ytAutoDetectTimer = setTimeout(autoConnectYouTubeLive, 5 * 60 * 1000); return; }
+    const videoId = r.data.items[0].id && r.data.items[0].id.videoId;
     if (!videoId) { ytAutoDetectTimer = setTimeout(autoConnectYouTubeLive, 5 * 60 * 1000); return; }
-    console.log(`[YouTube] ✅ Live: "${r.data.items[0].snippet?.title}" → ${videoId}`);
+    console.log('[YouTube] Live detectado: ' + videoId);
     await connectYouTubeApi(videoId);
     ytAutoDetectTimer = setTimeout(autoConnectYouTubeLive, 30 * 60 * 1000);
   } catch(e) {
+    console.error('[YouTube] Auto-detect excepcion: ' + e.message);
     ytAutoDetectTimer = setTimeout(autoConnectYouTubeLive, 10 * 60 * 1000);
   }
 }
