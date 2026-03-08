@@ -1,7 +1,7 @@
 // ============================================================
-//  MEEVE MULTICHAT SERVER v2.3
+//  MEEVE MULTICHAT SERVER v2.4
 //  ✅ Twitch via tmi.js
-//  ✅ Kick via Pusher WebSocket + OAuth 2.1 PKCE (canjes)
+//  ✅ Kick via Pusher WebSocket (chat) + OAuth 2.1 PKCE + Webhooks (canjes)
 //  ✅ TikTok via tiktok-live-connector
 //  ✅ YouTube via API v3 (multi-key + auto-detect live)
 // ============================================================
@@ -34,22 +34,24 @@ const CONFIG = {
   kickClientId:     process.env.KICK_CLIENT_ID      || '',
   kickClientSecret: process.env.KICK_CLIENT_SECRET  || '',
   kickRedirectUri:  process.env.KICK_REDIRECT_URI   || 'https://multichat-krona-5uts.onrender.com/auth/kick/callback',
+  kickWebhookSecret: process.env.KICK_WEBHOOK_SECRET || '',
 };
 
-// OAuth 2.1 PKCE state
 const kickOAuth = {
   accessToken:  process.env.KICK_ACCESS_TOKEN  || '',
   refreshToken: process.env.KICK_REFRESH_TOKEN || '',
   expiresAt:    0,
   userId:       '',
   channelId:    '',
-  // PKCE temporales por sesión
   state:        '',
   codeVerifier: '',
 };
 
+// ── Webhook raw body para verificar firma ──
+app.use('/webhook/kick', express.raw({ type: '*/*' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
@@ -74,7 +76,6 @@ const state = {
 function generateCodeVerifier() {
   return crypto.randomBytes(32).toString('base64url');
 }
-
 function generateCodeChallenge(verifier) {
   return crypto.createHash('sha256').update(verifier).digest('base64url');
 }
@@ -168,6 +169,15 @@ function broadcastStatus() {
     tiktokMode: CONFIG.tiktokMode,
     channels: { twitch: CONFIG.twitch, kick: CONFIG.kick, tiktok: CONFIG.tiktok, youtube: CONFIG.youtubeHandle }
   });
+}
+
+function htmlPage(icon, title, body, color, autoClose = false) {
+  return `<html><body style="background:#0a0a0a;color:#fff;font-family:monospace;padding:60px;text-align:center">
+    <div style="font-size:60px">${icon}</div>
+    <h2 style="color:${color};margin:20px 0">${title}</h2>
+    <p style="color:#aaa">${body}</p>
+    ${autoClose ? '<script>setTimeout(()=>window.close(),3000)</script>' : ''}
+  </body></html>`;
 }
 
 wss.on('connection', (ws) => {
@@ -341,20 +351,15 @@ function tryKickPusher(channelId) {
 }
 
 // ══════════════════════════════════════════════════════
-// KICK OAUTH 2.1 + PKCE — Canjes de Channel Points
+// KICK OAUTH 2.1 + PKCE
 // ══════════════════════════════════════════════════════
-
-// Página de inicio de auth — genera PKCE y redirige a Kick
 app.get('/auth/kick', (req, res) => {
   if (!CONFIG.kickClientId) {
-    return res.status(500).send(htmlPage('❌ Falta KICK_CLIENT_ID', 'Agregá KICK_CLIENT_ID y KICK_CLIENT_SECRET en las variables de entorno de Render.', '#ff4444'));
+    return res.status(500).send(htmlPage('❌', 'Falta KICK_CLIENT_ID', 'Agregá KICK_CLIENT_ID y KICK_CLIENT_SECRET en Render.', '#ff4444'));
   }
-
-  // Generar PKCE
   kickOAuth.codeVerifier = generateCodeVerifier();
   kickOAuth.state        = crypto.randomBytes(16).toString('hex');
   const codeChallenge    = generateCodeChallenge(kickOAuth.codeVerifier);
-
   const params = new URLSearchParams({
     client_id:             CONFIG.kickClientId,
     redirect_uri:          CONFIG.kickRedirectUri,
@@ -364,25 +369,14 @@ app.get('/auth/kick', (req, res) => {
     code_challenge:        codeChallenge,
     code_challenge_method: 'S256',
   });
-
-  const authUrl = `https://id.kick.com/oauth/authorize?${params.toString()}`;
-  console.log('[Kick OAuth] Redirigiendo con PKCE a:', authUrl);
-  res.redirect(authUrl);
+  res.redirect(`https://id.kick.com/oauth/authorize?${params.toString()}`);
 });
 
-// Callback de Kick
 app.get('/auth/kick/callback', async (req, res) => {
   const { code, state: returnedState, error } = req.query;
-
-  if (error) {
-    return res.send(htmlPage('❌ Error OAuth', `Kick devolvió: ${error}`, '#ff4444'));
-  }
-  if (returnedState !== kickOAuth.state) {
-    return res.status(400).send(htmlPage('❌ State inválido', 'Intentá el proceso de auth nuevamente.', '#ff4444'));
-  }
-  if (!code) {
-    return res.status(400).send(htmlPage('❌ Sin code', 'No se recibió el código de autorización.', '#ff4444'));
-  }
+  if (error)                              return res.send(htmlPage('❌', 'Error OAuth', `Kick devolvió: ${error}`, '#ff4444'));
+  if (returnedState !== kickOAuth.state)  return res.status(400).send(htmlPage('❌', 'State inválido', 'Intentá de nuevo.', '#ff4444'));
+  if (!code)                              return res.status(400).send(htmlPage('❌', 'Sin código', 'No se recibió el código de Kick.', '#ff4444'));
 
   try {
     const tokenBody = new URLSearchParams({
@@ -390,7 +384,7 @@ app.get('/auth/kick/callback', async (req, res) => {
       client_id:     CONFIG.kickClientId,
       client_secret: CONFIG.kickClientSecret,
       redirect_uri:  CONFIG.kickRedirectUri,
-      code_verifier: kickOAuth.codeVerifier,   // ← PKCE
+      code_verifier: kickOAuth.codeVerifier,
       code,
     }).toString();
 
@@ -398,16 +392,12 @@ app.get('/auth/kick/callback', async (req, res) => {
       hostname: 'id.kick.com',
       path:     '/oauth/token',
       method:   'POST',
-      headers:  {
-        'Content-Type':   'application/x-www-form-urlencoded',
-        'Content-Length': Buffer.byteLength(tokenBody),
-        'Accept':         'application/json',
-      },
+      headers:  { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(tokenBody), 'Accept': 'application/json' },
     }, tokenBody);
 
     if (tokenRes.status !== 200 || !tokenRes.data.access_token) {
       console.error('[Kick OAuth] Error token:', JSON.stringify(tokenRes.data));
-      return res.send(htmlPage('❌ Error al obtener token', `<pre style="text-align:left;color:#aaa;font-size:12px">${JSON.stringify(tokenRes.data, null, 2)}</pre>`, '#ff4444'));
+      return res.send(htmlPage('❌', 'Error al obtener token', `<pre style="text-align:left;font-size:11px;color:#aaa">${JSON.stringify(tokenRes.data, null, 2)}</pre>`, '#ff4444'));
     }
 
     kickOAuth.accessToken  = tokenRes.data.access_token;
@@ -416,28 +406,18 @@ app.get('/auth/kick/callback', async (req, res) => {
     console.log('[Kick OAuth] ✅ Token obtenido! Scopes:', tokenRes.data.scope);
 
     await loadKickUserInfo();
-    connectKickEventSub();
+    await registerKickWebhooks();
 
     state.kickOAuth.connected = true;
     broadcastStatus();
     broadcast({ type: 'system', platform: 'system', chatname: 'Sistema', chatmessage: '✅ Kick OAuth conectado — Canjes de Channel Points activos 🎁', nameColor: '#53FC18', mid: 'sys-kick-' + Date.now() });
 
-    res.send(htmlPage('✅ ¡Kick conectado!', 'Los canjes de Channel Points ya están activos.<br><br><span style="color:#666;font-size:12px">Esta ventana se cerrará en 3 segundos...</span>', '#53FC18', true));
-
+    res.send(htmlPage('✅', '¡Kick conectado!', 'Los canjes de Channel Points ya están activos.<br><br><span style="color:#666;font-size:12px">Esta ventana se cerrará en 3 segundos...</span>', '#53FC18', true));
   } catch(e) {
     console.error('[Kick OAuth] Excepción callback:', e.message);
-    res.status(500).send(htmlPage('❌ Error interno', e.message, '#ff4444'));
+    res.status(500).send(htmlPage('❌', 'Error interno', e.message, '#ff4444'));
   }
 });
-
-function htmlPage(title, body, color, autoClose = false) {
-  return `<html><body style="background:#0a0a0a;color:#fff;font-family:monospace;padding:60px;text-align:center">
-    <div style="font-size:60px">${color === '#53FC18' ? '✅' : '❌'}</div>
-    <h2 style="color:${color};margin:20px 0">${title}</h2>
-    <p style="color:#aaa">${body}</p>
-    ${autoClose ? '<script>setTimeout(()=>window.close(),3000)</script>' : ''}
-  </body></html>`;
-}
 
 async function loadKickUserInfo() {
   try {
@@ -460,65 +440,17 @@ async function loadKickUserInfo() {
   }
 }
 
-// EventSub WebSocket
-let kickEventSubWs = null, kickEventSubRetry = null;
+// ══════════════════════════════════════════════════════
+// KICK WEBHOOKS — Registro y recepción
+// ══════════════════════════════════════════════════════
+const WEBHOOK_URL = 'https://multichat-krona-5uts.onrender.com/webhook/kick';
 
-function connectKickEventSub() {
-  if (kickEventSubWs) { try { kickEventSubWs.terminate(); } catch(e) {} kickEventSubWs = null; }
-  if (kickEventSubRetry) { clearTimeout(kickEventSubRetry); kickEventSubRetry = null; }
-
-  console.log('[Kick EventSub] Conectando...');
-  try {
-    kickEventSubWs = new NodeWS('wss://eventsub.kick.com/ws', { headers: { 'User-Agent': 'Mozilla/5.0' } });
-  } catch(e) {
-    console.error('[Kick EventSub] No se pudo crear WS:', e.message);
-    kickEventSubRetry = setTimeout(connectKickEventSub, 30000);
-    return;
-  }
-
-  kickEventSubWs.on('open', () => console.log('[Kick EventSub] ✅ Conectado, esperando session_welcome...'));
-
-  kickEventSubWs.on('message', async (raw) => {
-    let msg; try { msg = JSON.parse(raw); } catch(e) { return; }
-    const msgType = msg.metadata?.message_type || msg.type || '';
-
-    if (msgType === 'session_welcome' || msgType === 'connection_established') {
-      const sessionId = msg.payload?.session?.id || msg.session_id || '';
-      console.log('[Kick EventSub] Session ID:', sessionId);
-      if (sessionId) await subscribeKickEvents(sessionId);
-      return;
-    }
-    if (msgType === 'session_keepalive' || msgType === 'keepalive') return;
-    if (msgType === 'ping') { if (kickEventSubWs?.readyState === 1) kickEventSubWs.send(JSON.stringify({ type: 'pong' })); return; }
-
-    if (msgType === 'notification' || msg.payload?.event) {
-      const evType = msg.metadata?.subscription_type || msg.payload?.subscription?.type || msg.event_type || '';
-      const evData = msg.payload?.event || msg.data || msg.event || {};
-      if (evType) handleKickOAuthEvent(evType, evData);
-    }
-  });
-
-  kickEventSubWs.on('close', (code) => {
-    console.log(`[Kick EventSub] Desconectado (${code}), reintentando en 15s...`);
-    state.kickOAuth.connected = false;
-    broadcastStatus();
-    kickEventSubRetry = setTimeout(connectKickEventSub, 15000);
-  });
-
-  kickEventSubWs.on('error', (e) => console.error('[Kick EventSub] Error:', e.message));
-}
-
-async function subscribeKickEvents(sessionId) {
+async function registerKickWebhooks() {
   if (!kickOAuth.accessToken) return;
   await refreshKickTokenIfNeeded();
 
-  if (!kickOAuth.userId && !kickOAuth.channelId) await loadKickUserInfo();
-
   const broadcasterId = kickOAuth.userId || kickOAuth.channelId;
-  if (!broadcasterId) {
-    console.error('[Kick EventSub] Sin broadcaster ID, no se puede suscribir');
-    return;
-  }
+  if (!broadcasterId) { console.error('[Kick Webhooks] Sin broadcaster ID'); return; }
 
   const events = [
     'channel.points_redemption.created',
@@ -528,14 +460,38 @@ async function subscribeKickEvents(sessionId) {
     'channel.followed',
   ];
 
+  // Primero listar webhooks existentes para evitar duplicados
+  let existingEvents = [];
+  try {
+    const listRes = await httpsRequest({
+      hostname: 'api.kick.com',
+      path:     '/public/v1/events/subscriptions',
+      method:   'GET',
+      headers:  { 'Authorization': `Bearer ${kickOAuth.accessToken}`, 'Accept': 'application/json' },
+    });
+    if (listRes.status === 200 && listRes.data.data) {
+      existingEvents = listRes.data.data.map(s => s.type);
+      console.log('[Kick Webhooks] Suscripciones existentes:', existingEvents);
+    }
+  } catch(e) {}
+
   let ok = 0;
   for (const eventType of events) {
+    if (existingEvents.includes(eventType)) {
+      console.log(`[Kick Webhooks] Ya registrado: ${eventType}`);
+      ok++;
+      continue;
+    }
     try {
       const body = JSON.stringify({
         type:      eventType,
         version:   '1',
         condition: { broadcaster_user_id: broadcasterId },
-        transport: { method: 'websocket', session_id: sessionId }
+        transport: {
+          method:   'webhook',
+          callback: WEBHOOK_URL,
+          secret:   CONFIG.kickWebhookSecret || kickOAuth.accessToken.slice(0, 32),
+        }
       });
       const r = await httpsRequest({
         hostname: 'api.kick.com',
@@ -550,28 +506,70 @@ async function subscribeKickEvents(sessionId) {
       }, body);
 
       if ([200, 201, 409].includes(r.status)) {
-        console.log(`[Kick EventSub] ✅ ${eventType}`);
+        console.log(`[Kick Webhooks] ✅ Registrado: ${eventType}`);
         ok++;
       } else {
-        console.error(`[Kick EventSub] ❌ ${eventType}: ${r.status}`, JSON.stringify(r.data));
+        console.error(`[Kick Webhooks] ❌ Error ${eventType}: ${r.status}`, JSON.stringify(r.data));
       }
     } catch(e) {
-      console.error(`[Kick EventSub] Excepción ${eventType}:`, e.message);
+      console.error(`[Kick Webhooks] Excepción ${eventType}:`, e.message);
     }
   }
 
   if (ok > 0) {
     state.kickOAuth.connected = true;
     broadcastStatus();
-    console.log(`[Kick EventSub] ✅ ${ok}/${events.length} suscripciones activas`);
+    console.log(`[Kick Webhooks] ✅ ${ok}/${events.length} webhooks activos. ¡Canjes listos!`);
   }
 }
 
-function handleKickOAuthEvent(eventType, data) {
-  if (!data) return;
-  console.log(`[Kick OAuth Event] ${eventType}:`, JSON.stringify(data).slice(0, 300));
+// Endpoint que recibe los webhooks de Kick
+app.post('/webhook/kick', (req, res) => {
+  // Responder 200 inmediatamente (Kick requiere respuesta rápida)
+  res.sendStatus(200);
 
-  // ✅ CANJES
+  try {
+    // Verificar firma si hay secret configurado
+    const signature  = req.headers['kick-event-signature'] || req.headers['x-kick-signature'] || '';
+    const rawBody    = req.body; // Buffer (gracias al express.raw de arriba)
+    const webhookSecret = CONFIG.kickWebhookSecret || kickOAuth.accessToken.slice(0, 32);
+
+    if (signature && webhookSecret) {
+      const expected = 'sha256=' + crypto.createHmac('sha256', webhookSecret).update(rawBody).digest('hex');
+      if (signature !== expected) {
+        console.warn('[Kick Webhook] ⚠️ Firma inválida, ignorando evento');
+        return;
+      }
+    }
+
+    let payload;
+    try { payload = JSON.parse(rawBody.toString()); } catch(e) { console.error('[Kick Webhook] Error parseando body'); return; }
+
+    const eventType = payload.type || payload.event_type || req.headers['kick-event-type'] || req.headers['x-kick-event-type'] || '';
+    const eventData = payload.data || payload.event || payload;
+
+    console.log(`[Kick Webhook] 📨 Evento recibido: ${eventType}`);
+    handleKickWebhookEvent(eventType, eventData);
+  } catch(e) {
+    console.error('[Kick Webhook] Excepción:', e.message);
+  }
+});
+
+// También manejar GET para verificación de webhook de Kick
+app.get('/webhook/kick', (req, res) => {
+  const challenge = req.query['hub.challenge'] || req.query.challenge;
+  if (challenge) {
+    console.log('[Kick Webhook] ✅ Verificación de webhook exitosa');
+    return res.send(challenge);
+  }
+  res.json({ ok: true, endpoint: 'Kick Webhook activo' });
+});
+
+function handleKickWebhookEvent(eventType, data) {
+  if (!data) return;
+  console.log(`[Kick Webhook Event] ${eventType}:`, JSON.stringify(data).slice(0, 300));
+
+  // ✅ CANJES DE CHANNEL POINTS
   if (eventType === 'channel.points_redemption.created' || eventType.includes('redemption')) {
     const username    = data.user?.username    || data.redeemer?.username || data.username || 'Viewer';
     const rewardTitle = data.reward?.title     || data.reward_title       || data.title    || 'Recompensa';
@@ -585,27 +583,29 @@ function handleKickOAuthEvent(eventType, data) {
     }));
     return;
   }
+
   if (eventType === 'channel.subscription.new') {
     const u = data.subscriber?.username || data.username || 'KickUser';
-    getKickAvatar(u, (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'sub', chatname: u, chatmessage: '¡Se suscribió!', chatimg: av || null, nameColor: '#53FC18', roles: [], mid: 'kick-sub-' + Date.now() }));
+    getKickAvatar(u, (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'sub', chatname: u, chatmessage: '¡Se suscribió!', chatimg: av || null, nameColor: '#53FC18', roles: [], mid: 'kick-sub-wh-' + Date.now() }));
     return;
   }
   if (eventType === 'channel.subscription.renewal') {
     const u = data.subscriber?.username || data.username || 'KickUser', months = data.months || 1;
-    getKickAvatar(u, (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'resub', chatname: u, chatmessage: `¡${months} mes(es)!`, months, chatimg: av || null, nameColor: '#53FC18', roles: [], mid: 'kick-resub-' + Date.now() }));
+    getKickAvatar(u, (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'resub', chatname: u, chatmessage: `¡${months} mes(es)!`, months, chatimg: av || null, nameColor: '#53FC18', roles: [], mid: 'kick-resub-wh-' + Date.now() }));
     return;
   }
   if (eventType === 'channel.subscription.gifts') {
     const g = data.gifter?.username || 'Anónimo', qty = data.quantity || 1;
-    getKickAvatar(g, (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'giftedsub', chatname: g, chatmessage: `¡Regaló ${qty} sub(s)!`, amount: qty, chatimg: av || null, nameColor: '#53FC18', roles: [], mid: 'kick-gift-' + Date.now() }));
+    getKickAvatar(g, (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'giftedsub', chatname: g, chatmessage: `¡Regaló ${qty} sub(s)!`, amount: qty, chatimg: av || null, nameColor: '#53FC18', roles: [], mid: 'kick-gift-wh-' + Date.now() }));
     return;
   }
   if (eventType === 'channel.followed') {
     const u = data.follower?.username || data.username || 'Alguien';
-    getKickAvatar(u, (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'follow', chatname: u, chatmessage: '¡Siguió el canal! 💚', chatimg: av || null, nameColor: '#53FC18', roles: [], mid: 'kick-follow-' + Date.now() }));
+    getKickAvatar(u, (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'follow', chatname: u, chatmessage: '¡Siguió el canal! 💚', chatimg: av || null, nameColor: '#53FC18', roles: [], mid: 'kick-follow-wh-' + Date.now() }));
   }
 }
 
+// Refresh token automático
 async function refreshKickTokenIfNeeded() {
   if (!kickOAuth.refreshToken) return;
   if (kickOAuth.expiresAt > Date.now() + 60000) return;
@@ -638,12 +638,12 @@ async function refreshKickTokenIfNeeded() {
 setInterval(refreshKickTokenIfNeeded, 30 * 60 * 1000);
 
 app.get('/api/kick/oauth/status', (req, res) => res.json({
-  connected: state.kickOAuth.connected,
-  hasToken:  !!kickOAuth.accessToken,
-  userId:    kickOAuth.userId    || null,
-  channelId: kickOAuth.channelId || null,
-  expiresAt: kickOAuth.expiresAt ? new Date(kickOAuth.expiresAt).toISOString() : null,
-  authUrl:   '/auth/kick',
+  connected:  state.kickOAuth.connected,
+  hasToken:   !!kickOAuth.accessToken,
+  userId:     kickOAuth.userId    || null,
+  channelId:  kickOAuth.channelId || null,
+  webhookUrl: WEBHOOK_URL,
+  authUrl:    '/auth/kick',
 }));
 
 // ══════════════════════════════════════════════════════
@@ -676,14 +676,9 @@ const YOUTUBE_API_KEYS = (() => {
   if (process.env.YOUTUBE_API_KEY_4) keys.push(process.env.YOUTUBE_API_KEY_4);
   return keys.filter(Boolean);
 })();
-
 let ytCurrentKeyIndex = 0;
 function getYouTubeApiKey() { return YOUTUBE_API_KEYS[ytCurrentKeyIndex] || ''; }
-function rotateYouTubeApiKey() {
-  if (YOUTUBE_API_KEYS.length <= 1) return false;
-  ytCurrentKeyIndex = (ytCurrentKeyIndex + 1) % YOUTUBE_API_KEYS.length;
-  return true;
-}
+function rotateYouTubeApiKey() { if (YOUTUBE_API_KEYS.length <= 1) return false; ytCurrentKeyIndex = (ytCurrentKeyIndex + 1) % YOUTUBE_API_KEYS.length; return true; }
 
 let ytPollState = { active: false, videoId: null, liveChatId: null, pageToken: null, pollTimer: null, errorCount: 0, seenIds: new Set(), keyExhaustedCount: 0 };
 let ytAutoDetectTimer = null;
@@ -819,7 +814,7 @@ app.post('/api/kick/restart',   (req, res) => { if (kickRetryTimeout) { clearTim
 app.get('/api/status', (req, res) => res.json({
   twitch:    { connected: state.twitch.connected,    channel:  CONFIG.twitch },
   kick:      { connected: state.kick.connected,      channel:  CONFIG.kick },
-  kickOAuth: { connected: state.kickOAuth.connected, hasToken: !!kickOAuth.accessToken, authUrl: '/auth/kick' },
+  kickOAuth: { connected: state.kickOAuth.connected, hasToken: !!kickOAuth.accessToken, webhookUrl: WEBHOOK_URL, authUrl: '/auth/kick' },
   tiktok:    { connected: state.tiktok.connected,    user:     CONFIG.tiktok },
   youtube:   { connected: state.youtube.connected,   videoId:  state.youtube.videoId, handle: CONFIG.youtubeHandle },
   clients: state.clients.size, messages: state.msgCount, uptime: Math.floor(process.uptime()),
@@ -832,23 +827,30 @@ app.post('/api/youtube/disconnect', (req, res) => { disconnectYouTubeApi(); res.
 // ARRANQUE
 // ══════════════════════════════════════════════════════
 server.listen(CONFIG.port, () => {
-  console.log(`\n🎮 MEEVE MULTICHAT SERVER v2.3`);
+  console.log(`\n🎮 MEEVE MULTICHAT SERVER v2.4`);
   console.log(`   Puerto    : ${CONFIG.port}`);
   console.log(`   Twitch    : ${CONFIG.twitch  || '(no config)'}`);
   console.log(`   Kick      : ${CONFIG.kick    || '(no config)'}`);
   console.log(`   Kick OAuth: ${CONFIG.kickClientId ? '✅ Configurado' : '❌ falta KICK_CLIENT_ID'}`);
   console.log(`   TikTok    : ${CONFIG.tiktok  || '(no config)'}`);
   console.log(`   YouTube   : ${YOUTUBE_API_KEYS.length} key(s) | ${CONFIG.youtubeChannelId || CONFIG.youtubeHandle || 'solo manual'}`);
-  if (CONFIG.kickClientId) console.log(`\n   👉 Activar canjes: https://multichat-krona-5uts.onrender.com/auth/kick\n`);
+  if (CONFIG.kickClientId) {
+    console.log(`\n   👉 Activar canjes Kick:`);
+    console.log(`      1. Abrí: https://multichat-krona-5uts.onrender.com/auth/kick`);
+    console.log(`      2. Activá webhooks en kick.com/settings/developer con URL:`);
+    console.log(`         ${WEBHOOK_URL}\n`);
+  }
 
   connectTwitch();
   connectKick();
   connectTikTokConnector();
 
+  // Si ya hay token en env vars, re-registrar webhooks sin pasar por browser
   if (kickOAuth.accessToken && CONFIG.kickClientId) {
-    console.log('[Kick OAuth] Token en env vars, reconectando EventSub...');
+    console.log('[Kick OAuth] Token encontrado, re-registrando webhooks...');
     kickOAuth.expiresAt = Date.now() + 3600000;
-    loadKickUserInfo().then(() => connectKickEventSub());
+    loadKickUserInfo().then(() => registerKickWebhooks());
+    state.kickOAuth.connected = true;
   }
 
   if (CONFIG.youtubeChannelId || CONFIG.youtubeHandle) setTimeout(autoConnectYouTubeLive, 6000);
