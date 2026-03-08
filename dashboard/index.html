@@ -129,7 +129,6 @@
     .url-box { background: rgba(0,30,20,0.5); border: 1px solid rgba(0,255,157,0.2); border-radius: 4px; padding: 8px 10px; font-size: 10px; font-family: monospace; color: #5eead4; word-break: break-all; cursor: pointer; transition: all 0.2s; line-height: 1.4; }
     .url-box:hover { background: rgba(0,255,157,0.06); border-color: var(--green); }
 
-    /* Auto-hide control row */
     .autohide-row { display:flex; align-items:center; gap:8px; margin-top:5px; padding:6px 8px; background:rgba(0,255,157,0.04); border:1px solid rgba(0,255,157,0.12); border-radius:4px; transition: border-color 0.2s; }
     .autohide-row.active { border-color: rgba(0,255,157,0.35); background: rgba(0,255,157,0.07); }
     .autohide-label { font-size:10px; color:var(--muted); flex:1; text-transform:uppercase; letter-spacing:0.5px; }
@@ -170,6 +169,16 @@
     .msg-item.youtube { border-left-color: var(--youtube); }
     .msg-item.custom  { border-left-color: var(--custom); }
     .msg-item.system  { border-left-color: var(--yellow); }
+
+    /* ✅ CANJES / DONACIONES — destacados visualmente */
+    .msg-item.donation { border-left-color: var(--yellow); background: rgba(255,170,0,0.05); }
+    .msg-item.donation:hover { background: rgba(255,170,0,0.1); }
+    .msg-item.donation.kick { border-left-color: #53FC18; background: rgba(83,252,24,0.05); }
+    .msg-item.donation.kick:hover { background: rgba(83,252,24,0.1); }
+    .msg-item.donation.twitch { border-left-color: var(--twitch); background: rgba(145,70,255,0.07); }
+    .msg-item.donation.youtube { border-left-color: var(--youtube); background: rgba(255,0,0,0.06); }
+    .msg-item.donation.tiktok  { border-left-color: var(--tiktok);  background: rgba(255,0,80,0.06); }
+
     .msg-item.highlighted { background: rgba(0,255,157,0.12); border-left-color: var(--green) !important; animation: msgAppear 0.4s ease-out, hlPulse 2s ease-in-out infinite; }
     @keyframes hlPulse { 0%,100%{ box-shadow: 0 0 15px rgba(0,255,157,0.2); } 50%{ box-shadow: 0 0 25px rgba(0,255,157,0.4); } }
 
@@ -199,6 +208,38 @@
     .msg-time { font-size: 9px; color: var(--muted); margin-left: auto; white-space: nowrap; }
     .msg-text { font-size: 12px; color: var(--text); line-height: 1.5; word-break: break-word; }
     .msg-text img.emote { height: var(--ov-emote-size, 24px); width: auto; vertical-align: middle; margin: 0 2px; image-rendering: -webkit-optimize-contrast; display: inline-block; }
+
+    /* ✅ Etiqueta especial para canjes */
+    .msg-event-tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 999px; font-size: 9px; font-weight: 700;
+      letter-spacing: 0.5px; border: 1px solid; white-space: nowrap; flex-shrink: 0;
+    }
+    .msg-event-tag.redemption { background: rgba(83,252,24,0.12); border-color: rgba(83,252,24,0.5); color: #53FC18; }
+    .msg-event-tag.bits       { background: rgba(145,70,255,0.15); border-color: rgba(145,70,255,0.5); color: #b38dff; }
+    .msg-event-tag.sub        { background: rgba(145,70,255,0.1);  border-color: rgba(145,70,255,0.4); color: var(--twitch); }
+    .msg-event-tag.resub      { background: rgba(145,70,255,0.1);  border-color: rgba(145,70,255,0.4); color: var(--twitch); }
+    .msg-event-tag.subgift    { background: rgba(145,70,255,0.12); border-color: rgba(145,70,255,0.5); color: #d0a8ff; }
+    .msg-event-tag.giftedsub  { background: rgba(83,252,24,0.1);   border-color: rgba(83,252,24,0.4);  color: var(--kick); }
+    .msg-event-tag.superchat  { background: rgba(255,0,0,0.12);    border-color: rgba(255,0,0,0.5);    color: #ff6666; }
+    .msg-event-tag.member     { background: rgba(255,0,0,0.1);     border-color: rgba(255,0,0,0.4);    color: #ff9999; }
+    .msg-event-tag.gift       { background: rgba(255,0,80,0.12);   border-color: rgba(255,0,80,0.5);   color: #ff6699; }
+
+    /* ✅ Donación / canje box */
+    .donation-box {
+      margin-top: 6px; padding: 6px 12px;
+      border-radius: 4px; font-size: 12px; font-weight: 700;
+      text-align: center; letter-spacing: 0.3px;
+    }
+    .donation-box.redemption { background: rgba(83,252,24,0.1); border: 1px solid rgba(83,252,24,0.4); color: #53FC18; }
+    .donation-box.bits       { background: rgba(145,70,255,0.12); border: 1px solid rgba(145,70,255,0.5); color: #b38dff; }
+    .donation-box.sub,
+    .donation-box.resub,
+    .donation-box.subgift,
+    .donation-box.giftedsub  { background: rgba(145,70,255,0.1); border: 1px solid rgba(145,70,255,0.4); color: #d0a8ff; }
+    .donation-box.superchat  { background: rgba(255,0,0,0.1); border: 1px solid rgba(255,0,0,0.4); color: #ff6666; }
+    .donation-box.member     { background: rgba(255,0,0,0.08); border: 1px solid rgba(255,0,0,0.3); color: #ff9999; }
+    .donation-box.gift       { background: rgba(255,0,80,0.1); border: 1px solid rgba(255,0,80,0.4); color: #ff6699; }
 
     .msg-highlight-btn { margin-left: auto; padding: 3px 8px; font-size: 10px; border-radius: 3px; border: 1px solid rgba(0,255,157,0.4); background: rgba(0,255,157,0.08); color: var(--green); cursor: pointer; white-space: nowrap; display: none; font-family: var(--font-body); font-weight: 700; letter-spacing: 0.5px; }
     .msg-item:hover .msg-highlight-btn, .msg-item.highlighted .msg-highlight-btn { display: inline-block; }
@@ -356,13 +397,13 @@
     <div class="card">
       <div class="card-header"><span class="card-title-text">▶️ YouTube — Chat al Multichat</span></div>
       <div class="card-body">
-        <div id="yt-bridge-status" class="info-box info-yellow">📋 Pegá el link del live y presioná Conectar.</div>
+        <div id="yt-bridge-status" class="info-box info-yellow">📋 Pegá el link del live y presioná Conectar.<br><span style="font-size:9px;color:rgba(0,255,157,0.5);">Si configuraste YOUTUBE_CHANNEL_ID en Render, el servidor detecta el live automáticamente.</span></div>
         <label>Link o Video ID del live:</label>
         <div class="input-row">
           <input id="yt-video-url" type="text" placeholder="https://youtube.com/watch?v=..." onkeydown="if(event.key==='Enter')connectYouTube()" />
           <button class="btn btn-primary" onclick="connectYouTube()">▶ Conectar</button>
         </div>
-        <div class="hint">El servidor usa YouTube Data API v3. Requiere <code style="color:var(--green);background:rgba(0,255,157,0.08);padding:1px 5px;border-radius:3px;">YOUTUBE_API_KEY</code> en Render.</div>
+        <div class="hint">El servidor usa YouTube Data API v3. Variables en Render: <code style="color:var(--green);background:rgba(0,255,157,0.08);padding:1px 5px;border-radius:3px;">YOUTUBE_API_KEY</code> y <code style="color:var(--green);background:rgba(0,255,157,0.08);padding:1px 5px;border-radius:3px;">YOUTUBE_CHANNEL_ID</code></div>
         <div style="display:flex;gap:6px;margin-top:2px;">
           <button class="btn btn-danger btn-full" onclick="disconnectYouTube()">⏹ Detener</button>
           <button class="btn btn-secondary btn-full" onclick="openYouTubeLive()">📺 Abrir Live</button>
@@ -370,12 +411,10 @@
       </div>
     </div>
 
-    <!-- OBS URLs ─────────────────────────────────────────────────────────── -->
+    <!-- OBS URLs -->
     <div class="card">
       <div class="card-header"><span class="card-title-text">📺 URLs para OBS</span></div>
       <div class="card-body">
-
-        <!-- MULTICHAT -->
         <label>💬 Chat multichat (burbujas)</label>
         <div class="url-box" id="url-chat" onclick="copyUrl('url-chat')" title="Click para copiar">Configura el servidor primero...</div>
         <div style="display:flex;gap:5px;margin-top:4px;">
@@ -394,7 +433,6 @@
           </div>
         </div>
 
-        <!-- CHAT UNO -->
         <label style="margin-top:10px;">🗨️ Chat un mensaje</label>
         <div class="url-box" id="url-chatuno" onclick="copyUrl('url-chatuno')" title="Click para copiar">Configura el servidor primero...</div>
         <div style="display:flex;gap:5px;margin-top:4px;">
@@ -413,7 +451,6 @@
           </div>
         </div>
 
-        <!-- DESTACADOR -->
         <label style="margin-top:10px;">📌 Destacador</label>
         <div class="url-box" id="url-destacador" onclick="copyUrl('url-destacador')" title="Click para copiar">Configura el servidor primero...</div>
         <div style="display:flex;gap:5px;margin-top:4px;">
@@ -427,10 +464,8 @@
             <span>seg</span>
           </div>
         </div>
-
       </div>
     </div>
-    <!-- ──────────────────────────────────────────────────────────────────── -->
 
     <!-- CONFIG VISUAL -->
     <div class="card">
@@ -595,6 +630,19 @@ var PLATFORM_LOGOS={
   system:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>'
 };
 
+// ✅ Labels de eventos/donaciones
+var EVENT_LABELS = {
+  redemption: '🎁 CANJE',
+  bits:       '💎 BITS',
+  sub:        '⭐ SUB',
+  resub:      '🔄 RESUB',
+  subgift:    '🎁 SUB REGALADA',
+  giftedsub:  '🎁 SUB REGALADA',
+  superchat:  '💰 SUPERCHAT',
+  member:     '⭐ MIEMBRO',
+  gift:       '🎁 REGALO',
+};
+
 function esc(str){return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
 function processTwitchEmotes(text, emotes) {
@@ -684,7 +732,6 @@ function closeChatVisor(){
 document.addEventListener('DOMContentLoaded',function(){
   var saved=store.get('serverUrl');
   document.getElementById('serverUrl').value=saved;
-  // Restore autohide settings
   restoreAutohideSettings();
   updateOverlayUrls();
   if(saved) connectWS(saved);
@@ -695,12 +742,11 @@ document.addEventListener('DOMContentLoaded',function(){
   if(store.get('singleLine')==='1'){document.getElementById('singleLineToggle').checked=true;toggleSingleLine(true,true);}
   var savedYtUrl=store.get('ytVideoUrl');
   if(savedYtUrl) document.getElementById('yt-video-url').value=savedYtUrl;
-
   var panel=document.getElementById('chat-panel');
   panel.addEventListener('scroll',function(){autoScroll=(panel.scrollHeight-panel.scrollTop-panel.clientHeight)<80;});
 });
 
-// ═══ AUTO-HIDE CONTROLS ═══
+// ═══ AUTO-HIDE ═══
 function onAutohideChange(key) {
   var cb = document.getElementById('autohide-'+key);
   var timeDiv = document.getElementById('autohide-time-'+key);
@@ -711,11 +757,9 @@ function onAutohideChange(key) {
   row.classList.toggle('active', enabled);
   store.set('autohide-'+key, enabled ? '1' : '0');
   updateOverlayUrls();
-  toast(enabled ? ('⏱ Auto-ocultar activado') : ('⏹ Auto-ocultar desactivado'));
+  toast(enabled ? '⏱ Auto-ocultar activado' : '⏹ Auto-ocultar desactivado');
 }
-
 function restoreAutohideSettings() {
-  // chat multichat: default OFF
   var chatEnabled = store.get('autohide-chat') === '1';
   document.getElementById('autohide-chat').checked = chatEnabled;
   var chatTime = store.get('showtime-chat') || '30';
@@ -725,8 +769,6 @@ function restoreAutohideSettings() {
   chatTimeDiv.style.opacity = chatEnabled ? '1' : '0.35';
   chatTimeDiv.style.pointerEvents = chatEnabled ? '' : 'none';
   chatRow.classList.toggle('active', chatEnabled);
-
-  // chat uno: default ON
   var chatUnoEnabled = store.get('autohide-chatuno') !== '0';
   document.getElementById('autohide-chatuno').checked = chatUnoEnabled;
   var chatUnoTime = store.get('showtime-chatuno') || '12';
@@ -736,8 +778,6 @@ function restoreAutohideSettings() {
   chatUnoTimeDiv.style.opacity = chatUnoEnabled ? '1' : '0.35';
   chatUnoTimeDiv.style.pointerEvents = chatUnoEnabled ? '' : 'none';
   chatUnoRow.classList.toggle('active', chatUnoEnabled);
-
-  // showtime destacador
   var destTime = store.get('showtime-dest') || '12';
   document.getElementById('showtime-input').value = destTime;
 }
@@ -801,7 +841,7 @@ async function disconnectYouTube(silent){
   setPlatformStatus('youtube',false,'—');
   if(!silent){setYtBridgeStatus('yellow','📋 Pegá el link del live y presioná Conectar.');toast('⏹ YouTube detenido');}
 }
-function setYtBridgeStatus(color,html){var box=document.getElementById('yt-bridge-status');if(!box)return;box.className='info-box info-'+color;box.innerHTML=html;}
+function setYtBridgeStatus(color,html){var box=document.getElementById('yt-bridge-status');if(!box)return;box.className='info-box info-'+color;box.innerHTML=html+'<br><span style="font-size:9px;color:rgba(0,255,157,0.5);">Si configuraste YOUTUBE_CHANNEL_ID en Render, el servidor detecta el live automáticamente.</span>';}
 function openYouTubeLive(){var vid=ytVideoId||'';if(vid)window.open('https://www.youtube.com/watch?v='+vid,'_blank','noopener');else toast('Pegá el link del live primero');}
 
 // ═══ APPEND MESSAGE ═══
@@ -810,30 +850,71 @@ function appendMessage(data){
   var panel=document.getElementById('chat-panel');
   var ph=document.getElementById('chat-placeholder');
   if(ph) ph.remove();
-  var platform=data.platform||data.type||'custom';
-  var logo=PLATFORM_LOGOS[platform]||PLATFORM_LOGOS.custom;
-  var time=new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
-  var el=document.createElement('div');
-  el.className='msg-item '+platform;
-  el.dataset.mid=data.mid||'';
-  var avatarHTML=data.chatimg?'<div class="msg-avatar"><img src="'+esc(data.chatimg)+'" onerror="this.style.display=\'none\'"></div>':'<div class="msg-avatar"><div class="msg-avatar-fallback" style="color:rgba(0,255,157,0.5);width:18px;height:18px;">'+logo+'</div></div>';
-  var platformBadge='<span class="msg-platform '+platform+'"><span style="width:10px;height:10px;display:inline-flex;">'+logo+'</span>'+platform.charAt(0).toUpperCase()+platform.slice(1)+'</span>';
-  var badgesHTML='';
-  if(data.roles&&data.roles.length) data.roles.forEach(function(r){badgesHTML+='<span style="font-size:9px;padding:1px 5px;background:rgba(0,255,157,0.08);border:1px solid rgba(0,255,157,0.3);border-radius:3px;color:#5eead4;">'+esc(r.label||r.type)+'</span>';});
-  var nameStyle=data.nameColor?'color:'+data.nameColor+';text-shadow:0 0 8px '+data.nameColor+';':'';
-  var msgHTML=processMessageHTML(data);
-  var donHTML='';
-  if(data.type==='donation'&&(data.amount||data.donationType)){
-    var dl=data.donationType==='bits'?'💎 '+data.amount+' Bits':data.donationType==='sub'?'🌟 ¡Nuevo Sub!':data.donationType==='resub'?'🔄 '+data.months+' meses':data.donationType==='subgift'?'🎁 Sub regalada':data.donationType==='superchat'?'💰 '+(data.amountDisplay||data.amount):data.donationType==='member'?'⭐ ¡Nuevo Miembro!':data.donationType==='gift'?'🎁 Regalo TikTok':data.amount?'💰 '+data.amount:'';
-    if(dl) donHTML='<div style="margin-top:5px;padding:5px 10px;background:rgba(0,255,157,0.1);border:1px solid rgba(0,255,157,0.4);border-radius:3px;font-size:11px;font-weight:700;color:var(--green);text-align:center;">'+dl+'</div>';
+
+  var platform = data.platform || data.type || 'custom';
+  var isDonation = (data.type === 'donation');
+  var donationType = data.donationType || '';
+  var logo = PLATFORM_LOGOS[platform] || PLATFORM_LOGOS.custom;
+  var time = new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
+
+  var el = document.createElement('div');
+  // ✅ Clase donation para canjes y donaciones (con sub-plataforma)
+  el.className = 'msg-item ' + platform + (isDonation ? ' donation' : '');
+  el.dataset.mid = data.mid || '';
+
+  var avatarHTML = data.chatimg
+    ? '<div class="msg-avatar"><img src="'+esc(data.chatimg)+'" onerror="this.style.display=\'none\'"></div>'
+    : '<div class="msg-avatar"><div class="msg-avatar-fallback" style="color:rgba(0,255,157,0.5);width:18px;height:18px;">'+logo+'</div></div>';
+
+  var platformBadge = '<span class="msg-platform '+platform+'"><span style="width:10px;height:10px;display:inline-flex;">'+logo+'</span>'+platform.charAt(0).toUpperCase()+platform.slice(1)+'</span>';
+
+  // ✅ Etiqueta de evento/canje
+  var eventTagHTML = '';
+  if(isDonation && donationType && EVENT_LABELS[donationType]) {
+    eventTagHTML = '<span class="msg-event-tag '+donationType+'">'+EVENT_LABELS[donationType]+'</span>';
   }
-  el.innerHTML=avatarHTML+'<div class="msg-body"><div class="msg-header"><span class="msg-user" style="'+nameStyle+'">'+esc(data.chatname||'?')+'</span>'+platformBadge+badgesHTML+'<span class="msg-time">'+time+'</span><button class="msg-highlight-btn" onclick="event.stopPropagation();sendHighlight(this.closest(\'.msg-item\'))">📌 Destacar</button></div><div class="msg-text">'+msgHTML+'</div>'+donHTML+'</div>';
-  el._msgData=data;
-  el.addEventListener('click',function(){sendHighlight(el);});
+
+  var badgesHTML = '';
+  if(data.roles&&data.roles.length) data.roles.forEach(function(r){badgesHTML+='<span style="font-size:9px;padding:1px 5px;background:rgba(0,255,157,0.08);border:1px solid rgba(0,255,157,0.3);border-radius:3px;color:#5eead4;">'+esc(r.label||r.type)+'</span>';});
+
+  var nameStyle = data.nameColor ? 'color:'+data.nameColor+';text-shadow:0 0 8px '+data.nameColor+';' : '';
+  var msgHTML = processMessageHTML(data);
+
+  // ✅ Caja de donación / canje mejorada
+  var donHTML = '';
+  if(isDonation && donationType) {
+    var dl = '';
+    if(donationType === 'redemption')  dl = '🎁 Canjeó: ' + esc(data.rewardTitle || data.chatmessage || 'Recompensa');
+    else if(donationType === 'bits')   dl = '💎 ' + (data.amount||'') + ' Bits';
+    else if(donationType === 'sub')    dl = '⭐ ¡Nuevo Suscriptor!';
+    else if(donationType === 'resub')  dl = '🔄 ' + (data.months||'') + ' meses de sub';
+    else if(donationType === 'subgift')    dl = '🎁 Sub regalada' + (data.recipient ? ' a '+esc(data.recipient) : '');
+    else if(donationType === 'giftedsub') dl = '🎁 ' + (data.amount||1) + ' sub(s) regalada(s)';
+    else if(donationType === 'superchat') dl = '💰 ' + (data.amountDisplay || data.amount || '');
+    else if(donationType === 'member')    dl = '⭐ ¡Nuevo Miembro!';
+    else if(donationType === 'gift')      dl = '🎁 ' + esc(data.chatmessage || 'Regalo TikTok');
+    if(dl) donHTML = '<div class="donation-box '+donationType+'">'+dl+'</div>';
+  }
+
+  el.innerHTML = avatarHTML
+    + '<div class="msg-body">'
+    +   '<div class="msg-header">'
+    +     '<span class="msg-user" style="'+nameStyle+'">'+esc(data.chatname||'?')+'</span>'
+    +     platformBadge
+    +     eventTagHTML
+    +     badgesHTML
+    +     '<span class="msg-time">'+time+'</span>'
+    +     '<button class="msg-highlight-btn" onclick="event.stopPropagation();sendHighlight(this.closest(\'.msg-item\'))">📌 Destacar</button>'
+    +   '</div>'
+    +   (donHTML || ('<div class="msg-text">'+msgHTML+'</div>'))
+    + '</div>';
+
+  el._msgData = data;
+  el.addEventListener('click', function(){ sendHighlight(el); });
   panel.appendChild(el);
-  messages.push({el:el,data:data});
-  if(messages.length>MAX_MESSAGES){var old=messages.shift();if(old.el.parentNode)old.el.parentNode.removeChild(old.el);}
-  if(autoScroll) requestAnimationFrame(function(){panel.scrollTop=panel.scrollHeight;});
+  messages.push({el:el, data:data});
+  if(messages.length > MAX_MESSAGES){ var old=messages.shift(); if(old.el.parentNode) old.el.parentNode.removeChild(old.el); }
+  if(autoScroll) requestAnimationFrame(function(){ panel.scrollTop=panel.scrollHeight; });
 }
 
 // ═══ HIGHLIGHT ═══
@@ -870,21 +951,62 @@ function connectKickBrowser(channelId){
 function tryKickUrl(channelId,urls,idx){
   if(idx>=urls.length) idx=0;
   try{kickWs=new WebSocket(urls[idx]);}catch(e){kickRetryTimeout=setTimeout(function(){tryKickUrl(channelId,urls,(idx+1)%urls.length);},5000);return;}
-  kickWs.onopen=function(){kickRetryDelay=3000;localStorage.setItem('kickWsUrlIndex',idx);kickWs.send(JSON.stringify({event:'pusher:subscribe',data:{auth:'',channel:'chatrooms.'+channelId+'.v2'}}));};
+  kickWs.onopen=function(){
+    kickRetryDelay=3000;
+    localStorage.setItem('kickWsUrlIndex',idx);
+    // Chat principal
+    kickWs.send(JSON.stringify({event:'pusher:subscribe',data:{auth:'',channel:'chatrooms.'+channelId+'.v2'}}));
+    // ✅ Canal de eventos del canal (para channel points)
+    kickWs.send(JSON.stringify({event:'pusher:subscribe',data:{auth:'',channel:'channel.'+channelId}}));
+  };
   kickWs.onmessage=function(e){
     try{
       var msg=JSON.parse(e.data),event=msg.event||'';
       if(event==='pusher:connection_established'||event==='pusher:pong') return;
-      if(event==='pusher_internal:subscription_succeeded'){var box=document.getElementById('kick-status-box');if(box){box.className='info-box info-green';box.innerHTML='✅ Kick conectado (chatroom '+channelId+')';}if(ws&&ws.readyState===1)ws.send(JSON.stringify({type:'kick_connected'}));return;}
+      if(event==='pusher_internal:subscription_succeeded'){
+        var box=document.getElementById('kick-status-box');
+        if(box){box.className='info-box info-green';box.innerHTML='✅ Kick conectado (chatroom '+channelId+')';}
+        if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'kick_connected'}));
+        return;
+      }
       if(event==='pusher:error'){kickWs.close();return;}
-      if(event.indexOf('ChatMessageEvent')===-1) return;
+
       var d=typeof msg.data==='string'?JSON.parse(msg.data):msg.data;
-      var kickRoles=[],badges=(d.sender&&d.sender.identity&&d.sender.identity.badges)||[];
+      if(!d) return;
+
+      // ✅ Canjes de Channel Points detectados en el cliente
+      if(event==='App\\Events\\ChannelPointsRedemptionEvent'||event==='App.Events.ChannelPointsRedemptionEvent'||event==='App\\Events\\PointRedemptionEvent'||event==='App.Events.PointRedemptionEvent'){
+        var username=(d.user&&d.user.username)||(d.sender&&d.sender.username)||'KickUser';
+        var rewardTitle=(d.reward&&d.reward.title)||d.reward_title||'Recompensa';
+        var content=d.message||d.comment||'';
+        var cm={type:'kick_donation',platform:'kick',donationType:'redemption',chatname:username,chatmessage:'🎁 Canjeó: "'+rewardTitle+'"'+(content?' — '+content:''),rewardTitle:rewardTitle,nameColor:'#53FC18',roles:[],mid:d.id||('kick-redeem-'+Date.now())};
+        if(ws&&ws.readyState===1) ws.send(JSON.stringify(cm));
+        else appendMessage(cm);
+        return;
+      }
+
+      if(event.indexOf('ChatMessageEvent')===-1) return;
+
+      var sender=d.sender||{};
+      var username=sender.username||'Unknown';
+      var content=d.content||'';
+      var badges=(sender.identity&&sender.identity.badges)||[];
+      var nameColor=(sender.identity&&sender.identity.color)||'#53FC18';
+      var kickRoles=[];
       badges.forEach(function(b){var bt=(b.type||'').toLowerCase();if(bt==='broadcaster'||bt==='owner')kickRoles.push({type:'broadcaster',label:'Owner'});else if(bt==='moderator'||bt==='mod')kickRoles.push({type:'moderator',label:'Mod'});else if(bt==='vip')kickRoles.push({type:'vip',label:'VIP'});else if(bt==='subscriber'||bt==='sub')kickRoles.push({type:'subscriber',label:'Sub'});else kickRoles.push({type:bt,label:b.type});});
-      var username=(d.sender&&d.sender.username)||'Unknown';
-      var nameColor=(d.sender&&d.sender.identity&&d.sender.identity.color)||'#53FC18';
+
+      // ✅ Detectar canje por tipo de mensaje
+      var msgType=d.type||'';
+      var rewardTitle=(d.reward&&d.reward.title)||(d.metadata&&d.metadata.reward_title)||(d.channel_point_reward&&d.channel_point_reward.title)||'';
+      if(msgType==='channel_points_redemption'||rewardTitle){
+        var cm={type:'kick_donation',platform:'kick',donationType:'redemption',chatname:username,chatmessage:'🎁 Canjeó: "'+(rewardTitle||'Recompensa')+'"'+(content?' — '+content:''),rewardTitle:rewardTitle||'Recompensa',nameColor:nameColor,roles:kickRoles,mid:d.id||('kick-redeem-'+Date.now())};
+        if(ws&&ws.readyState===1) ws.send(JSON.stringify(cm));
+        else appendMessage(cm);
+        return;
+      }
+
       getKickAvatarBrowser(username,function(avatar){
-        var cm={type:'kick_message',platform:'kick',chatname:username,chatmessage:d.content,nameColor:nameColor,chatimg:avatar||null,roles:kickRoles,mid:d.id||('kick-'+Date.now())};
+        var cm={type:'kick_message',platform:'kick',chatname:username,chatmessage:content,nameColor:nameColor,chatimg:avatar||null,roles:kickRoles,mid:d.id||('kick-'+Date.now())};
         if(ws&&ws.readyState===1) ws.send(JSON.stringify(cm));
         else appendMessage(cm);
       });
@@ -950,43 +1072,32 @@ async function restartTikTok(){var su=store.get('serverUrl');if(!su)return toast
 function openTikTokLive(){var u=currentChannels.tiktok||'';if(!u)return toast('TikTok no configurado');window.open('https://www.tiktok.com/@'+u+'/live','_blank','noopener');}
 function sendCustomMessage(){var input=document.getElementById('custom-msg-input'),text=input.value.trim();if(!text)return;if(!isConnected||!ws)return toast('⚠️ No hay conexión');ws.send(JSON.stringify({type:'custom_message',user:'Tú (dashboard)',text:text}));input.value='';}
 
-// ═══ OVERLAY URLs — CON AUTO-HIDE ═══
+// ═══ OVERLAY URLs ═══
 function getBaseOverlayDir(){
   var href=window.location.href.split('?')[0].replace(/\/+$/,'');
   var base=href.replace(/\/dashboard(\/[^?]*)?$/,'/overlay');
   if(base===href) base=href.replace(/\/[^/]+$/,'/overlay');
   return base;
 }
-
 function updateOverlayUrls(){
   var serverUrl=store.get('serverUrl');
   var base=(window.location.protocol!=='file:')?getBaseOverlayDir():'';
-
-  // Leer estado del multichat
   var chatAH   = document.getElementById('autohide-chat') ? document.getElementById('autohide-chat').checked : false;
   var chatTime = parseInt(document.getElementById('showtime-chat') ? document.getElementById('showtime-chat').value : 30) || 30;
   store.set('showtime-chat', chatTime);
-
-  // Leer estado del chat uno
   var chatUnoAH   = document.getElementById('autohide-chatuno') ? document.getElementById('autohide-chatuno').checked : true;
   var chatUnoTime = parseInt(document.getElementById('showtime-chatuno') ? document.getElementById('showtime-chatuno').value : 12) || 12;
   store.set('showtime-chatuno', chatUnoTime);
-
-  // Destacador (siempre tiene showtime)
   var destTime = parseInt(document.getElementById('showtime-input') ? document.getElementById('showtime-input').value : 12) || 12;
   store.set('showtime-dest', destTime);
   var destShowtime = destTime * 1000;
-
-  // Construir parámetros
   var chatParams    = chatAH    ? '&autohide=1&showtime='+chatTime    : '&autohide=0';
   var chatUnoParams = chatUnoAH ? '&autohide=1&showtime='+chatUnoTime : '&autohide=0';
-
   var ids = {
     'url-chat':       { file:'index.html',      params: chatParams },
     'url-chatuno':    { file:'chat_uno.html',   params: chatUnoParams },
     'url-destacador': { file:'destacador.html', params: '&showtime='+destShowtime }
   };
-
   Object.keys(ids).forEach(function(id){
     var box=document.getElementById(id); if(!box) return;
     if(!serverUrl){box.textContent='Configura el servidor primero...';box.dataset.url='';return;}
@@ -995,7 +1106,6 @@ function updateOverlayUrls(){
     box.textContent=url; box.dataset.url=url;
   });
 }
-
 function copyUrl(id){var url=document.getElementById(id).dataset.url;if(!url)return toast('Configura el servidor primero');navigator.clipboard.writeText(url).then(function(){toast('✅ URL copiada');});}
 function openUrl(id){var url=document.getElementById(id).dataset.url;if(!url)return toast('Configura el servidor primero');window.open(url,'_blank');}
 
@@ -1006,11 +1116,22 @@ function clearChat(){if(!confirm('¿Limpiar todos los mensajes del dashboard?'))
 function exportMessages(){var data=messages.map(function(m,i){return{id:i+1,name:m.data.chatname,message:m.data.chatmessage,platform:m.data.platform||m.data.type,timestamp:new Date().toISOString()};});var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download='krona_messages_'+Date.now()+'.json';a.click();URL.revokeObjectURL(url);toast('💾 Mensajes exportados');}
 function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
+
 function injectTestMessage(){
-  appendMessage({type:'custom',platform:'twitch',chatname:'Test Twitch',chatmessage:'Hola Kappa que tal PogChamp',nameColor:'#9146FF',chatemotes:[{text:'Kappa',url:'https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/1.0',start:5,end:9},{text:'PogChamp',url:'https://static-cdn.jtvnw.net/emoticons/v2/305954156/default/dark/1.0',start:15,end:22}],mid:'test-tw-'+Date.now()});
-  setTimeout(function(){appendMessage({type:'youtube',platform:'youtube',chatname:'Test YouTube',chatmessage:'Mensaje de prueba desde YouTube 🔴',nameColor:'#FF0000',roles:[],mid:'test-yt-'+Date.now()});},500);
+  appendMessage({type:'twitch',platform:'twitch',chatname:'Test Twitch',chatmessage:'Hola Kappa que tal PogChamp',nameColor:'#9146FF',chatemotes:[{text:'Kappa',url:'https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/1.0',start:5,end:9},{text:'PogChamp',url:'https://static-cdn.jtvnw.net/emoticons/v2/305954156/default/dark/1.0',start:15,end:22}],mid:'test-tw-'+Date.now()});
+  setTimeout(function(){
+    // ✅ Test de canje de Channel Points Kick
+    appendMessage({type:'donation',platform:'kick',donationType:'redemption',chatname:'TestViewer',chatmessage:'Texto del canje',rewardTitle:'Pedir canción 🎵',nameColor:'#53FC18',roles:[],mid:'test-redeem-'+Date.now()});
+  },400);
+  setTimeout(function(){
+    appendMessage({type:'donation',platform:'twitch',donationType:'bits',chatname:'BitsDonor',chatmessage:'',amount:500,nameColor:'#9146FF',mid:'test-bits-'+Date.now()});
+  },800);
+  setTimeout(function(){
+    appendMessage({type:'youtube',platform:'youtube',chatname:'Test YouTube',chatmessage:'Mensaje de prueba desde YouTube 🔴',nameColor:'#FF0000',roles:[],mid:'test-yt-'+Date.now()});
+  },1200);
   toast('Mensajes de prueba inyectados');
 }
+
 function toast(msg){var el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(function(){el.classList.remove('show');},3000);}
 </script>
 </body>
