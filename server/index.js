@@ -326,6 +326,10 @@ function tryKickPusher(channelId) {
     if (event === 'pusher:error') { ws.terminate(); return; }
     let d; try { d = typeof msg.data === 'string' ? JSON.parse(msg.data) : msg.data; } catch(e) { return; }
     if (!d) return;
+    // 🔍 LOG TEMPORAL: loguear todos los eventos Pusher desconocidos para detectar el evento real de canjes
+    if (!event.startsWith('pusher') && !event.includes('ChatMessage') && !event.includes('Subscription') && !event.includes('GiftedSub') && !event.includes('ChannelPoints') && !event.includes('PointRedemption')) {
+      console.log('[Kick Pusher] EVENTO DESCONOCIDO:', event, '| data:', JSON.stringify(d).slice(0, 200));
+    }
     if (event === 'App\Events\ChatMessageEvent' || event === 'App.Events.ChatMessageEvent') {
       const sender = d.sender || {}, username = sender.username || 'KickUser', content = d.content || '';
       const badges = (sender.identity && sender.identity.badges) || [], nameColor = (sender.identity && sender.identity.color) || '#53FC18';
@@ -580,7 +584,7 @@ async function registerKickWebhooks() {
   // Formato correcto de la API de Kick: todos los eventos en un solo POST
   const body = JSON.stringify({
     events: [
-      { name: 'channel.points_redemption.created', version: 1 },
+      // { name: 'channel.points_redemption.created', version: 1 }, // ❌ Kick aún no lo soporta (invalid event name)
       { name: 'channel.subscription.new',          version: 1 },
       { name: 'channel.subscription.renewal',      version: 1 },
       { name: 'channel.subscription.gifts',        version: 1 },
