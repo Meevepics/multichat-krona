@@ -520,7 +520,7 @@ async function registerKickWebhooks() {
   if (!kickOAuth.accessToken) return;
   await refreshKickTokenIfNeeded();
 
-  const broadcasterId = kickOAuth.channelId || kickOAuth.userId;
+  const broadcasterId = parseInt(kickOAuth.channelId || kickOAuth.userId);
   if (!broadcasterId) {
     console.error('[Kick Webhooks] ❌ Sin broadcaster ID — no se pueden registrar webhooks');
     return;
@@ -528,16 +528,7 @@ async function registerKickWebhooks() {
 
   console.log('[Kick Webhooks] Registrando con broadcasterId:', broadcasterId);
 
-  const events = [
-    'channel.points_redemption.created',
-    'channel.subscription.new',
-    'channel.subscription.renewal',
-    'channel.subscription.gifts',
-    'channel.followed',
-  ];
-
-  // Listar webhooks existentes para evitar duplicados
-  let existingEvents = [];
+  // Primero borrar suscripciones existentes para evitar duplicados
   try {
     const listRes = await httpsRequest({
       hostname: 'api.kick.com',
@@ -545,57 +536,63 @@ async function registerKickWebhooks() {
       method:   'GET',
       headers:  { 'Authorization': `Bearer ${kickOAuth.accessToken}`, 'Accept': 'application/json' },
     });
-    if (listRes.status === 200 && listRes.data.data) {
-      existingEvents = listRes.data.data.map(s => s.type);
-      console.log('[Kick Webhooks] Suscripciones existentes:', existingEvents);
-    }
-  } catch(e) {}
-
-  let ok = 0;
-  for (const eventType of events) {
-    if (existingEvents.includes(eventType)) {
-      console.log(`[Kick Webhooks] Ya registrado: ${eventType}`);
-      ok++;
-      continue;
-    }
-    try {
-      const body = JSON.stringify({
-        type:      eventType,
-        version:   '1',
-        condition: { broadcaster_user_id: broadcasterId },
-        transport: {
-          method:   'webhook',
-          callback: WEBHOOK_URL,
-          secret:   CONFIG.kickWebhookSecret || kickOAuth.accessToken.slice(0, 32),
-        }
-      });
-      const r = await httpsRequest({
-        hostname: 'api.kick.com',
-        path:     '/public/v1/events/subscriptions',
-        method:   'POST',
-        headers:  {
-          'Authorization':  `Bearer ${kickOAuth.accessToken}`,
-          'Content-Type':   'application/json',
-          'Content-Length': Buffer.byteLength(body),
-          'Accept':         'application/json',
-        },
-      }, body);
-
-      if ([200, 201, 409].includes(r.status)) {
-        console.log(`[Kick Webhooks] ✅ Registrado: ${eventType}`);
-        ok++;
-      } else {
-        console.error(`[Kick Webhooks] ❌ Error ${eventType}: ${r.status}`, JSON.stringify(r.data));
+    if (listRes.status === 200 && listRes.data.data && listRes.data.data.length > 0) {
+      const ids = listRes.data.data.map(s => s.id).filter(Boolean);
+      console.log('[Kick Webhooks] Borrando suscripciones existentes:', ids);
+      if (ids.length > 0) {
+        const deleteQuery = ids.map(id => `id=${id}`).join('&');
+        await httpsRequest({
+          hostname: 'api.kick.com',
+          path:     `/public/v1/events/subscriptions?${deleteQuery}`,
+          method:   'DELETE',
+          headers:  { 'Authorization': `Bearer ${kickOAuth.accessToken}`, 'Accept': 'application/json' },
+        });
       }
-    } catch(e) {
-      console.error(`[Kick Webhooks] Excepción ${eventType}:`, e.message);
     }
+  } catch(e) {
+    console.log('[Kick Webhooks] No se pudieron listar/borrar suscripciones existentes:', e.message);
   }
 
-  if (ok > 0) {
-    state.kickOAuth.connected = true;
-    broadcastStatus();
-    console.log(`[Kick Webhooks] ✅ ${ok}/${events.length} webhooks activos. ¡Canjes listos!`);
+  // Formato correcto de la API de Kick: todos los eventos en un solo POST
+  const body = JSON.stringify({
+    events: [
+      { name: 'channel.points_redemption.created', version: 1 },
+      { name: 'channel.subscription.new',          version: 1 },
+      { name: 'channel.subscription.renewal',      version: 1 },
+      { name: 'channel.subscription.gifts',        version: 1 },
+      { name: 'channel.followed',                  version: 1 },
+      { name: 'chat.message.sent',                 version: 1 },
+    ],
+    method:              'webhook',
+    broadcaster_user_id: broadcasterId,
+  });
+
+  try {
+    const r = await httpsRequest({
+      hostname: 'api.kick.com',
+      path:     '/public/v1/events/subscriptions',
+      method:   'POST',
+      headers:  {
+        'Authorization':  `Bearer ${kickOAuth.accessToken}`,
+        'Content-Type':   'application/json',
+        'Content-Length': Buffer.byteLength(body),
+        'Accept':         'application/json',
+      },
+    }, body);
+
+    console.log('[Kick Webhooks] POST status:', r.status, JSON.stringify(r.data).slice(0, 300));
+
+    // 204 = No Content = éxito según la doc de Kick
+    if ([200, 201, 204].includes(r.status)) {
+      state.kickOAuth.connected = true;
+      broadcastStatus();
+      console.log('[Kick Webhooks] ✅ Todos los eventos registrados correctamente!');
+      broadcast({ type: 'system', platform: 'system', chatname: 'Sistema', chatmessage: '✅ Kick webhooks activos — canjes y subs llegando!', nameColor: '#53FC18', mid: 'sys-kick-wh-' + Date.now() });
+    } else {
+      console.error('[Kick Webhooks] ❌ Error:', r.status, JSON.stringify(r.data));
+    }
+  } catch(e) {
+    console.error('[Kick Webhooks] Excepción:', e.message);
   }
 }
 
