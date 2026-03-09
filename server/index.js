@@ -422,100 +422,85 @@ app.get('/auth/kick/callback', async (req, res) => {
 // ══════════════════════════════════════════════════════
 // ✅ FIX: loadKickUserInfo con múltiples fallbacks
 // ══════════════════════════════════════════════════════
-async function loadKickUserInfo() {
+function decodeJwtPayload(token) {
   try {
-    const r = await httpsRequest({
-      hostname: 'api.kick.com',
-      path:     '/public/v1/users/me',
-      method:   'GET',
-      headers:  { 'Authorization': `Bearer ${kickOAuth.accessToken}`, 'Accept': 'application/json' },
-    });
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const json = Buffer.from(b64, 'base64').toString('utf8');
+    return JSON.parse(json);
+  } catch(e) { return null; }
+}
 
-    // Log completo para diagnóstico
-    console.log('[Kick OAuth] /users/me status:', r.status);
-    console.log('[Kick OAuth] /users/me body:', JSON.stringify(r.data).slice(0, 600));
-
-    if (r.status === 200) {
-      // Kick puede devolver { data: {...} } o el objeto directamente
-      const u = (r.data && r.data.data) ? r.data.data : r.data;
-
-      // Intentar todos los campos posibles que Kick usa según versión de API
-      kickOAuth.userId    = String(u.user_id || u.id || u.userId || '');
-      kickOAuth.channelId = String(
-        u.channel_id   ||
-        u.channelId    ||
-        u.broadcaster_user_id ||
-        u.streamer_id  ||
-        u.user_id      ||
-        u.id           ||
-        ''
-      );
-
-      const username = u.username || u.name || u.slug || u.email || 'desconocido';
-      console.log(`[Kick OAuth] Usuario: ${username} | userId: ${kickOAuth.userId} | channelId: ${kickOAuth.channelId}`);
-    } else {
-      console.error('[Kick OAuth] /users/me error HTTP:', r.status);
+async function loadKickUserInfo() {
+  // Metodo 0: decodificar JWT directamente (no necesita request)
+  const jwtPayload = decodeJwtPayload(kickOAuth.accessToken);
+  if (jwtPayload) {
+    console.log('[Kick OAuth] JWT payload:', JSON.stringify(jwtPayload).slice(0, 400));
+    const jwtId = String(jwtPayload.sub || jwtPayload.user_id || jwtPayload.id || jwtPayload.userId || '');
+    if (jwtId && jwtId !== 'undefined') {
+      kickOAuth.userId    = jwtId;
+      kickOAuth.channelId = jwtId;
+      console.log('[Kick OAuth] userId/channelId desde JWT:', jwtId);
     }
-  } catch(e) {
-    console.error('[Kick OAuth] /users/me excepción:', e.message);
   }
 
-  // ── Fallback 1: si channelId sigue vacío, pero userId existe, usarlo como channelId
-  if (!kickOAuth.channelId && kickOAuth.userId) {
-    kickOAuth.channelId = kickOAuth.userId;
-    console.log('[Kick OAuth] channelId tomado de userId:', kickOAuth.channelId);
-  }
-
-  // ── Fallback 2: resolver por nombre de canal configurado en env vars
-  if (!kickOAuth.channelId && CONFIG.kick) {
-    console.log('[Kick OAuth] Resolviendo channelId por nombre de canal:', CONFIG.kick);
+  // Metodo 1: /public/v1/users/me
+  if (!kickOAuth.channelId) {
     try {
-      // kick.com/api/v2/channels/{slug} → devuelve el user_id del dueño del canal
+      const r = await httpsRequest({
+        hostname: 'api.kick.com',
+        path:     '/public/v1/users/me',
+        method:   'GET',
+        headers:  { 'Authorization': `Bearer ${kickOAuth.accessToken}`, 'Accept': 'application/json' },
+      });
+      console.log('[Kick OAuth] /users/me status:', r.status, JSON.stringify(r.data).slice(0, 300));
+      if (r.status === 200) {
+        const u = (r.data && r.data.data) ? r.data.data : r.data;
+        kickOAuth.userId    = String(u.user_id || u.id || u.userId || kickOAuth.userId || '');
+        kickOAuth.channelId = String(u.channel_id || u.broadcaster_user_id || u.user_id || u.id || '');
+        console.log('[Kick OAuth] /users/me -> userId:', kickOAuth.userId, 'channelId:', kickOAuth.channelId);
+      }
+    } catch(e) { console.error('[Kick OAuth] /users/me excepcion:', e.message); }
+  }
+
+  // Metodo 2: SIEMPRE consultar kick.com/api/v2/channels/{slug}
+  // user_id ahi es el broadcaster_user_id que Kick espera en webhooks
+  if (CONFIG.kick) {
+    try {
       const channelData = await new Promise((resolve) => {
         const req = https.get(
           `https://kick.com/api/v2/channels/${CONFIG.kick.toLowerCase()}`,
           { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } },
           (res) => {
             let body = ''; res.on('data', c => body += c);
-            res.on('end', () => {
-              try { resolve(JSON.parse(body)); } catch(e) { resolve(null); }
-            });
+            res.on('end', () => { try { resolve(JSON.parse(body)); } catch(e) { resolve(null); } });
           }
         );
         req.on('error', () => resolve(null));
         req.setTimeout(10000, () => { req.destroy(); resolve(null); });
       });
-
       if (channelData) {
-        console.log('[Kick OAuth] Canal data (user_id, id):', channelData.user_id, channelData.id);
-        // user_id es el ID del streamer (broadcaster), que es el que pide Kick en condition.broadcaster_user_id
-        const resolvedId = String(
-          channelData.user_id ||
-          (channelData.user && channelData.user.id) ||
-          channelData.id ||
-          ''
-        );
-        if (resolvedId) {
-          kickOAuth.channelId = resolvedId;
-          if (!kickOAuth.userId) kickOAuth.userId = resolvedId;
-          console.log('[Kick OAuth] ✅ channelId resuelto por API pública:', kickOAuth.channelId);
+        console.log('[Kick OAuth] kick.com/api/v2 -> user_id:', channelData.user_id, '| id:', channelData.id, '| user.id:', channelData.user && channelData.user.id);
+        const apiV2Id = String(channelData.user_id || (channelData.user && channelData.user.id) || channelData.id || '');
+        if (apiV2Id && apiV2Id !== 'undefined') {
+          kickOAuth.channelId = apiV2Id;
+          if (!kickOAuth.userId) kickOAuth.userId = apiV2Id;
+          console.log('[Kick OAuth] channelId definitivo desde API v2:', kickOAuth.channelId);
         }
       }
-    } catch(e) {
-      console.error('[Kick OAuth] Excepción al resolver canal:', e.message);
-    }
+    } catch(e) { console.error('[Kick OAuth] Excepcion API v2:', e.message); }
   }
 
-  // ── Fallback 3: usar el kickId del Pusher si ya lo tenemos
+  // Metodo 3: ultimo recurso
   if (!kickOAuth.channelId && CONFIG.kickId) {
     kickOAuth.channelId = CONFIG.kickId;
     if (!kickOAuth.userId) kickOAuth.userId = CONFIG.kickId;
-    console.log('[Kick OAuth] channelId tomado de CONFIG.kickId (Pusher):', kickOAuth.channelId);
+    console.log('[Kick OAuth] channelId desde CONFIG.kickId:', kickOAuth.channelId);
   }
 
-  if (!kickOAuth.channelId) {
-    console.error('[Kick OAuth] ❌ No se pudo resolver channelId por ningún método. Los webhooks no se registrarán correctamente.');
-  }
+  console.log(`[Kick OAuth] FINAL -> userId: ${kickOAuth.userId || 'NULL'} | channelId: ${kickOAuth.channelId || 'NULL'}`);
+  if (!kickOAuth.channelId) console.error('[Kick OAuth] Sin channelId. Webhooks no funcionaran.');
 }
 
 // ══════════════════════════════════════════════════════
