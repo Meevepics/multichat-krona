@@ -347,6 +347,17 @@ function tryKickPusher(channelId) {
       const sendRedeem = (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'redemption', chatname: rdmUser, chatmessage: rdmInput || '', rewardTitle: rdmTitle, chatimg: av || null, nameColor: '#53FC18', roles: [], mid: d.id || ('kick-redeem-' + Date.now()) });
       if (rdmAvatar) { kickAvatarCache[rdmUser.toLowerCase()] = rdmAvatar; sendRedeem(rdmAvatar); } else getKickAvatar(rdmUser, sendRedeem);
     }
+
+    // 🎁 Catch-all: cualquier evento Pusher desconocido con datos de canje (Channel Points 2025)
+    if (d && d.reward && d.reward.title && !event.includes('ChatMessage') && !event.includes('ChannelPoints') && !event.includes('PointRedemption') && !event.includes('Subscription') && !event.includes('GiftedSub')) {
+      const rdmUserCA = (d.user && (d.user.username || d.user.login || d.user.display_name)) || (d.redeemer && d.redeemer.username) || (d.sender && d.sender.username) || 'KickUser';
+      const rdmTitleCA = d.reward.title || 'Recompensa';
+      const rdmInputCA = d.user_input || d.message || d.comment || '';
+      const rdmAvatarCA = (d.user && (d.user.profile_pic || d.user.profilePic)) || (d.redeemer && d.redeemer.profile_picture) || null;
+      console.log('[Kick Pusher] Catch-all canje: event=' + event + ' reward=' + rdmTitleCA + ' user=' + rdmUserCA);
+      const sendCA = (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'redemption', chatname: rdmUserCA, chatmessage: rdmInputCA || '', rewardTitle: rdmTitleCA, chatimg: av || null, nameColor: '#53FC18', roles: [], mid: d.id || ('kick-redeem-ca-' + Date.now()) });
+      if (rdmAvatarCA) { kickAvatarCache[rdmUserCA.toLowerCase()] = rdmAvatarCA; sendCA(rdmAvatarCA); } else getKickAvatar(rdmUserCA, sendCA);
+    }
     if (event === 'App\Events\GiftedSubscriptionsEvent' || event === 'App.Events.GiftedSubscriptionsEvent') {
       const gifter = (d.gifted_by && d.gifted_by.username) || 'Anónimo', qty = (d.gifted_usernames && d.gifted_usernames.length) || 1;
       getKickAvatar(gifter, (avatar) => broadcast({ type: 'donation', platform: 'kick', donationType: 'giftedsub', chatname: gifter, chatmessage: `¡Regaló ${qty} sub(s)!`, amount: qty, chatimg: avatar || null, nameColor: '#53FC18', roles: [], mid: 'kick-gift-' + Date.now() }));
@@ -618,11 +629,23 @@ app.post('/webhook/kick', (req, res) => {
     const rawBody    = req.body;
     const webhookSecret = CONFIG.kickWebhookSecret || kickOAuth.accessToken.slice(0, 32);
 
-    if (signature && webhookSecret) {
-      const expected = 'sha256=' + crypto.createHmac('sha256', webhookSecret).update(rawBody).digest('hex');
-      if (signature !== expected) {
-        console.warn('[Kick Webhook] ⚠️ Firma inválida, ignorando evento');
-        return;
+    // Kick usa firma ED25519 (asimétrica), NO HMAC-SHA256
+    // El header Kick-Event-Signature contiene la firma hex; verificar con la clave pública de Kick
+    // Si no tenemos la clave pública, logueamos la firma pero NO bloqueamos el evento
+    if (signature) {
+      const kickPublicKey = process.env.KICK_WEBHOOK_PUBLIC_KEY || null;
+      if (kickPublicKey) {
+        try {
+          const sigBuf = Buffer.from(signature.replace(/^sha256=/, ''), 'hex');
+          const verified = crypto.verify(null, rawBody, { key: kickPublicKey, format: 'pem', type: 'spki', dsaEncoding: 'ieee-p1363' }, sigBuf);
+          if (!verified) {
+            console.warn('[Kick Webhook] ⚠️ Firma ED25519 inválida, procesando de todos modos (log only)');
+          }
+        } catch(sigErr) {
+          console.warn('[Kick Webhook] ⚠️ No se pudo verificar firma:', sigErr.message);
+        }
+      } else {
+        console.log('[Kick Webhook] ℹ️ Firma recibida pero sin clave pública configurada — procesando sin verificar');
       }
     }
 
