@@ -326,18 +326,32 @@ function tryKickPusher(channelId) {
     if (event === 'pusher:error') { ws.terminate(); return; }
     let d; try { d = typeof msg.data === 'string' ? JSON.parse(msg.data) : msg.data; } catch(e) { return; }
     if (!d) return;
-    if (event === 'App\\Events\\ChatMessageEvent' || event === 'App.Events.ChatMessageEvent') {
+    if (event === 'App\\\\Events\\\\ChatMessageEvent' || event === 'App.Events.ChatMessageEvent') {
       const sender = d.sender || {}, username = sender.username || 'KickUser', content = d.content || '';
       const badges = (sender.identity && sender.identity.badges) || [], nameColor = (sender.identity && sender.identity.color) || '#53FC18';
       const kickRoles = [];
       badges.forEach(b => { const bt = (b.type || '').toLowerCase(); if (bt === 'broadcaster' || bt === 'owner') kickRoles.push({ type: 'broadcaster', label: 'Owner' }); else if (bt === 'moderator' || bt === 'mod') kickRoles.push({ type: 'moderator', label: 'Mod' }); else if (bt === 'vip') kickRoles.push({ type: 'vip', label: 'VIP' }); else if (bt === 'subscriber' || bt === 'sub') kickRoles.push({ type: 'subscriber', label: 'Sub' }); else kickRoles.push({ type: bt, label: b.type }); });
-      getKickAvatar(username, (avatar) => broadcast({ type: 'kick', platform: 'kick', chatname: username, chatmessage: content, nameColor, chatimg: avatar || null, roles: kickRoles, mid: d.id || ('kick-' + Date.now()) }));
+      // ✅ Usar avatar del propio mensaje (Render no puede llamar kick.com/api/v2 - IP bloqueada)
+      const avatarInMsg = sender.profile_pic || sender.profilePic || (sender.user && (sender.user.profile_pic || sender.user.profilePic)) || null;
+      if (avatarInMsg) { kickAvatarCache[username.toLowerCase()] = avatarInMsg; broadcast({ type: 'kick', platform: 'kick', chatname: username, chatmessage: content, nameColor, chatimg: avatarInMsg, roles: kickRoles, mid: d.id || ('kick-' + Date.now()) }); }
+      else { getKickAvatar(username, (avatar) => broadcast({ type: 'kick', platform: 'kick', chatname: username, chatmessage: content, nameColor, chatimg: avatar || null, roles: kickRoles, mid: d.id || ('kick-' + Date.now()) })); }
     }
-    if (event === 'App\\Events\\GiftedSubscriptionsEvent' || event === 'App.Events.GiftedSubscriptionsEvent') {
+    // ✅ Canjes de Channel Points via Pusher servidor (independiente de webhooks)
+    if (event === 'App\\\\Events\\\\ChannelPointsRedemptionEvent' || event === 'App.Events.ChannelPointsRedemptionEvent' ||
+        event === 'App\\\\Events\\\\PointRedemptionEvent' || event === 'App.Events.PointRedemptionEvent') {
+      const rdmUser = (d.user && d.user.username) || (d.sender && d.sender.username) || 'KickUser';
+      const rdmTitle = (d.reward && d.reward.title) || d.reward_title || d.title || 'Recompensa';
+      const rdmInput = d.message || d.comment || d.user_input || '';
+      const rdmAvatar = (d.user && (d.user.profile_pic || d.user.profilePic)) || null;
+      console.log(`[Kick Pusher] 🎁 Canje: "${rdmTitle}" por ${rdmUser}`);
+      const sendRedeem = (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'redemption', chatname: rdmUser, chatmessage: rdmInput || '', rewardTitle: rdmTitle, chatimg: av || null, nameColor: '#53FC18', roles: [], mid: d.id || ('kick-redeem-' + Date.now()) });
+      if (rdmAvatar) { kickAvatarCache[rdmUser.toLowerCase()] = rdmAvatar; sendRedeem(rdmAvatar); } else getKickAvatar(rdmUser, sendRedeem);
+    }
+    if (event === 'App\\\\Events\\\\GiftedSubscriptionsEvent' || event === 'App.Events.GiftedSubscriptionsEvent') {
       const gifter = (d.gifted_by && d.gifted_by.username) || 'Anónimo', qty = (d.gifted_usernames && d.gifted_usernames.length) || 1;
       getKickAvatar(gifter, (avatar) => broadcast({ type: 'donation', platform: 'kick', donationType: 'giftedsub', chatname: gifter, chatmessage: `¡Regaló ${qty} sub(s)!`, amount: qty, chatimg: avatar || null, nameColor: '#53FC18', roles: [], mid: 'kick-gift-' + Date.now() }));
     }
-    if (event === 'App\\Events\\SubscriptionEvent' || event === 'App.Events.SubscriptionEvent') {
+    if (event === 'App\\\\Events\\\\SubscriptionEvent' || event === 'App.Events.SubscriptionEvent') {
       const uname = (d.usernames && d.usernames[0]) || d.username || 'KickUser';
       getKickAvatar(uname, (avatar) => broadcast({ type: 'donation', platform: 'kick', donationType: 'sub', chatname: uname, chatmessage: '¡Se suscribió!', chatimg: avatar || null, nameColor: '#53FC18', roles: [], mid: 'kick-sub-' + Date.now() }));
     }
