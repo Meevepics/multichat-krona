@@ -170,7 +170,6 @@
     .msg-item.custom  { border-left-color: var(--custom); }
     .msg-item.system  { border-left-color: var(--yellow); }
 
-    /* ✅ CANJES / DONACIONES — destacados visualmente */
     .msg-item.donation { border-left-color: var(--yellow); background: rgba(255,170,0,0.05); }
     .msg-item.donation:hover { background: rgba(255,170,0,0.1); }
     .msg-item.donation.kick { border-left-color: #53FC18; background: rgba(83,252,24,0.05); }
@@ -209,7 +208,6 @@
     .msg-text { font-size: 12px; color: var(--text); line-height: 1.5; word-break: break-word; }
     .msg-text img.emote { height: var(--ov-emote-size, 24px); width: auto; vertical-align: middle; margin: 0 2px; image-rendering: -webkit-optimize-contrast; display: inline-block; }
 
-    /* ✅ Etiqueta especial para canjes */
     .msg-event-tag {
       display: inline-flex; align-items: center; gap: 4px;
       padding: 2px 8px; border-radius: 999px; font-size: 9px; font-weight: 700;
@@ -225,7 +223,6 @@
     .msg-event-tag.member     { background: rgba(255,0,0,0.1);     border-color: rgba(255,0,0,0.4);    color: #ff9999; }
     .msg-event-tag.gift       { background: rgba(255,0,80,0.12);   border-color: rgba(255,0,80,0.5);   color: #ff6699; }
 
-    /* ✅ Donación / canje box */
     .donation-box {
       margin-top: 6px; padding: 6px 12px;
       border-radius: 4px; font-size: 12px; font-weight: 700;
@@ -365,7 +362,7 @@
     <div class="card">
       <div class="card-header"><span class="card-title-text">🟢 Kick — Chatroom</span></div>
       <div class="card-body">
-        <div id="kick-status-box" class="info-box info-green">Kick bloquea servidores en la nube. Tu navegador actúa como puente.</div>
+        <div id="kick-status-box" class="info-box info-green">Kick conectado via servidor (OAuth + Pusher).</div>
         <div style="display:flex;gap:6px;">
           <button class="btn btn-secondary btn-full" onclick="resolveKickId()">🔍 Auto</button>
           <button class="btn btn-secondary btn-full" onclick="toggleKickManual()">✏️ Manual</button>
@@ -621,6 +618,9 @@ var MAX_MESSAGES=200, messages=[], currentHighlightMid=null;
 var autoScroll=true;
 var currentVisor=null;
 
+// ✅ FIX DUPLICADOS: flag para saber si el servidor ya maneja Kick
+var serverHandlesKick = false;
+
 var PLATFORM_LOGOS={
   twitch:'<svg viewBox="0 0 24 28" fill="currentColor"><path d="M2.149 0L.537 4.119v19.63h6.72V28l4.123-4.25h3.29L22.463 14V0H2.149zm18.24 13.18l-3.29 3.387h-3.948l-2.886 2.973v-2.973H6.584V2.387h13.805v10.793zM17.07 5.367h-2.148v6.42h2.148V5.367zm-5.907 0h-2.15v6.42h2.15V5.367z"/></svg>',
   kick:'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 3h4v7l4.5-7H17L12 12l5.5 9H13L8.5 14v7H4V3z"/></svg>',
@@ -630,7 +630,6 @@ var PLATFORM_LOGOS={
   system:'<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>'
 };
 
-// ✅ Labels de eventos/donaciones
 var EVENT_LABELS = {
   redemption: '🎁 CANJE',
   bits:       '💎 BITS',
@@ -793,9 +792,12 @@ function connectWS(url){
   if(ws){try{ws.close();}catch(e){}}
   var wsUrl=url.replace(/^https?/,'ws').replace(/\/$/,'');
   try{ws=new WebSocket(wsUrl);}catch(e){setStatus(false);scheduleRetry(url);return;}
-  ws.onopen=function(){isConnected=true;retryDelay=1000;setStatus(true);var id=store.get('kickChannelId');if(id)connectKickBrowser(id);};
+  ws.onopen=function(){
+    isConnected=true;retryDelay=1000;setStatus(true);
+    // ✅ FIX DUPLICADOS: NO conectar Pusher browser al abrir — esperar el status del servidor
+  };
   ws.onmessage=function(e){try{var d=JSON.parse(e.data);if(d.type==='status')handleStatus(d);else if(d.type==='highlight'||d.type==='highlight_clear')return;else appendMessage(d);}catch(err){}};
-  ws.onclose=function(){isConnected=false;setStatus(false);scheduleRetry(url);};
+  ws.onclose=function(){isConnected=false;setStatus(false);serverHandlesKick=false;scheduleRetry(url);};
   ws.onerror=function(){ws.close();};
 }
 function scheduleRetry(url){retryDelay=Math.min(retryDelay*2,30000);setTimeout(function(){connectWS(url);},retryDelay);}
@@ -810,7 +812,25 @@ function handleStatus(data){
   if(data.channels) currentChannels=data.channels;
   var mt=document.getElementById('tiktok-mode-tag');
   if(mt){mt.textContent=data.tiktokMode||'connector';mt.className='tag '+(data.tiktokMode==='puppeteer'?'tag-puppeteer':'tag-connector');}
-  if(!data.kick){var savedId=store.get('kickChannelId');if(savedId&&(!kickWs||kickWs.readyState>1)){connectKickBrowser(savedId);}else if(!savedId&&!autoKickDone&&data.channels&&data.channels.kick){autoKickDone=true;setTimeout(resolveKickId,1500);}}
+
+  // ✅ FIX DUPLICADOS: solo conectar Pusher browser si el servidor NO maneja Kick
+  if(data.kick){
+    // Servidor maneja Kick — desconectar Pusher browser si estaba activo
+    serverHandlesKick = true;
+    if(kickWs && kickWs.readyState <= 1){
+      kickWs.onclose = null; // evitar reconexión automática
+      kickWs.close();
+      kickWs = null;
+    }
+    var box=document.getElementById('kick-status-box');
+    if(box){box.className='info-box info-green';box.innerHTML='✅ Kick conectado via servidor OAuth';}
+  } else {
+    // Servidor NO maneja Kick — el browser actúa como puente
+    serverHandlesKick = false;
+    var savedId=store.get('kickChannelId');
+    if(savedId&&(!kickWs||kickWs.readyState>1)){connectKickBrowser(savedId);}
+    else if(!savedId&&!autoKickDone&&data.channels&&data.channels.kick){autoKickDone=true;setTimeout(resolveKickId,1500);}
+  }
 }
 function setPlatformStatus(p,c,ch){var dot=document.getElementById('dot-'+p),el=document.getElementById('ch-'+p);if(dot)dot.className='platform-dot'+(c?' ok':'');if(el)el.textContent=ch||'—';}
 
@@ -845,22 +865,32 @@ function setYtBridgeStatus(color,html){var box=document.getElementById('yt-bridg
 function openYouTubeLive(){var vid=ytVideoId||'';if(vid)window.open('https://www.youtube.com/watch?v='+vid,'_blank','noopener');else toast('Pegá el link del live primero');}
 
 // ═══ APPEND MESSAGE ═══
+// ✅ FIX DUPLICADOS: deduplicar por mid
+var seenMids = {};
 function appendMessage(data){
   if(!data.chatname&&!data.chatmessage) return;
+
+  // Deduplicar por mid
+  var mid = data.mid || '';
+  if(mid && seenMids[mid]) return;
+  if(mid) seenMids[mid] = true;
+  // Limpiar cache de mids viejos cada 500 mensajes
+  var midKeys = Object.keys(seenMids);
+  if(midKeys.length > 500) { delete seenMids[midKeys[0]]; }
+
   var panel=document.getElementById('chat-panel');
   var ph=document.getElementById('chat-placeholder');
   if(ph) ph.remove();
 
   var platform = data.platform || data.type || 'custom';
-  var isDonation = (data.type === 'donation');
+  var isDonation = (data.type === 'donation' || data.type === 'kick_donation');
   var donationType = data.donationType || '';
   var logo = PLATFORM_LOGOS[platform] || PLATFORM_LOGOS.custom;
   var time = new Date().toLocaleTimeString('es',{hour:'2-digit',minute:'2-digit'});
 
   var el = document.createElement('div');
-  // ✅ Clase donation para canjes y donaciones (con sub-plataforma)
   el.className = 'msg-item ' + platform + (isDonation ? ' donation' : '');
-  el.dataset.mid = data.mid || '';
+  el.dataset.mid = mid;
 
   var avatarHTML = data.chatimg
     ? '<div class="msg-avatar"><img src="'+esc(data.chatimg)+'" onerror="this.style.display=\'none\'"></div>'
@@ -868,7 +898,6 @@ function appendMessage(data){
 
   var platformBadge = '<span class="msg-platform '+platform+'"><span style="width:10px;height:10px;display:inline-flex;">'+logo+'</span>'+platform.charAt(0).toUpperCase()+platform.slice(1)+'</span>';
 
-  // ✅ Etiqueta de evento/canje
   var eventTagHTML = '';
   if(isDonation && donationType && EVENT_LABELS[donationType]) {
     eventTagHTML = '<span class="msg-event-tag '+donationType+'">'+EVENT_LABELS[donationType]+'</span>';
@@ -880,7 +909,6 @@ function appendMessage(data){
   var nameStyle = data.nameColor ? 'color:'+data.nameColor+';text-shadow:0 0 8px '+data.nameColor+';' : '';
   var msgHTML = processMessageHTML(data);
 
-  // ✅ Caja de donación / canje mejorada
   var donHTML = '';
   if(isDonation && donationType) {
     var dl = '';
@@ -936,36 +964,40 @@ function clearHighlight(){
   toast('🧹 Destacado quitado');
 }
 
-// ═══ KICK BRIDGE ═══
+// ═══ KICK BRIDGE (browser fallback — solo si servidor no conecta) ═══
 var kickWs=null,kickRetryDelay=3000,kickRetryTimeout=null;
 function connectKickBrowser(channelId){
   if(!channelId) return;
+  // ✅ FIX: no conectar si el servidor ya maneja Kick
+  if(serverHandlesKick) return;
   if(kickWs){try{kickWs.onmessage=null;kickWs.onclose=null;kickWs.onerror=null;kickWs.close();}catch(e){}kickWs=null;}
   if(kickRetryTimeout){clearTimeout(kickRetryTimeout);kickRetryTimeout=null;}
   var box=document.getElementById('kick-status-box');
-  if(box){box.className='info-box info-yellow';box.innerHTML='⏳ Conectando a Kick...';}
+  if(box){box.className='info-box info-yellow';box.innerHTML='⏳ Conectando a Kick (browser)...';}
   var urls=['wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0-rc2&flash=false','wss://ws-us2.pusher.com/app/eb1d5f283081a78b932c?protocol=7&client=js&version=7.6.0&flash=false'];
   var idx=parseInt(localStorage.getItem('kickWsUrlIndex')||'0');
   tryKickUrl(channelId,urls,idx);
 }
 function tryKickUrl(channelId,urls,idx){
+  // ✅ FIX: abortar si servidor ya conectó
+  if(serverHandlesKick) return;
   if(idx>=urls.length) idx=0;
   try{kickWs=new WebSocket(urls[idx]);}catch(e){kickRetryTimeout=setTimeout(function(){tryKickUrl(channelId,urls,(idx+1)%urls.length);},5000);return;}
   kickWs.onopen=function(){
     kickRetryDelay=3000;
     localStorage.setItem('kickWsUrlIndex',idx);
-    // Chat principal
     kickWs.send(JSON.stringify({event:'pusher:subscribe',data:{auth:'',channel:'chatrooms.'+channelId+'.v2'}}));
-    // ✅ Canal de eventos del canal (para channel points)
     kickWs.send(JSON.stringify({event:'pusher:subscribe',data:{auth:'',channel:'channel.'+channelId}}));
   };
   kickWs.onmessage=function(e){
+    // ✅ FIX: ignorar mensajes si servidor ya conectó
+    if(serverHandlesKick) return;
     try{
       var msg=JSON.parse(e.data),event=msg.event||'';
       if(event==='pusher:connection_established'||event==='pusher:pong') return;
       if(event==='pusher_internal:subscription_succeeded'){
         var box=document.getElementById('kick-status-box');
-        if(box){box.className='info-box info-green';box.innerHTML='✅ Kick conectado (chatroom '+channelId+')';}
+        if(box){box.className='info-box info-green';box.innerHTML='✅ Kick conectado (browser, chatroom '+channelId+')';}
         if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'kick_connected'}));
         return;
       }
@@ -974,7 +1006,6 @@ function tryKickUrl(channelId,urls,idx){
       var d=typeof msg.data==='string'?JSON.parse(msg.data):msg.data;
       if(!d) return;
 
-      // ✅ Canjes de Channel Points detectados en el cliente
       if(event==='App\\Events\\ChannelPointsRedemptionEvent'||event==='App.Events.ChannelPointsRedemptionEvent'||event==='App\\Events\\PointRedemptionEvent'||event==='App.Events.PointRedemptionEvent'){
         var username=(d.user&&d.user.username)||(d.sender&&d.sender.username)||'KickUser';
         var rewardTitle=(d.reward&&d.reward.title)||d.reward_title||'Recompensa';
@@ -995,7 +1026,6 @@ function tryKickUrl(channelId,urls,idx){
       var kickRoles=[];
       badges.forEach(function(b){var bt=(b.type||'').toLowerCase();if(bt==='broadcaster'||bt==='owner')kickRoles.push({type:'broadcaster',label:'Owner'});else if(bt==='moderator'||bt==='mod')kickRoles.push({type:'moderator',label:'Mod'});else if(bt==='vip')kickRoles.push({type:'vip',label:'VIP'});else if(bt==='subscriber'||bt==='sub')kickRoles.push({type:'subscriber',label:'Sub'});else kickRoles.push({type:bt,label:b.type});});
 
-      // ✅ Detectar canje por tipo de mensaje
       var msgType=d.type||'';
       var rewardTitle=(d.reward&&d.reward.title)||(d.metadata&&d.metadata.reward_title)||(d.channel_point_reward&&d.channel_point_reward.title)||'';
       if(msgType==='channel_points_redemption'||rewardTitle){
@@ -1013,6 +1043,7 @@ function tryKickUrl(channelId,urls,idx){
     }catch(err){}
   };
   kickWs.onclose=function(e){
+    if(serverHandlesKick) return; // ✅ no reconectar si servidor ya lo maneja
     var box=document.getElementById('kick-status-box');
     if(box){box.className='info-box info-yellow';box.innerHTML='🔄 Kick desconectado, reintentando...';}
     if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'kick_disconnected'}));
@@ -1037,7 +1068,7 @@ function getKickAvatarBrowser(username,cb){
 }
 
 // ═══ ACCIONES ═══
-function saveAndConnect(){var url=document.getElementById('serverUrl').value.trim();if(!url)return toast('Introduce la URL del servidor');store.set('serverUrl',url);retryDelay=1000;autoKickDone=false;connectWS(url);updateOverlayUrls();toast('Conectando...');}
+function saveAndConnect(){var url=document.getElementById('serverUrl').value.trim();if(!url)return toast('Introduce la URL del servidor');store.set('serverUrl',url);retryDelay=1000;autoKickDone=false;serverHandlesKick=false;connectWS(url);updateOverlayUrls();toast('Conectando...');}
 function toggleKickManual(){var el=document.getElementById('kick-manual-wrap');el.style.display=el.style.display==='none'?'block':'none';}
 async function resolveKickId(){
   var channel=currentChannels.kick||store.get('kickChannel')||'';
@@ -1064,7 +1095,7 @@ async function sendKickId(idParam){
   try{
     var r=await fetch(httpUrl+'/api/kick/channel-id',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({channelId:id})});
     var d=await r.json();
-    if(d.ok){store.set('kickChannelId',String(id));toast('✅ Kick conectando con ID '+id);connectKickBrowser(String(id));}
+    if(d.ok){store.set('kickChannelId',String(id));toast('✅ Kick conectando con ID '+id);if(!serverHandlesKick)connectKickBrowser(String(id));}
     else toast('❌ El servidor rechazó el ID');
   }catch(e){toast('❌ '+e.message);}
 }
@@ -1112,7 +1143,7 @@ function openUrl(id){var url=document.getElementById(id).dataset.url;if(!url)ret
 // ═══ CONFIG VISUAL ═══
 function setCfgVar(cssVar,val,displayId){document.documentElement.style.setProperty(cssVar,val);if(displayId)document.getElementById(displayId).textContent=val;}
 function applyColorPrimary(val){document.documentElement.style.setProperty('--green',val);document.documentElement.style.setProperty('--border',val);document.documentElement.style.setProperty('--muted',val+'88');}
-function clearChat(){if(!confirm('¿Limpiar todos los mensajes del dashboard?'))return;var panel=document.getElementById('chat-panel');panel.innerHTML='<div class="chat-spacer" id="chat-spacer"></div><div id="chat-placeholder">🌊 Los mensajes del abismo aparecerán aquí...</div>';messages=[];toast('🗑️ Chat limpiado');}
+function clearChat(){if(!confirm('¿Limpiar todos los mensajes del dashboard?'))return;var panel=document.getElementById('chat-panel');panel.innerHTML='<div class="chat-spacer" id="chat-spacer"></div><div id="chat-placeholder">🌊 Los mensajes del abismo aparecerán aquí...</div>';messages=[];seenMids={};toast('🗑️ Chat limpiado');}
 function exportMessages(){var data=messages.map(function(m,i){return{id:i+1,name:m.data.chatname,message:m.data.chatmessage,platform:m.data.platform||m.data.type,timestamp:new Date().toISOString()};});var blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});var url=URL.createObjectURL(blob);var a=document.createElement('a');a.href=url;a.download='krona_messages_'+Date.now()+'.json';a.click();URL.revokeObjectURL(url);toast('💾 Mensajes exportados');}
 function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
@@ -1120,7 +1151,6 @@ function closeModal(id){document.getElementById(id).classList.remove('open');}
 function injectTestMessage(){
   appendMessage({type:'twitch',platform:'twitch',chatname:'Test Twitch',chatmessage:'Hola Kappa que tal PogChamp',nameColor:'#9146FF',chatemotes:[{text:'Kappa',url:'https://static-cdn.jtvnw.net/emoticons/v2/25/default/dark/1.0',start:5,end:9},{text:'PogChamp',url:'https://static-cdn.jtvnw.net/emoticons/v2/305954156/default/dark/1.0',start:15,end:22}],mid:'test-tw-'+Date.now()});
   setTimeout(function(){
-    // ✅ Test de canje de Channel Points Kick
     appendMessage({type:'donation',platform:'kick',donationType:'redemption',chatname:'TestViewer',chatmessage:'Texto del canje',rewardTitle:'Pedir canción 🎵',nameColor:'#53FC18',roles:[],mid:'test-redeem-'+Date.now()});
   },400);
   setTimeout(function(){
