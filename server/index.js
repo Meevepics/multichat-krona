@@ -35,6 +35,7 @@ const CONFIG = {
   kickClientSecret: process.env.KICK_CLIENT_SECRET  || '',
   kickRedirectUri:  process.env.KICK_REDIRECT_URI   || 'https://multichat-krona-5uts.onrender.com/auth/kick/callback',
   kickWebhookSecret: process.env.KICK_WEBHOOK_SECRET || '',
+  kickBroadcasterId: process.env.KICK_BROADCASTER_ID || '',
 };
 
 const kickOAuth = {
@@ -482,7 +483,7 @@ async function loadKickUserInfo() {
       });
       if (channelData) {
         console.log('[Kick OAuth] kick.com/api/v2 -> user_id:', channelData.user_id, '| id:', channelData.id, '| user.id:', channelData.user && channelData.user.id);
-        const apiV2Id = String(channelData.user_id || (channelData.user && channelData.user.id) || channelData.id || '');
+        const apiV2Id = String(channelData.id || '');
         if (apiV2Id && apiV2Id !== 'undefined') {
           kickOAuth.channelId = apiV2Id;
           if (!kickOAuth.userId) kickOAuth.userId = apiV2Id;
@@ -492,7 +493,14 @@ async function loadKickUserInfo() {
     } catch(e) { console.error('[Kick OAuth] Excepcion API v2:', e.message); }
   }
 
-  // Metodo 3: ultimo recurso
+  // Metodo 3: env var KICK_BROADCASTER_ID (hardcodeado, nunca falla)
+  if (CONFIG.kickBroadcasterId) {
+    kickOAuth.channelId = CONFIG.kickBroadcasterId;
+    if (!kickOAuth.userId) kickOAuth.userId = CONFIG.kickBroadcasterId;
+    console.log('[Kick OAuth] channelId desde KICK_BROADCASTER_ID:', kickOAuth.channelId);
+  }
+
+  // Metodo 4: ultimo recurso CONFIG.kickId
   if (!kickOAuth.channelId && CONFIG.kickId) {
     kickOAuth.channelId = CONFIG.kickId;
     if (!kickOAuth.userId) kickOAuth.userId = CONFIG.kickId;
