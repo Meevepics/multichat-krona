@@ -304,6 +304,24 @@ async function connectKick() {
   tryKickPusher(CONFIG.kickId);
 }
 
+// ══════════════════════════════════════════════════════
+// ✅ FIX: Nombres de eventos Pusher de Kick
+//
+// Los eventos llegan con UN solo backslash: "App\Events\ChatMessageEvent"
+// En JSON dentro de JSON se serializa como "App\\Events\\ChatMessageEvent"
+// Al parsear con JSON.parse() queda como string con un backslash.
+// Por eso en el código JS los comparamos con UN backslash (escrito como "\\").
+//
+// El error original usaba CUATRO backslashes (\\\\) que en runtime
+// producían DOS backslashes — nunca coincidían con el evento real.
+// ══════════════════════════════════════════════════════
+
+// Helper para normalizar nombres de eventos Kick (soporta ambas variantes)
+function isKickEvent(event, name) {
+  // Acepta tanto "App\Events\NombreEvento" como "App.Events.NombreEvento"
+  return event === `App\\Events\\${name}` || event === `App.Events.${name}`;
+}
+
 function tryKickPusher(channelId) {
   if (kickPusherWs) { try { kickPusherWs.terminate(); } catch(e) {} kickPusherWs = null; }
   if (kickPingInterval) { clearInterval(kickPingInterval); kickPingInterval = null; }
@@ -312,50 +330,120 @@ function tryKickPusher(channelId) {
   try { ws = new NodeWS(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }); }
   catch(e) { kickRetryTimeout = setTimeout(() => { kickUrlIndex++; tryKickPusher(channelId); }, kickRetryDelay); return; }
   kickPusherWs = ws;
+
   ws.on('open', () => {
     kickRetryDelay = 5000;
     ws.send(JSON.stringify({ event: 'pusher:subscribe', data: { auth: '', channel: `chatrooms.${channelId}.v2` } }));
     ws.send(JSON.stringify({ event: 'pusher:subscribe', data: { auth: '', channel: `channel.${channelId}` } }));
     kickPingInterval = setInterval(() => { if (ws.readyState === 1) ws.send(JSON.stringify({ event: 'pusher:ping', data: {} })); }, 25000);
   });
+
   ws.on('message', (raw) => {
     let msg; try { msg = JSON.parse(raw); } catch(e) { return; }
     const event = msg.event || '';
+
     if (event === 'pusher:connection_established' || event === 'pusher:pong') return;
-    if (event === 'pusher_internal:subscription_succeeded') { state.kick.connected = true; broadcastStatus(); return; }
+    if (event === 'pusher_internal:subscription_succeeded') {
+      state.kick.connected = true;
+      broadcastStatus();
+      return;
+    }
     if (event === 'pusher:error') { ws.terminate(); return; }
+
     let d; try { d = typeof msg.data === 'string' ? JSON.parse(msg.data) : msg.data; } catch(e) { return; }
     if (!d) return;
-    if (event === 'App\\\\Events\\\\ChatMessageEvent' || event === 'App.Events.ChatMessageEvent') {
+
+    // ── Chat normal ──────────────────────────────────────────
+    if (isKickEvent(event, 'ChatMessageEvent')) {
       const sender = d.sender || {}, username = sender.username || 'KickUser', content = d.content || '';
       const badges = (sender.identity && sender.identity.badges) || [], nameColor = (sender.identity && sender.identity.color) || '#53FC18';
       const kickRoles = [];
-      badges.forEach(b => { const bt = (b.type || '').toLowerCase(); if (bt === 'broadcaster' || bt === 'owner') kickRoles.push({ type: 'broadcaster', label: 'Owner' }); else if (bt === 'moderator' || bt === 'mod') kickRoles.push({ type: 'moderator', label: 'Mod' }); else if (bt === 'vip') kickRoles.push({ type: 'vip', label: 'VIP' }); else if (bt === 'subscriber' || bt === 'sub') kickRoles.push({ type: 'subscriber', label: 'Sub' }); else kickRoles.push({ type: bt, label: b.type }); });
-      // ✅ Usar avatar del propio mensaje (Render no puede llamar kick.com/api/v2 - IP bloqueada)
-      const avatarInMsg = sender.profile_pic || sender.profilePic || (sender.user && (sender.user.profile_pic || sender.user.profilePic)) || null;
-      if (avatarInMsg) { kickAvatarCache[username.toLowerCase()] = avatarInMsg; broadcast({ type: 'kick', platform: 'kick', chatname: username, chatmessage: content, nameColor, chatimg: avatarInMsg, roles: kickRoles, mid: d.id || ('kick-' + Date.now()) }); }
-      else { getKickAvatar(username, (avatar) => broadcast({ type: 'kick', platform: 'kick', chatname: username, chatmessage: content, nameColor, chatimg: avatar || null, roles: kickRoles, mid: d.id || ('kick-' + Date.now()) })); }
+      badges.forEach(b => {
+        const bt = (b.type || '').toLowerCase();
+        if (bt === 'broadcaster' || bt === 'owner') kickRoles.push({ type: 'broadcaster', label: 'Owner' });
+        else if (bt === 'moderator' || bt === 'mod') kickRoles.push({ type: 'moderator', label: 'Mod' });
+        else if (bt === 'vip') kickRoles.push({ type: 'vip', label: 'VIP' });
+        else if (bt === 'subscriber' || bt === 'sub') kickRoles.push({ type: 'subscriber', label: 'Sub' });
+        else kickRoles.push({ type: bt, label: b.type });
+      });
+
+      // Detectar canjes embebidos en mensajes de chat normales
+      const msgType = d.type || '';
+      const rewardTitle = (d.reward && d.reward.title)
+        || (d.metadata && d.metadata.reward_title)
+        || (d.channel_point_reward && d.channel_point_reward.title)
+        || '';
+      if (msgType === 'channel_points_redemption' || rewardTitle) {
+        const avatarInMsg = sender.profile_pic || sender.profilePic || (sender.user && (sender.user.profile_pic || sender.user.profilePic)) || null;
+        const sendRedeem = (av) => broadcast({
+          type: 'donation', platform: 'kick', donationType: 'redemption',
+          chatname: username, chatmessage: content || '',
+          rewardTitle: rewardTitle || 'Recompensa',
+          chatimg: av || null, nameColor, roles: kickRoles,
+          mid: d.id || ('kick-redeem-' + Date.now())
+        });
+        if (avatarInMsg) { kickAvatarCache[username.toLowerCase()] = avatarInMsg; sendRedeem(avatarInMsg); }
+        else getKickAvatar(username, sendRedeem);
+        return;
+      }
+
+      // Mensaje normal — usar avatar del propio mensaje si viene (Render no puede llamar kick.com/api/v2)
+      const avatarInMsg = sender.profile_pic || sender.profilePic
+        || (sender.user && (sender.user.profile_pic || sender.user.profilePic)) || null;
+      if (avatarInMsg) {
+        kickAvatarCache[username.toLowerCase()] = avatarInMsg;
+        broadcast({ type: 'kick', platform: 'kick', chatname: username, chatmessage: content, nameColor, chatimg: avatarInMsg, roles: kickRoles, mid: d.id || ('kick-' + Date.now()) });
+      } else {
+        getKickAvatar(username, (avatar) => broadcast({ type: 'kick', platform: 'kick', chatname: username, chatmessage: content, nameColor, chatimg: avatar || null, roles: kickRoles, mid: d.id || ('kick-' + Date.now()) }));
+      }
+      return;
     }
-    // ✅ Canjes de Channel Points via Pusher servidor (independiente de webhooks)
-    if (event === 'App\\\\Events\\\\ChannelPointsRedemptionEvent' || event === 'App.Events.ChannelPointsRedemptionEvent' ||
-        event === 'App\\\\Events\\\\PointRedemptionEvent' || event === 'App.Events.PointRedemptionEvent') {
-      const rdmUser = (d.user && d.user.username) || (d.sender && d.sender.username) || 'KickUser';
-      const rdmTitle = (d.reward && d.reward.title) || d.reward_title || d.title || 'Recompensa';
-      const rdmInput = d.message || d.comment || d.user_input || '';
+
+    // ── Canjes de Channel Points (evento dedicado) ────────────
+    if (isKickEvent(event, 'ChannelPointsRedemptionEvent') || isKickEvent(event, 'PointRedemptionEvent')) {
+      const rdmUser   = (d.user && d.user.username) || (d.sender && d.sender.username) || 'KickUser';
+      const rdmTitle  = (d.reward && d.reward.title) || d.reward_title || d.title || 'Recompensa';
+      const rdmInput  = d.message || d.comment || d.user_input || '';
       const rdmAvatar = (d.user && (d.user.profile_pic || d.user.profilePic)) || null;
       console.log(`[Kick Pusher] 🎁 Canje: "${rdmTitle}" por ${rdmUser}`);
-      const sendRedeem = (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'redemption', chatname: rdmUser, chatmessage: rdmInput || '', rewardTitle: rdmTitle, chatimg: av || null, nameColor: '#53FC18', roles: [], mid: d.id || ('kick-redeem-' + Date.now()) });
-      if (rdmAvatar) { kickAvatarCache[rdmUser.toLowerCase()] = rdmAvatar; sendRedeem(rdmAvatar); } else getKickAvatar(rdmUser, sendRedeem);
+      const sendRedeem = (av) => broadcast({
+        type: 'donation', platform: 'kick', donationType: 'redemption',
+        chatname: rdmUser, chatmessage: rdmInput || '',
+        rewardTitle: rdmTitle,
+        chatimg: av || null, nameColor: '#53FC18', roles: [],
+        mid: d.id || ('kick-redeem-' + Date.now())
+      });
+      if (rdmAvatar) { kickAvatarCache[rdmUser.toLowerCase()] = rdmAvatar; sendRedeem(rdmAvatar); }
+      else getKickAvatar(rdmUser, sendRedeem);
+      return;
     }
-    if (event === 'App\\\\Events\\\\GiftedSubscriptionsEvent' || event === 'App.Events.GiftedSubscriptionsEvent') {
-      const gifter = (d.gifted_by && d.gifted_by.username) || 'Anónimo', qty = (d.gifted_usernames && d.gifted_usernames.length) || 1;
-      getKickAvatar(gifter, (avatar) => broadcast({ type: 'donation', platform: 'kick', donationType: 'giftedsub', chatname: gifter, chatmessage: `¡Regaló ${qty} sub(s)!`, amount: qty, chatimg: avatar || null, nameColor: '#53FC18', roles: [], mid: 'kick-gift-' + Date.now() }));
+
+    // ── Subs regaladas ────────────────────────────────────────
+    if (isKickEvent(event, 'GiftedSubscriptionsEvent')) {
+      const gifter = (d.gifted_by && d.gifted_by.username) || 'Anónimo';
+      const qty    = (d.gifted_usernames && d.gifted_usernames.length) || d.quantity || 1;
+      getKickAvatar(gifter, (avatar) => broadcast({
+        type: 'donation', platform: 'kick', donationType: 'giftedsub',
+        chatname: gifter, chatmessage: `¡Regaló ${qty} sub(s)!`,
+        amount: qty, chatimg: avatar || null, nameColor: '#53FC18', roles: [],
+        mid: 'kick-gift-' + Date.now()
+      }));
+      return;
     }
-    if (event === 'App\\\\Events\\\\SubscriptionEvent' || event === 'App.Events.SubscriptionEvent') {
+
+    // ── Sub nueva ─────────────────────────────────────────────
+    if (isKickEvent(event, 'SubscriptionEvent')) {
       const uname = (d.usernames && d.usernames[0]) || d.username || 'KickUser';
-      getKickAvatar(uname, (avatar) => broadcast({ type: 'donation', platform: 'kick', donationType: 'sub', chatname: uname, chatmessage: '¡Se suscribió!', chatimg: avatar || null, nameColor: '#53FC18', roles: [], mid: 'kick-sub-' + Date.now() }));
+      getKickAvatar(uname, (avatar) => broadcast({
+        type: 'donation', platform: 'kick', donationType: 'sub',
+        chatname: uname, chatmessage: '¡Se suscribió!',
+        chatimg: avatar || null, nameColor: '#53FC18', roles: [],
+        mid: 'kick-sub-' + Date.now()
+      }));
+      return;
     }
   });
+
   ws.on('close', () => {
     if (kickPingInterval) { clearInterval(kickPingInterval); kickPingInterval = null; }
     state.kick.connected = false; broadcastStatus();
@@ -435,7 +523,7 @@ app.get('/auth/kick/callback', async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════
-// ✅ FIX: loadKickUserInfo con múltiples fallbacks
+// ✅ loadKickUserInfo con múltiples fallbacks
 // ══════════════════════════════════════════════════════
 function decodeJwtPayload(token) {
   try {
@@ -448,7 +536,7 @@ function decodeJwtPayload(token) {
 }
 
 async function loadKickUserInfo() {
-  // Metodo 0: decodificar JWT directamente (no necesita request)
+  // Metodo 0: decodificar JWT directamente
   const jwtPayload = decodeJwtPayload(kickOAuth.accessToken);
   if (jwtPayload) {
     console.log('[Kick OAuth] JWT payload:', JSON.stringify(jwtPayload).slice(0, 400));
@@ -479,8 +567,7 @@ async function loadKickUserInfo() {
     } catch(e) { console.error('[Kick OAuth] /users/me excepcion:', e.message); }
   }
 
-  // Metodo 2: SIEMPRE consultar kick.com/api/v2/channels/{slug}
-  // user_id ahi es el broadcaster_user_id que Kick espera en webhooks
+  // Metodo 2: kick.com/api/v2/channels/{slug}
   if (CONFIG.kick) {
     try {
       const channelData = await new Promise((resolve) => {
@@ -507,7 +594,7 @@ async function loadKickUserInfo() {
     } catch(e) { console.error('[Kick OAuth] Excepcion API v2:', e.message); }
   }
 
-  // Metodo 3: env var KICK_BROADCASTER_ID (hardcodeado, nunca falla)
+  // Metodo 3: env var KICK_BROADCASTER_ID
   if (CONFIG.kickBroadcasterId) {
     kickOAuth.channelId = CONFIG.kickBroadcasterId;
     if (!kickOAuth.userId) kickOAuth.userId = CONFIG.kickBroadcasterId;
@@ -542,7 +629,7 @@ async function registerKickWebhooks() {
 
   console.log('[Kick Webhooks] Registrando con broadcasterId:', broadcasterId);
 
-  // Primero borrar suscripciones existentes para evitar duplicados
+  // Borrar suscripciones existentes para evitar duplicados
   try {
     const listRes = await httpsRequest({
       hostname: 'api.kick.com',
@@ -567,7 +654,6 @@ async function registerKickWebhooks() {
     console.log('[Kick Webhooks] No se pudieron listar/borrar suscripciones existentes:', e.message);
   }
 
-  // Formato correcto de la API de Kick: todos los eventos en un solo POST
   const body = JSON.stringify({
     events: [
       { name: 'channel.points_redemption.created', version: 1 },
@@ -596,7 +682,6 @@ async function registerKickWebhooks() {
 
     console.log('[Kick Webhooks] POST status:', r.status, JSON.stringify(r.data).slice(0, 300));
 
-    // 204 = No Content = éxito según la doc de Kick
     if ([200, 201, 204].includes(r.status)) {
       state.kickOAuth.connected = true;
       broadcastStatus();
@@ -906,7 +991,6 @@ app.get('/tiktok-preview', (req, res) => {
 app.post('/api/tiktok/restart', (req, res) => { state.tiktok.connected = false; state.tiktok.restartCount++; broadcastStatus(); connectTikTokConnector(); res.json({ ok: true }); });
 app.post('/api/kick/restart',   (req, res) => { if (kickRetryTimeout) { clearTimeout(kickRetryTimeout); kickRetryTimeout = null; } state.kick.connected = false; CONFIG.kickId = process.env.KICK_CHANNEL_ID || ''; broadcastStatus(); connectKick(); res.json({ ok: true }); });
 
-// ✅ Endpoint para re-registrar webhooks manualmente sin pasar por OAuth de nuevo
 app.post('/api/kick/reregister-webhooks', async (req, res) => {
   if (!kickOAuth.accessToken) return res.status(400).json({ error: 'Sin token OAuth. Primero autorizá en /auth/kick' });
   try {
@@ -952,7 +1036,6 @@ server.listen(CONFIG.port, () => {
   connectKick();
   connectTikTokConnector();
 
-  // Si ya hay token en env vars, re-registrar webhooks sin pasar por browser
   if (kickOAuth.accessToken && CONFIG.kickClientId) {
     console.log('[Kick OAuth] Token encontrado en env vars, cargando info de usuario y re-registrando webhooks...');
     kickOAuth.expiresAt = Date.now() + 3600000;
