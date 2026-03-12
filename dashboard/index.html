@@ -405,6 +405,8 @@
           <button class="btn btn-danger btn-full" onclick="disconnectYouTube()">⏹ Detener</button>
           <button class="btn btn-secondary btn-full" onclick="openYouTubeLive()">📺 Abrir Live</button>
         </div>
+        <!-- ✅ NUEVO: muestra el link armado con el handle -->
+        <div id="yt-handle-info" style="display:none;margin-top:4px;" class="info-box info-green"></div>
       </div>
     </div>
 
@@ -618,8 +620,10 @@ var MAX_MESSAGES=200, messages=[], currentHighlightMid=null;
 var autoScroll=true;
 var currentVisor=null;
 
-// ✅ FIX DUPLICADOS: flag para saber si el servidor ya maneja Kick
 var serverHandlesKick = false;
+
+// ✅ NUEVO: almacena el handle de YouTube recibido del servidor
+var youtubeHandle = '';
 
 var PLATFORM_LOGOS={
   twitch:'<svg viewBox="0 0 24 28" fill="currentColor"><path d="M2.149 0L.537 4.119v19.63h6.72V28l4.123-4.25h3.29L22.463 14V0H2.149zm18.24 13.18l-3.29 3.387h-3.948l-2.886 2.973v-2.973H6.584V2.387h13.805v10.793zM17.07 5.367h-2.148v6.42h2.148V5.367zm-5.907 0h-2.15v6.42h2.15V5.367z"/></svg>',
@@ -676,6 +680,17 @@ function toggleSidebar(){
   var c=s.classList.toggle('collapsed');
   b.classList.toggle('collapsed',c);
   store.set('sidebarCollapsed',c?'1':'0');
+}
+
+// ═══ YOUTUBE LIVE URL HELPER ═══
+// ✅ Arma el link usando el handle de Render o el videoId si está disponible
+function getYouTubeLiveUrl() {
+  // Prioridad 1: video ID activo (link directo al stream)
+  if (ytVideoId) return 'https://www.youtube.com/watch?v=' + ytVideoId;
+  // Prioridad 2: handle de la variable de entorno YOUTUBE_HANDLE
+  var h = youtubeHandle || currentChannels.youtube || '';
+  if (h) return 'https://www.youtube.com/@' + h.replace(/^@/, '') + '/live';
+  return null;
 }
 
 // ═══ CHAT VISOR ═══
@@ -794,7 +809,6 @@ function connectWS(url){
   try{ws=new WebSocket(wsUrl);}catch(e){setStatus(false);scheduleRetry(url);return;}
   ws.onopen=function(){
     isConnected=true;retryDelay=1000;setStatus(true);
-    // ✅ FIX DUPLICADOS: NO conectar Pusher browser al abrir — esperar el status del servidor
   };
   ws.onmessage=function(e){try{var d=JSON.parse(e.data);if(d.type==='status')handleStatus(d);else if(d.type==='highlight'||d.type==='highlight_clear')return;else appendMessage(d);}catch(err){}};
   ws.onclose=function(){isConnected=false;setStatus(false);serverHandlesKick=false;scheduleRetry(url);};
@@ -810,28 +824,47 @@ function handleStatus(data){
   setPlatformStatus('youtube',data.youtube,data.youtubeVideoId||'—');
   if(data.youtubeVideoId){ytVideoId=data.youtubeVideoId;if(data.youtube)setYtBridgeStatus('green','✅ Conectado — <b>'+data.youtubeVideoId+'</b> · Mensajes llegando via API v3.');}
   if(data.channels) currentChannels=data.channels;
+
+  // ✅ NUEVO: capturar el handle de YouTube del servidor
+  if(data.channels && data.channels.youtube) {
+    youtubeHandle = data.channels.youtube;
+    updateYtHandleInfo();
+  }
+
   var mt=document.getElementById('tiktok-mode-tag');
   if(mt){mt.textContent=data.tiktokMode||'connector';mt.className='tag '+(data.tiktokMode==='puppeteer'?'tag-puppeteer':'tag-connector');}
 
-  // ✅ FIX DUPLICADOS: solo conectar Pusher browser si el servidor NO maneja Kick
   if(data.kick){
-    // Servidor maneja Kick — desconectar Pusher browser si estaba activo
     serverHandlesKick = true;
     if(kickWs && kickWs.readyState <= 1){
-      kickWs.onclose = null; // evitar reconexión automática
+      kickWs.onclose = null;
       kickWs.close();
       kickWs = null;
     }
     var box=document.getElementById('kick-status-box');
     if(box){box.className='info-box info-green';box.innerHTML='✅ Kick conectado via servidor OAuth';}
   } else {
-    // Servidor NO maneja Kick — el browser actúa como puente
     serverHandlesKick = false;
     var savedId=store.get('kickChannelId');
     if(savedId&&(!kickWs||kickWs.readyState>1)){connectKickBrowser(savedId);}
     else if(!savedId&&!autoKickDone&&data.channels&&data.channels.kick){autoKickDone=true;setTimeout(resolveKickId,1500);}
   }
 }
+
+// ✅ NUEVO: actualiza el recuadro informativo del handle de YouTube
+function updateYtHandleInfo() {
+  var box = document.getElementById('yt-handle-info');
+  if (!box) return;
+  var h = youtubeHandle || currentChannels.youtube || '';
+  if (h) {
+    var url = 'https://www.youtube.com/@' + h.replace(/^@/, '') + '/live';
+    box.style.display = 'block';
+    box.innerHTML = '▶️ Live del canal: <a href="' + url + '" target="_blank" style="color:var(--green);word-break:break-all;">' + url + '</a>';
+  } else {
+    box.style.display = 'none';
+  }
+}
+
 function setPlatformStatus(p,c,ch){var dot=document.getElementById('dot-'+p),el=document.getElementById('ch-'+p);if(dot)dot.className='platform-dot'+(c?' ok':'');if(el)el.textContent=ch||'—';}
 
 // ═══ YOUTUBE ═══
@@ -862,19 +895,22 @@ async function disconnectYouTube(silent){
   if(!silent){setYtBridgeStatus('yellow','📋 Pegá el link del live y presioná Conectar.');toast('⏹ YouTube detenido');}
 }
 function setYtBridgeStatus(color,html){var box=document.getElementById('yt-bridge-status');if(!box)return;box.className='info-box info-'+color;box.innerHTML=html+'<br><span style="font-size:9px;color:rgba(0,255,157,0.5);">Si configuraste YOUTUBE_CHANNEL_ID en Render, el servidor detecta el live automáticamente.</span>';}
-function openYouTubeLive(){var vid=ytVideoId||'';if(vid)window.open('https://www.youtube.com/watch?v='+vid,'_blank','noopener');else toast('Pegá el link del live primero');}
+
+// ✅ MODIFICADO: usa getYouTubeLiveUrl() que prioriza videoId, luego handle
+function openYouTubeLive(){
+  var url = getYouTubeLiveUrl();
+  if(url) window.open(url, '_blank', 'noopener');
+  else toast('Configura YOUTUBE_HANDLE en Render o pegá el link del live');
+}
 
 // ═══ APPEND MESSAGE ═══
-// ✅ FIX DUPLICADOS: deduplicar por mid
 var seenMids = {};
 function appendMessage(data){
   if(!data.chatname&&!data.chatmessage) return;
 
-  // Deduplicar por mid
   var mid = data.mid || '';
   if(mid && seenMids[mid]) return;
   if(mid) seenMids[mid] = true;
-  // Limpiar cache de mids viejos cada 500 mensajes
   var midKeys = Object.keys(seenMids);
   if(midKeys.length > 500) { delete seenMids[midKeys[0]]; }
 
@@ -968,7 +1004,6 @@ function clearHighlight(){
 var kickWs=null,kickRetryDelay=3000,kickRetryTimeout=null;
 function connectKickBrowser(channelId){
   if(!channelId) return;
-  // ✅ FIX: no conectar si el servidor ya maneja Kick
   if(serverHandlesKick) return;
   if(kickWs){try{kickWs.onmessage=null;kickWs.onclose=null;kickWs.onerror=null;kickWs.close();}catch(e){}kickWs=null;}
   if(kickRetryTimeout){clearTimeout(kickRetryTimeout);kickRetryTimeout=null;}
@@ -979,7 +1014,6 @@ function connectKickBrowser(channelId){
   tryKickUrl(channelId,urls,idx);
 }
 function tryKickUrl(channelId,urls,idx){
-  // ✅ FIX: abortar si servidor ya conectó
   if(serverHandlesKick) return;
   if(idx>=urls.length) idx=0;
   try{kickWs=new WebSocket(urls[idx]);}catch(e){kickRetryTimeout=setTimeout(function(){tryKickUrl(channelId,urls,(idx+1)%urls.length);},5000);return;}
@@ -990,7 +1024,6 @@ function tryKickUrl(channelId,urls,idx){
     kickWs.send(JSON.stringify({event:'pusher:subscribe',data:{auth:'',channel:'channel.'+channelId}}));
   };
   kickWs.onmessage=function(e){
-    // ✅ FIX: ignorar mensajes si servidor ya conectó
     if(serverHandlesKick) return;
     try{
       var msg=JSON.parse(e.data),event=msg.event||'';
@@ -1043,7 +1076,7 @@ function tryKickUrl(channelId,urls,idx){
     }catch(err){}
   };
   kickWs.onclose=function(e){
-    if(serverHandlesKick) return; // ✅ no reconectar si servidor ya lo maneja
+    if(serverHandlesKick) return;
     var box=document.getElementById('kick-status-box');
     if(box){box.className='info-box info-yellow';box.innerHTML='🔄 Kick desconectado, reintentando...';}
     if(ws&&ws.readyState===1) ws.send(JSON.stringify({type:'kick_disconnected'}));
