@@ -326,7 +326,6 @@ function tryKickPusher(channelId) {
     if (event === 'pusher:error') { ws.terminate(); return; }
     let d; try { d = typeof msg.data === 'string' ? JSON.parse(msg.data) : msg.data; } catch(e) { return; }
     if (!d) return;
-    // 🔍 LOG TEMPORAL: loguear todos los eventos Pusher desconocidos para detectar el evento real de canjes
     if (!event.startsWith('pusher') && !event.includes('ChatMessage') && !event.includes('Subscription') && !event.includes('GiftedSub') && !event.includes('ChannelPoints') && !event.includes('PointRedemption')) {
       console.log('[Kick Pusher] EVENTO DESCONOCIDO:', event, '| data:', JSON.stringify(d).slice(0, 200));
     }
@@ -335,12 +334,10 @@ function tryKickPusher(channelId) {
       const badges = (sender.identity && sender.identity.badges) || [], nameColor = (sender.identity && sender.identity.color) || '#53FC18';
       const kickRoles = [];
       badges.forEach(b => { const bt = (b.type || '').toLowerCase(); if (bt === 'broadcaster' || bt === 'owner') kickRoles.push({ type: 'broadcaster', label: 'Owner' }); else if (bt === 'moderator' || bt === 'mod') kickRoles.push({ type: 'moderator', label: 'Mod' }); else if (bt === 'vip') kickRoles.push({ type: 'vip', label: 'VIP' }); else if (bt === 'subscriber' || bt === 'sub') kickRoles.push({ type: 'subscriber', label: 'Sub' }); else kickRoles.push({ type: bt, label: b.type }); });
-      // ✅ Usar avatar del propio mensaje (Render no puede llamar kick.com/api/v2 - IP bloqueada)
       const avatarInMsg = sender.profile_pic || sender.profilePic || (sender.user && (sender.user.profile_pic || sender.user.profilePic)) || null;
       if (avatarInMsg) { kickAvatarCache[username.toLowerCase()] = avatarInMsg; broadcast({ type: 'kick', platform: 'kick', chatname: username, chatmessage: content, nameColor, chatimg: avatarInMsg, roles: kickRoles, mid: d.id || ('kick-' + Date.now()) }); }
       else { getKickAvatar(username, (avatar) => broadcast({ type: 'kick', platform: 'kick', chatname: username, chatmessage: content, nameColor, chatimg: avatar || null, roles: kickRoles, mid: d.id || ('kick-' + Date.now()) })); }
     }
-    // ✅ FIX: Canjes de Channel Points via Pusher servidor
     if (event === 'App\Events\ChannelPointsRedemptionEvent' || event === 'App.Events.ChannelPointsRedemptionEvent' ||
         event === 'App\Events\PointRedemptionEvent' || event === 'App.Events.PointRedemptionEvent') {
       const rdmUser = (d.user && d.user.username) || (d.sender && d.sender.username) || 'KickUser';
@@ -351,8 +348,6 @@ function tryKickPusher(channelId) {
       const sendRedeem = (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'redemption', chatname: rdmUser, chatmessage: rdmInput || '', rewardTitle: rdmTitle, chatimg: av || null, nameColor: '#53FC18', roles: [], mid: d.id || ('kick-redeem-' + Date.now()) });
       if (rdmAvatar) { kickAvatarCache[rdmUser.toLowerCase()] = rdmAvatar; sendRedeem(rdmAvatar); } else getKickAvatar(rdmUser, sendRedeem);
     }
-
-    // 🎁 Catch-all: cualquier evento Pusher desconocido con datos de canje (Channel Points 2025)
     if (d && d.reward && d.reward.title && !event.includes('ChatMessage') && !event.includes('ChannelPoints') && !event.includes('PointRedemption') && !event.includes('Subscription') && !event.includes('GiftedSub')) {
       const rdmUserCA = (d.user && (d.user.username || d.user.login || d.user.display_name)) || (d.redeemer && d.redeemer.username) || (d.sender && d.sender.username) || 'KickUser';
       const rdmTitleCA = d.reward.title || 'Recompensa';
@@ -450,7 +445,7 @@ app.get('/auth/kick/callback', async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════
-// ✅ FIX: loadKickUserInfo con múltiples fallbacks
+// loadKickUserInfo con múltiples fallbacks
 // ══════════════════════════════════════════════════════
 function decodeJwtPayload(token) {
   try {
@@ -463,7 +458,6 @@ function decodeJwtPayload(token) {
 }
 
 async function loadKickUserInfo() {
-  // Metodo 0: decodificar JWT directamente (no necesita request)
   const jwtPayload = decodeJwtPayload(kickOAuth.accessToken);
   if (jwtPayload) {
     console.log('[Kick OAuth] JWT payload:', JSON.stringify(jwtPayload).slice(0, 400));
@@ -475,7 +469,6 @@ async function loadKickUserInfo() {
     }
   }
 
-  // Metodo 1: /public/v1/users/me
   if (!kickOAuth.channelId) {
     try {
       const r = await httpsRequest({
@@ -494,7 +487,6 @@ async function loadKickUserInfo() {
     } catch(e) { console.error('[Kick OAuth] /users/me excepcion:', e.message); }
   }
 
-  // Metodo 2: SIEMPRE consultar kick.com/api/v2/channels/{slug}
   if (CONFIG.kick) {
     try {
       const channelData = await new Promise((resolve) => {
@@ -521,14 +513,12 @@ async function loadKickUserInfo() {
     } catch(e) { console.error('[Kick OAuth] Excepcion API v2:', e.message); }
   }
 
-  // Metodo 3: env var KICK_BROADCASTER_ID (hardcodeado, nunca falla)
   if (CONFIG.kickBroadcasterId) {
     kickOAuth.channelId = CONFIG.kickBroadcasterId;
     if (!kickOAuth.userId) kickOAuth.userId = CONFIG.kickBroadcasterId;
     console.log('[Kick OAuth] channelId desde KICK_BROADCASTER_ID:', kickOAuth.channelId);
   }
 
-  // Metodo 4: ultimo recurso CONFIG.kickId
   if (!kickOAuth.channelId && CONFIG.kickId) {
     kickOAuth.channelId = CONFIG.kickId;
     if (!kickOAuth.userId) kickOAuth.userId = CONFIG.kickId;
@@ -556,7 +546,6 @@ async function registerKickWebhooks() {
 
   console.log('[Kick Webhooks] Registrando con broadcasterId:', broadcasterId);
 
-  // Primero borrar suscripciones existentes para evitar duplicados
   try {
     const listRes = await httpsRequest({
       hostname: 'api.kick.com',
@@ -581,15 +570,13 @@ async function registerKickWebhooks() {
     console.log('[Kick Webhooks] No se pudieron listar/borrar suscripciones existentes:', e.message);
   }
 
-  // Formato correcto de la API de Kick: todos los eventos en un solo POST
   const body = JSON.stringify({
     events: [
-      // { name: 'channel.points_redemption.created', version: 1 }, // ❌ Kick aún no lo soporta (invalid event name)
-      { name: 'channel.subscription.new',          version: 1 },
-      { name: 'channel.subscription.renewal',      version: 1 },
-      { name: 'channel.subscription.gifts',        version: 1 },
-      { name: 'channel.followed',                  version: 1 },
-      { name: 'chat.message.sent',                 version: 1 },
+      { name: 'channel.subscription.new',     version: 1 },
+      { name: 'channel.subscription.renewal', version: 1 },
+      { name: 'channel.subscription.gifts',   version: 1 },
+      { name: 'channel.followed',              version: 1 },
+      { name: 'chat.message.sent',             version: 1 },
     ],
     method:              'webhook',
     broadcaster_user_id: broadcasterId,
@@ -610,7 +597,6 @@ async function registerKickWebhooks() {
 
     console.log('[Kick Webhooks] POST status:', r.status, JSON.stringify(r.data).slice(0, 300));
 
-    // 204 = No Content = éxito según la doc de Kick
     if ([200, 201, 204].includes(r.status)) {
       state.kickOAuth.connected = true;
       broadcastStatus();
@@ -624,18 +610,16 @@ async function registerKickWebhooks() {
   }
 }
 
-// Endpoint que recibe los webhooks de Kick
+// ══════════════════════════════════════════════════════
+// ✅ FIX PRINCIPAL: Webhook handler con chat.message.sent
+// ══════════════════════════════════════════════════════
 app.post('/webhook/kick', (req, res) => {
   res.sendStatus(200);
 
   try {
     const signature  = req.headers['kick-event-signature'] || req.headers['x-kick-signature'] || '';
     const rawBody    = req.body;
-    const webhookSecret = CONFIG.kickWebhookSecret || kickOAuth.accessToken.slice(0, 32);
 
-    // Kick usa firma ED25519 (asimétrica), NO HMAC-SHA256
-    // El header Kick-Event-Signature contiene la firma hex; verificar con la clave pública de Kick
-    // Si no tenemos la clave pública, logueamos la firma pero NO bloqueamos el evento
     if (signature) {
       const kickPublicKey = process.env.KICK_WEBHOOK_PUBLIC_KEY || null;
       if (kickPublicKey) {
@@ -660,7 +644,7 @@ app.post('/webhook/kick', (req, res) => {
     const eventData = payload.data || payload.event || payload;
 
     console.log(`[Kick Webhook] 📨 Evento recibido: ${eventType}`);
-    handleKickWebhookEvent(eventType, eventData);
+    handleKickWebhookEvent(eventType, eventData, payload);
   } catch(e) {
     console.error('[Kick Webhook] Excepción:', e.message);
   }
@@ -675,9 +659,68 @@ app.get('/webhook/kick', (req, res) => {
   res.json({ ok: true, endpoint: 'Kick Webhook activo' });
 });
 
-function handleKickWebhookEvent(eventType, data) {
+// ──────────────────────────────────────────────────────
+// handleKickWebhookEvent — con el fix de chat.message.sent
+// ──────────────────────────────────────────────────────
+function parseKickRoles(badges) {
+  const roles = [];
+  (badges || []).forEach(b => {
+    const bt = (b.type || '').toLowerCase();
+    if (bt === 'broadcaster' || bt === 'owner') roles.push({ type: 'broadcaster', label: 'Owner' });
+    else if (bt === 'moderator' || bt === 'mod') roles.push({ type: 'moderator', label: 'Mod' });
+    else if (bt === 'vip')  roles.push({ type: 'vip',        label: 'VIP' });
+    else if (bt === 'subscriber' || bt === 'sub') roles.push({ type: 'subscriber', label: 'Sub' });
+    else roles.push({ type: bt, label: b.type });
+  });
+  return roles;
+}
+
+function handleKickWebhookEvent(eventType, data, rawPayload) {
   if (!data) return;
   console.log(`[Kick Webhook Event] ${eventType}:`, JSON.stringify(data).slice(0, 300));
+
+  // ✅ FIX: Mensajes de chat via webhook (nuevo sistema de Kick)
+  if (eventType === 'chat.message.sent') {
+    // Kick puede envolver el mensaje en distintas estructuras — cubrir todos los casos
+    const msgData    = data.message || data;
+    const sender     = data.sender  || data.broadcaster || msgData.sender || {};
+    const username   = sender.username    || data.username    || msgData.username    || 'KickUser';
+    const content    = data.content       || msgData.content  || data.message_content || data.text || '';
+
+    if (!content) {
+      console.log('[Kick Webhook] chat.message.sent sin contenido, descartando');
+      return;
+    }
+
+    const avatarInMsg = sender.profile_picture || sender.profile_pic || sender.profilePic
+                     || (sender.user && (sender.user.profile_picture || sender.user.profile_pic))
+                     || null;
+    const nameColor   = (sender.identity && sender.identity.color) || '#53FC18';
+    const badges      = (sender.identity && sender.identity.badges) || [];
+    const kickRoles   = parseKickRoles(badges);
+    const mid         = data.message_id || msgData.id || data.id || ('kick-wh-chat-' + Date.now());
+
+    console.log(`[Kick Webhook] 💬 Chat: ${username}: ${content.slice(0, 80)}`);
+
+    const send = (av) => broadcast({
+      type:        'kick',
+      platform:    'kick',
+      chatname:    username,
+      chatmessage: content,
+      nameColor,
+      chatimg:     av || null,
+      roles:       kickRoles,
+      mid,
+    });
+
+    if (avatarInMsg) {
+      kickAvatarCache[username.toLowerCase()] = avatarInMsg;
+      send(avatarInMsg);
+    } else {
+      getKickAvatar(username, send);
+    }
+    return;
+  }
 
   if (eventType === 'channel.points_redemption.created' || eventType.includes('redemption')) {
     const username    = data.user?.username    || data.redeemer?.username || data.username || 'Viewer';
@@ -932,7 +975,6 @@ app.get('/tiktok-preview', (req, res) => {
 app.post('/api/tiktok/restart', (req, res) => { state.tiktok.connected = false; state.tiktok.restartCount++; broadcastStatus(); connectTikTokConnector(); res.json({ ok: true }); });
 app.post('/api/kick/restart',   (req, res) => { if (kickRetryTimeout) { clearTimeout(kickRetryTimeout); kickRetryTimeout = null; } state.kick.connected = false; CONFIG.kickId = process.env.KICK_CHANNEL_ID || ''; broadcastStatus(); connectKick(); res.json({ ok: true }); });
 
-// ✅ Endpoint para re-registrar webhooks manualmente sin pasar por OAuth de nuevo
 app.post('/api/kick/reregister-webhooks', async (req, res) => {
   if (!kickOAuth.accessToken) return res.status(400).json({ error: 'Sin token OAuth. Primero autorizá en /auth/kick' });
   try {
@@ -978,7 +1020,6 @@ server.listen(CONFIG.port, () => {
   connectKick();
   connectTikTokConnector();
 
-  // Si ya hay token en env vars, re-registrar webhooks sin pasar por browser
   if (kickOAuth.accessToken && CONFIG.kickClientId) {
     console.log('[Kick OAuth] Token encontrado en env vars, cargando info de usuario y re-registrando webhooks...');
     kickOAuth.expiresAt = Date.now() + 3600000;
