@@ -33,7 +33,7 @@ const CONFIG = {
   tiktokMode:       process.env.TIKTOK_MODE         || 'connector',
   kickClientId:     process.env.KICK_CLIENT_ID      || '',
   kickClientSecret: process.env.KICK_CLIENT_SECRET  || '',
-  kickRedirectUri:  process.env.KICK_REDIRECT_URI   || 'https://multichat-krona-5uts.onrender.com/auth/kick/callback',
+  kickRedirectUri:  process.env.KICK_REDIRECT_URI   || 'https://TU-APP.koyeb.app/auth/kick/callback',
   kickWebhookSecret: process.env.KICK_WEBHOOK_SECRET || '',
   kickBroadcasterId: process.env.KICK_BROADCASTER_ID || '',
 };
@@ -532,7 +532,7 @@ async function loadKickUserInfo() {
 // ══════════════════════════════════════════════════════
 // KICK WEBHOOKS — Registro y recepción
 // ══════════════════════════════════════════════════════
-const WEBHOOK_URL = 'https://multichat-krona-5uts.onrender.com/webhook/kick';
+const WEBHOOK_URL = 'https://TU-APP.koyeb.app/webhook/kick';
 
 async function registerKickWebhooks() {
   if (!kickOAuth.accessToken) return;
@@ -1011,7 +1011,7 @@ server.listen(CONFIG.port, () => {
   console.log(`   YouTube   : ${YOUTUBE_API_KEYS.length} key(s) | ${CONFIG.youtubeChannelId || CONFIG.youtubeHandle || 'solo manual'}`);
   if (CONFIG.kickClientId) {
     console.log(`\n   👉 Activar canjes Kick:`);
-    console.log(`      1. Abrí: https://multichat-krona-5uts.onrender.com/auth/kick`);
+    console.log(`      1. Abrí: https://TU-APP.koyeb.app/auth/kick`);
     console.log(`      2. O re-registrá webhooks: POST /api/kick/reregister-webhooks`);
     console.log(`         ${WEBHOOK_URL}\n`);
   }
