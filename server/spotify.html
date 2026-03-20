@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comic Style Spotify Widget</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Comic Sans MS', 'Marker Felt', cursive;
+            background: transparent;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .comic-widget {
+            position: relative;
+            background: #fffef9;
+            border: 5px solid #1a1a1a;
+            border-radius: 12px;
+            box-shadow: 8px 8px 0 #1a1a1a;
+            padding: 24px;
+            max-width: 480px;
+            width: 100%;
+            transform: rotate(-0.5deg);
+            transition: opacity 200ms ease, transform 200ms ease;
+        }
+
+        .comic-widget.hidden-state {
+            opacity: 0;
+            transform: translateY(6px) rotate(-0.5deg);
+            pointer-events: none;
+        }
+
+        .comic-widget::before {
+            content: '';
+            position: absolute;
+            inset: -3px;
+            background: repeating-linear-gradient(
+                45deg,
+                transparent,
+                transparent 2px,
+                rgba(0,0,0,0.02) 2px,
+                rgba(0,0,0,0.02) 4px
+            );
+            pointer-events: none;
+            border-radius: 10px;
+        }
+
+        .now-playing-tag {
+            position: absolute;
+            top: -12px;
+            right: 30px;
+            background: #ffb3ba;
+            color: #1a1a1a;
+            padding: 6px 16px;
+            border: 3px solid #1a1a1a;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 11px;
+            letter-spacing: 1px;
+            box-shadow: 3px 3px 0 #1a1a1a;
+            transform: rotate(3deg);
+            z-index: 10;
+        }
+
+        .widget-content {
+            display: flex;
+            gap: 20px;
+            position: relative;
+        }
+
+        .album-art {
+            width: 160px;
+            height: 160px;
+            background: linear-gradient(135deg, #bae1ff 0%, #ffd6a5 100%);
+            border: 4px solid #1a1a1a;
+            border-radius: 8px;
+            box-shadow: 4px 4px 0 #1a1a1a;
+            flex-shrink: 0;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .album-art img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+        }
+
+        .album-art img.loaded {
+            display: block;
+        }
+
+        .album-art .placeholder {
+            font-size: 64px;
+            color: rgba(255, 255, 255, 0.6);
+            position: absolute;
+        }
+
+        .album-art img.loaded + .placeholder {
+            display: none;
+        }
+
+        .info-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-width: 0;
+        }
+
+        .track-info {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .track-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #1a1a1a;
+            line-height: 1.2;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            word-wrap: break-word;
+            word-break: break-word;
+        }
+
+        .track-artist {
+            font-size: 1rem;
+            color: #4a4a4a;
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .track-album {
+            font-size: 0.85rem;
+            color: #6a6a6a;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .progress-container {
+            background: #fffef9;
+            border: 3px solid #1a1a1a;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 3px 3px 0 #1a1a1a;
+            margin-top: auto;
+        }
+
+        .progress-bar-wrapper {
+            margin-bottom: 8px;
+        }
+
+        .progress-bar {
+            height: 16px;
+            background: #ffb3ba;
+            border: 3px solid #1a1a1a;
+            border-radius: 20px;
+            overflow: hidden;
+            position: relative;
+            margin-bottom: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #1a1a1a;
+            width: 0%;
+            transition: width 0.3s ease;
+            max-width: 100%;
+        }
+
+        .progress-times {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            font-weight: bold;
+            color: #1a1a1a;
+            margin-top: 6px;
+        }
+
+        .decorative-dots {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 2px solid #1a1a1a;
+        }
+
+        .dot-1 {
+            background: #ffdfba;
+            top: 20px;
+            left: 20px;
+        }
+
+        .dot-2 {
+            background: #bae1ff;
+            bottom: 20px;
+            right: 20px;
+        }
+
+        .dot-3 {
+            background: #e7c6ff;
+            top: 50%;
+            right: 10px;
+        }
+
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="comic-widget" id="overlay">
+        <div class="now-playing-tag" id="status">NOW PLAYING</div>
+        
+        <div class="decorative-dots dot-1"></div>
+        <div class="decorative-dots dot-2"></div>
+        <div class="decorative-dots dot-3"></div>
+        
+        <div class="widget-content">
+            <div class="album-art">
+                <img id="art" alt="Album artwork">
+                <span class="placeholder">♪</span>
+            </div>
+            
+            <div class="info-panel">
+                <div class="track-info">
+                    <div class="track-title" id="title">Esperando Spotify...</div>
+                    <div class="track-artist" id="artist">—</div>
+                    <div class="track-album" id="album">—</div>
+                </div>
+                
+                <div class="progress-container">
+                    <div class="progress-bar-wrapper">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                    </div>
+                    <div class="progress-times">
+                        <span id="currentTime">0:00</span>
+                        <span id="totalTime">0:00</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <span class="sr-only" id="ariaStatus" aria-live="polite"></span>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script>
+(function() {
+    // ─── Configuración ───────────────────────────────────────────────────────────
+    const urlParams    = new URLSearchParams(location.search);
+
+    // URL base del bot: por defecto usa el mismo origen (cuando se sirve desde /widget)
+    // Puedes pasarlo como ?server=https://tu-bot.onrender.com
+    const serverBase   = urlParams.get('server') || location.origin;
+
+    // Intervalo de polling en ms (por defecto 3 segundos)
+    const pollInterval = parseInt(urlParams.get('interval') || '3000');
+
+    // Opciones de visibilidad — por defecto se oculta si está pausado o sin música
+    const hidePaused      = !urlParams.has('showpaused');
+    const hideInactive    = urlParams.has('hideoffline') || urlParams.has('hideinactive');
+    const hideWhenNoSong  = !urlParams.has('shownosong');
+
+    // ─── Estado ──────────────────────────────────────────────────────────────────
+    let state = {
+        track:      null,
+        status:     'idle',
+        isPlaying:  false,
+        progressMs: 0,
+        durationMs: 0,
+        receivedAt: Date.now()
+    };
+
+    // ─── Referencias DOM ─────────────────────────────────────────────────────────
+    const overlayEl      = document.getElementById('overlay');
+    const titleEl        = document.getElementById('title');
+    const artistEl       = document.getElementById('artist');
+    const albumEl        = document.getElementById('album');
+    const statusEl       = document.getElementById('status');
+    const artEl          = document.getElementById('art');
+    const currentTimeEl  = document.getElementById('currentTime');
+    const totalTimeEl    = document.getElementById('totalTime');
+    const progressFillEl = document.getElementById('progressFill');
+    const ariaStatus     = document.getElementById('ariaStatus');
+
+    // ─── Helpers ─────────────────────────────────────────────────────────────────
+    function formatMs(ms) {
+        if (!ms && ms !== 0) return '0:00';
+        const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+        const minutes      = Math.floor(totalSeconds / 60);
+        const seconds      = totalSeconds % 60;
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+
+    function updateProgressBar() {
+        const { durationMs, progressMs, receivedAt, isPlaying } = state;
+        if (!durationMs) {
+            progressFillEl.style.width = '0%';
+            currentTimeEl.textContent  = '0:00';
+            totalTimeEl.textContent    = '0:00';
+            return;
+        }
+        let elapsed = progressMs || 0;
+        if (isPlaying) elapsed += Date.now() - (receivedAt || Date.now());
+        const clamped = Math.max(0, Math.min(durationMs, elapsed));
+        const pct     = Math.min(100, (clamped / durationMs) * 100);
+        progressFillEl.style.width = `${pct}%`;
+        currentTimeEl.textContent  = formatMs(clamped);
+        totalTimeEl.textContent    = formatMs(durationMs);
+    }
+
+    // ─── Render ──────────────────────────────────────────────────────────────────
+    function render() {
+        const { track, status, isPlaying } = state;
+
+        const shouldHide = (!track && hideWhenNoSong) ||
+                           (status === 'paused'  && hidePaused) ||
+                           (status === 'stopped' && hideInactive);
+
+        if (shouldHide) {
+            overlayEl.classList.add('hidden-state');
+            return;
+        }
+        overlayEl.classList.remove('hidden-state');
+
+        if (track) {
+            titleEl.textContent  = track.name   || 'Canción desconocida';
+            artistEl.textContent = track.artist  || '';
+            albumEl.textContent  = track.album   || '';
+
+            if (track.imageUrl && artEl.src !== track.imageUrl) {
+                artEl.src = track.imageUrl;
+                artEl.onload  = () => artEl.classList.add('loaded');
+                artEl.onerror = () => artEl.classList.remove('loaded');
+            }
+        } else {
+            titleEl.textContent  = status === 'stopped' ? 'Nada sonando' : 'Esperando Spotify...';
+            artistEl.textContent = '';
+            albumEl.textContent  = '';
+            artEl.classList.remove('loaded');
+        }
+
+        const badge = status || (isPlaying ? 'PLAYING' : 'PAUSED');
+        statusEl.textContent = badge.toUpperCase();
+        ariaStatus.textContent = `${track?.name || 'No track'} ${badge}`;
+
+        updateProgressBar();
+
+        // Animaciones brutalist ocasionales
+        if (track) {
+            if (Math.random() > 0.7) {
+                gsap.to('.info-panel', { rotation: gsap.utils.random(-2, 2), duration: 0.3, ease: 'none' });
+            }
+            if (Math.random() > 0.8) {
+                gsap.to(overlayEl, { x: gsap.utils.random(-5, 5), y: gsap.utils.random(-5, 5), duration: 0.2, yoyo: true, repeat: 1, ease: 'none' });
+            }
+            if (Math.random() > 0.9) {
+                gsap.to(overlayEl, { boxShadow: '12px 12px 0 #1a1a1a', duration: 0.2, yoyo: true, repeat: 1 });
+            }
+            if (Math.random() > 0.85) {
+                gsap.to('.album-art', { rotate: gsap.utils.random(-3, 3), duration: 0.3, ease: 'none' });
+            }
+        }
+    }
+
+    // ─── Polling al bot de Spotify ────────────────────────────────────────────────
+    async function fetchNowPlaying() {
+        try {
+            const res  = await fetch(`${serverBase}/nowplaying`);
+            if (!res.ok) return;
+            const data = await res.json();
+
+            // receivedAt SIEMPRE se marca aquí en el cliente, en el momento exacto
+            // que llega la respuesta. Así el cálculo de elapsed en updateProgressBar
+            // mide correctamente cuánto tiempo pasó desde el último dato de Spotify.
+            state = {
+                track:      data.track   || null,
+                status:     data.status  || 'idle',
+                isPlaying:  !!data.isPlaying,
+                progressMs: data.progressMs || 0,
+                durationMs: data.durationMs || 0,
+                receivedAt: Date.now()
+            };
+
+            render();
+        } catch (e) {
+            // Silencioso: red caída o servidor apagado
+        }
+    }
+
+    // ─── Iniciar ─────────────────────────────────────────────────────────────────
+    render();
+    fetchNowPlaying();
+    setInterval(fetchNowPlaying, pollInterval);
+
+    // Barra de progreso suave entre polls
+    setInterval(updateProgressBar, 500);
+
+    // Animaciones del badge y container cada cierto tiempo
+    function animatePlayingBadge() {
+        if (statusEl && Math.random() > 0.3) {
+            gsap.to(statusEl, {
+                rotate: gsap.utils.random(-3, 3),
+                duration: 0.3,
+                ease: 'none',
+                onComplete: () => {
+                    if (Math.random() > 0.7) gsap.to(statusEl, { rotate: 3, duration: 0.2, ease: 'none' });
+                }
+            });
+        }
+    }
+
+    function animateContainer() {
+        if (Math.random() > 0.7) gsap.to(overlayEl, { rotation: gsap.utils.random(-2, 2), duration: 0.3, ease: 'none' });
+        if (Math.random() > 0.8) gsap.to(overlayEl, { x: gsap.utils.random(-5, 5), y: gsap.utils.random(-5, 5), duration: 0.2, yoyo: true, repeat: 1, ease: 'none' });
+        if (Math.random() > 0.9) gsap.to(overlayEl, { boxShadow: '12px 12px 0 #1a1a1a', duration: 0.2, yoyo: true, repeat: 1 });
+    }
+
+    setInterval(animatePlayingBadge, gsap.utils.random(3000, 7000));
+    setInterval(animateContainer,    gsap.utils.random(4000, 8000));
+})();
+    </script>
+</body>
+</html>
