@@ -295,24 +295,51 @@ function getTwitchAvatar(username, callback) {
   req.setTimeout(5000, () => req.destroy());
 }
 
-function getKickAvatar(username, callback) {
+function getKickAvatar(username, callback, userId) {
   if (!username) return callback(null);
   const slug = username.toLowerCase();
   if (kickAvatarCache[slug]) return callback(kickAvatarCache[slug]);
   if (kickAvatarPending[slug]) { kickAvatarPending[slug].push(callback); return; }
   kickAvatarPending[slug] = [callback];
-  const req = https.get(`https://kick.com/api/v2/channels/${slug}`, { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } }, (res) => {
-    let body = ''; res.on('data', c => body += c);
-    res.on('end', () => {
-      let avatar = null;
-      try { const d = JSON.parse(body); avatar = (d.user && (d.user.profile_pic || d.user.profilePic)) || d.profile_pic || null; } catch(e) {}
-      if (avatar) kickAvatarCache[slug] = avatar;
-      const cbs = kickAvatarPending[slug] || []; delete kickAvatarPending[slug];
-      cbs.forEach(cb => cb(avatar));
+
+  const done = (avatar) => {
+    if (avatar) kickAvatarCache[slug] = avatar;
+    const cbs = kickAvatarPending[slug] || []; delete kickAvatarPending[slug];
+    cbs.forEach(cb => cb(avatar));
+  };
+
+  // Intentar con la API de usuarios si tenemos el ID
+  const tryUsersApi = () => {
+    if (!userId) { tryChannelsApi(); return; }
+    const req = https.get(`https://kick.com/api/v2/users/${userId}`, { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } }, (res) => {
+      let body = ''; res.on('data', c => body += c);
+      res.on('end', () => {
+        try {
+          const d = JSON.parse(body);
+          const avatar = d.profile_pic || d.profilePic || (d.user && (d.user.profile_pic || d.user.profilePic)) || null;
+          if (avatar) { done(avatar); return; }
+        } catch(e) {}
+        tryChannelsApi();
+      });
     });
-  });
-  req.on('error', () => { const cbs = kickAvatarPending[slug] || []; delete kickAvatarPending[slug]; cbs.forEach(cb => cb(null)); });
-  req.setTimeout(8000, () => req.destroy());
+    req.on('error', () => tryChannelsApi());
+    req.setTimeout(5000, () => { req.destroy(); tryChannelsApi(); });
+  };
+
+  const tryChannelsApi = () => {
+    const req = https.get(`https://kick.com/api/v2/channels/${slug}`, { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } }, (res) => {
+      let body = ''; res.on('data', c => body += c);
+      res.on('end', () => {
+        let avatar = null;
+        try { const d = JSON.parse(body); avatar = (d.user && (d.user.profile_pic || d.user.profilePic)) || d.profile_pic || null; } catch(e) {}
+        done(avatar);
+      });
+    });
+    req.on('error', () => done(null));
+    req.setTimeout(8000, () => { req.destroy(); done(null); });
+  };
+
+  tryUsersApi();
 }
 
 function httpsRequest(options, body) {
@@ -451,8 +478,6 @@ function tryKickPusher(channelId) {
     let d; try { d = typeof m.data === 'string' ? JSON.parse(m.data) : m.data; } catch(e) { return; }
     if (!d) return;
     if (event === 'App\\Events\\ChatMessageEvent' || event === 'App.Events.ChatMessageEvent') {
-      console.log('[Kick MSG] sender keys:', JSON.stringify(Object.keys(d.sender || {})));
-      console.log('[Kick MSG] sender data:', JSON.stringify(d.sender).slice(0, 500));
       const sender = d.sender || {}, username = sender.username || 'KickUser', content = d.content || '';
       const badges = (sender.identity && sender.identity.badges) || [], nameColor = (sender.identity && sender.identity.color) || '#53FC18';
       const kickRoles = []; badges.forEach(b => { const bt = (b.type || '').toLowerCase(); if (bt === 'broadcaster' || bt === 'owner') kickRoles.push({ type: 'broadcaster', label: 'Owner' }); else if (bt === 'moderator' || bt === 'mod') kickRoles.push({ type: 'moderator', label: 'Mod' }); else if (bt === 'vip') kickRoles.push({ type: 'vip', label: 'VIP' }); else if (bt === 'subscriber' || bt === 'sub') kickRoles.push({ type: 'subscriber', label: 'Sub' }); });
