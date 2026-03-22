@@ -475,11 +475,20 @@ function tryKickPusher(channelId) {
 
     if (event === 'App\\Events\\ChatMessageEvent' || event === 'App.Events.ChatMessageEvent') {
       const sender = d.sender || {}, username = sender.username || 'KickUser', content = d.content || '';
-      const badges = (sender.identity && sender.identity.badges) || [], nameColor = (sender.identity && sender.identity.color) || '#53FC18';
+      const badges = (sender.identity && sender.identity.badges) || [], nameColor = (sender.identity && (sender.identity.color || sender.identity.username_color)) || '#53FC18';
       const kickRoles = []; badges.forEach(b => { const bt = (b.type || '').toLowerCase(); if (bt === 'broadcaster' || bt === 'owner') kickRoles.push({ type: 'broadcaster', label: 'Owner' }); else if (bt === 'moderator' || bt === 'mod') kickRoles.push({ type: 'moderator', label: 'Mod' }); else if (bt === 'vip') kickRoles.push({ type: 'vip', label: 'VIP' }); else if (bt === 'subscriber' || bt === 'sub') kickRoles.push({ type: 'subscriber', label: 'Sub' }); });
-      const avatarInMsg = sender.profile_pic || sender.profilePic || null;
-      if (avatarInMsg) { kickAvatarCache[username.toLowerCase()] = avatarInMsg; broadcast({ type: 'kick', platform: 'kick', chatname: username, chatmessage: content, nameColor, chatimg: avatarInMsg, roles: kickRoles, mid: d.id || ('kick-' + Date.now()) }); }
-      else { getKickAvatar(username, (avatar) => broadcast({ type: 'kick', platform: 'kick', chatname: username, chatmessage: content, nameColor, chatimg: avatar || null, roles: kickRoles, mid: d.id || ('kick-' + Date.now()) })); }
+      const avatarInMsg = sender.profile_pic || sender.profilePic || sender.profile_picture || null;
+      // Detectar canjes: mensajes que empiezan con "canjeó "
+      const isRedemption = content.startsWith('canjeó ');
+      if (isRedemption) {
+        const rewardTitle = content.replace('canjeó ', '').trim();
+        console.log('[Kick Redemption Pusher]', username, rewardTitle);
+        const send = (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'redemption', chatname: username, chatmessage: content, rewardTitle, chatimg: av || null, nameColor: '#FFD700', roles: kickRoles, mid: d.id || ('kick-redeem-' + Date.now()) });
+        if (avatarInMsg) { kickAvatarCache[username.toLowerCase()] = avatarInMsg; send(avatarInMsg); } else getKickAvatar(username, send);
+      } else {
+        if (avatarInMsg) { kickAvatarCache[username.toLowerCase()] = avatarInMsg; broadcast({ type: 'kick', platform: 'kick', chatname: username, chatmessage: content, nameColor, chatimg: avatarInMsg, roles: kickRoles, mid: d.id || ('kick-' + Date.now()) }); }
+        else { getKickAvatar(username, (avatar) => broadcast({ type: 'kick', platform: 'kick', chatname: username, chatmessage: content, nameColor, chatimg: avatar || null, roles: kickRoles, mid: d.id || ('kick-' + Date.now()) })); }
+      }
     }
     if (event === 'App\\Events\\GiftedSubscriptionsEvent') { const gifter = (d.gifted_by && d.gifted_by.username) || 'Anónimo', qty = (d.gifted_usernames && d.gifted_usernames.length) || 1; getKickAvatar(gifter, (avatar) => broadcast({ type: 'donation', platform: 'kick', donationType: 'giftedsub', chatname: gifter, chatmessage: `¡Regaló ${qty} sub(s)!`, amount: qty, chatimg: avatar || null, nameColor: '#53FC18', roles: [], mid: 'kick-gift-' + Date.now() })); }
     if (event === 'App\\Events\\SubscriptionEvent') { const uname = (d.usernames && d.usernames[0]) || d.username || 'KickUser'; getKickAvatar(uname, (avatar) => broadcast({ type: 'donation', platform: 'kick', donationType: 'sub', chatname: uname, chatmessage: '¡Se suscribió!', chatimg: avatar || null, nameColor: '#53FC18', roles: [], mid: 'kick-sub-' + Date.now() })); }
@@ -586,13 +595,21 @@ function handleKickWebhookEvent(eventType, data) {
   if (eventType === 'chat.message.sent') {
     const sender = data.sender || {}, username = sender.username || data.username || 'KickUser', content = data.content || data.message_content || '';
     if (!content) return;
-    // webhook usa identity.username_color, pusher usa identity.color
     const avatarInMsg = sender.profile_picture || sender.profile_pic || null;
     const nameColor = (sender.identity && (sender.identity.username_color || sender.identity.color)) || '#53FC18';
     const kickRoles = parseKickRoles(sender.identity?.badges);
     const mid = data.message_id || data.id || ('kick-wh-' + Date.now());
-    const send = (av) => broadcast({ type: 'kick', platform: 'kick', chatname: username, chatmessage: content, nameColor, chatimg: av || null, roles: kickRoles, mid });
-    if (avatarInMsg) { kickAvatarCache[username.toLowerCase()] = avatarInMsg; send(avatarInMsg); } else getKickAvatar(username, send);
+    // Detectar canjes: mensajes que empiezan con "canjeó "
+    const isRedemption = content.startsWith('canjeó ');
+    if (isRedemption) {
+      const rewardTitle = content.replace('canjeó ', '').trim();
+      console.log('[Kick Redemption Webhook]', username, rewardTitle);
+      const send = (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'redemption', chatname: username, chatmessage: content, rewardTitle, chatimg: av || null, nameColor: '#FFD700', roles: kickRoles, mid });
+      if (avatarInMsg) { kickAvatarCache[username.toLowerCase()] = avatarInMsg; send(avatarInMsg); } else getKickAvatar(username, send);
+    } else {
+      const send = (av) => broadcast({ type: 'kick', platform: 'kick', chatname: username, chatmessage: content, nameColor, chatimg: av || null, roles: kickRoles, mid });
+      if (avatarInMsg) { kickAvatarCache[username.toLowerCase()] = avatarInMsg; send(avatarInMsg); } else getKickAvatar(username, send);
+    }
     return;
   }
   if (eventType === 'channel.subscription.new') { const u = data.subscriber?.username || 'KickUser'; getKickAvatar(u, (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'sub', chatname: u, chatmessage: '¡Se suscribió!', chatimg: av || null, nameColor: '#53FC18', roles: [], mid: 'kick-sub-wh-' + Date.now() })); }
