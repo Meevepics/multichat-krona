@@ -452,6 +452,10 @@ function tryKickPusher(channelId) {
     ws.send(JSON.stringify({ event: 'pusher:subscribe', data: { auth: '', channel: `chatrooms.${channelId}.v2` } }));
     ws.send(JSON.stringify({ event: 'pusher:subscribe', data: { auth: '', channel: `channel.${channelId}` } }));
     kickPingInterval = setInterval(() => { if (ws.readyState === 1) ws.send(JSON.stringify({ event: 'pusher:ping', data: {} })); }, 25000);
+    ws.send(JSON.stringify({ event: 'pusher:subscribe', data: { auth: '', channel: `channel-points.${channelId}` } }));
+    ws.send(JSON.stringify({ event: 'pusher:subscribe', data: { auth: '', channel: `redemptions.${channelId}` } }));
+    ws.send(JSON.stringify({ event: 'pusher:subscribe', data: { auth: '', channel: `broadcaster.${channelId}` } }));
+    console.log('[Kick Pusher] Suscrito a canales extra:', channelId);
   });
   ws.on('message', (raw) => {
     let m; try { m = JSON.parse(raw); } catch(e) { return; }
@@ -855,6 +859,20 @@ app.post('/api/tiktok/restart', (req, res) => { chatState.tiktok.connected = fal
 app.post('/api/youtube/connect', (req, res) => { const { videoId } = req.body; if (!videoId) return res.status(400).json({ error: 'videoId requerido' }); connectYouTubeApi(videoId); res.json({ ok: true, videoId }); });
 app.post('/api/youtube/disconnect', (req, res) => { disconnectYouTubeApi(); res.json({ ok: true }); });
 app.post('/api/kick/reregister-webhooks', async (req, res) => { if (!kickOAuth.accessToken) return res.status(400).json({ error: 'Sin token OAuth' }); try { await loadKickUserInfo(); await registerKickWebhooks(); res.json({ ok: true }); } catch(e) { res.status(500).json({ error: e.message }); } });
+
+app.post('/api/kick/set-token', async (req, res) => {
+  const { accessToken, refreshToken } = req.body;
+  if (!accessToken) return res.status(400).json({ error: 'accessToken requerido' });
+  kickOAuth.accessToken = accessToken;
+  kickOAuth.refreshToken = refreshToken || '';
+  kickOAuth.expiresAt = Date.now() + 3600000;
+  await loadKickUserInfo();
+  await registerKickWebhooks();
+  chatState.kickOAuth.connected = true;
+  broadcastStatus();
+  console.log('[Kick OAuth] Token seteado manualmente, channelId:', kickOAuth.channelId);
+  res.json({ ok: true, channelId: kickOAuth.channelId, userId: kickOAuth.userId });
+});
 
 // ============================================================
 // ADMIN PANEL
