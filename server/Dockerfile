@@ -7,4 +7,5 @@ COPY server/spotify.html ./
 COPY dashboard/ ./dashboard/
 COPY overlay/ ./overlay/
 EXPOSE 3000
+# v2
 CMD ["node", "index.js"]
