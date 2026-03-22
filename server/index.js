@@ -295,51 +295,24 @@ function getTwitchAvatar(username, callback) {
   req.setTimeout(5000, () => req.destroy());
 }
 
-function getKickAvatar(username, callback, userId) {
+function getKickAvatar(username, callback) {
   if (!username) return callback(null);
   const slug = username.toLowerCase();
   if (kickAvatarCache[slug]) return callback(kickAvatarCache[slug]);
   if (kickAvatarPending[slug]) { kickAvatarPending[slug].push(callback); return; }
   kickAvatarPending[slug] = [callback];
-
-  const done = (avatar) => {
-    if (avatar) kickAvatarCache[slug] = avatar;
-    const cbs = kickAvatarPending[slug] || []; delete kickAvatarPending[slug];
-    cbs.forEach(cb => cb(avatar));
-  };
-
-  // Intentar con la API de usuarios si tenemos el ID
-  const tryUsersApi = () => {
-    if (!userId) { tryChannelsApi(); return; }
-    const req = https.get(`https://kick.com/api/v2/users/${userId}`, { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } }, (res) => {
-      let body = ''; res.on('data', c => body += c);
-      res.on('end', () => {
-        try {
-          const d = JSON.parse(body);
-          const avatar = d.profile_pic || d.profilePic || (d.user && (d.user.profile_pic || d.user.profilePic)) || null;
-          if (avatar) { done(avatar); return; }
-        } catch(e) {}
-        tryChannelsApi();
-      });
+  const req = https.get(`https://kick.com/api/v2/channels/${slug}`, { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } }, (res) => {
+    let body = ''; res.on('data', c => body += c);
+    res.on('end', () => {
+      let avatar = null;
+      try { const d = JSON.parse(body); avatar = (d.user && (d.user.profile_pic || d.user.profilePic)) || d.profile_pic || null; } catch(e) {}
+      if (avatar) kickAvatarCache[slug] = avatar;
+      const cbs = kickAvatarPending[slug] || []; delete kickAvatarPending[slug];
+      cbs.forEach(cb => cb(avatar));
     });
-    req.on('error', () => tryChannelsApi());
-    req.setTimeout(5000, () => { req.destroy(); tryChannelsApi(); });
-  };
-
-  const tryChannelsApi = () => {
-    const req = https.get(`https://kick.com/api/v2/channels/${slug}`, { headers: { 'Accept': 'application/json', 'User-Agent': 'Mozilla/5.0' } }, (res) => {
-      let body = ''; res.on('data', c => body += c);
-      res.on('end', () => {
-        let avatar = null;
-        try { const d = JSON.parse(body); avatar = (d.user && (d.user.profile_pic || d.user.profilePic)) || d.profile_pic || null; } catch(e) {}
-        done(avatar);
-      });
-    });
-    req.on('error', () => done(null));
-    req.setTimeout(8000, () => { req.destroy(); done(null); });
-  };
-
-  tryUsersApi();
+  });
+  req.on('error', () => { const cbs = kickAvatarPending[slug] || []; delete kickAvatarPending[slug]; cbs.forEach(cb => cb(null)); });
+  req.setTimeout(8000, () => req.destroy());
 }
 
 function httpsRequest(options, body) {
