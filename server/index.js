@@ -479,9 +479,9 @@ function tryKickPusher(channelId) {
       const kickRoles = []; badges.forEach(b => { const bt = (b.type || '').toLowerCase(); if (bt === 'broadcaster' || bt === 'owner') kickRoles.push({ type: 'broadcaster', label: 'Owner' }); else if (bt === 'moderator' || bt === 'mod') kickRoles.push({ type: 'moderator', label: 'Mod' }); else if (bt === 'vip') kickRoles.push({ type: 'vip', label: 'VIP' }); else if (bt === 'subscriber' || bt === 'sub') kickRoles.push({ type: 'subscriber', label: 'Sub' }); });
       const avatarInMsg = sender.profile_pic || sender.profilePic || sender.profile_picture || null;
       // Detectar canjes: mensajes que empiezan con "canjeó "
-      const isRedemption = content.startsWith('canjeó ');
+      const isRedemption = /^(canjeó |canjeo |redeemed |redimió |redemption )/i.test(content);
       if (isRedemption) {
-        const rewardTitle = content.replace('canjeó ', '').trim();
+        const rewardTitle = content.replace(/^(canjeó |canjeo |redeemed |redimió |redemption )/i, '').trim();
         console.log('[Kick Redemption Pusher]', username, rewardTitle);
         const send = (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'redemption', chatname: username, chatmessage: content, rewardTitle, chatimg: av || null, nameColor: '#FFD700', roles: kickRoles, mid: d.id || ('kick-redeem-' + Date.now()) });
         if (avatarInMsg) { kickAvatarCache[username.toLowerCase()] = avatarInMsg; send(avatarInMsg); } else getKickAvatar(username, send);
@@ -600,9 +600,9 @@ function handleKickWebhookEvent(eventType, data) {
     const kickRoles = parseKickRoles(sender.identity?.badges);
     const mid = data.message_id || data.id || ('kick-wh-' + Date.now());
     // Detectar canjes: mensajes que empiezan con "canjeó "
-    const isRedemption = content.startsWith('canjeó ');
+    const isRedemption = /^(canjeó |canjeo |redeemed |redimió |redemption )/i.test(content);
     if (isRedemption) {
-      const rewardTitle = content.replace('canjeó ', '').trim();
+      const rewardTitle = content.replace(/^(canjeó |canjeo |redeemed |redimió |redemption )/i, '').trim();
       console.log('[Kick Redemption Webhook]', username, rewardTitle);
       const send = (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'redemption', chatname: username, chatmessage: content, rewardTitle, chatimg: av || null, nameColor: '#FFD700', roles: kickRoles, mid });
       if (avatarInMsg) { kickAvatarCache[username.toLowerCase()] = avatarInMsg; send(avatarInMsg); } else getKickAvatar(username, send);
