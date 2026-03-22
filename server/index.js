@@ -899,6 +899,61 @@ app.post('/api/kick/set-token', async (req, res) => {
 });
 
 // ============================================================
+// ENDPOINT CANJES TOUCH PORTAL / EXTERNOS
+// ============================================================
+app.post('/api/kick/redemption', (req, res) => {
+  // Acepta cualquier combinación de campos que mande Touch Portal
+  const username = req.body.username || req.body.user || req.body.viewer || req.body.sender || 'KickUser';
+  const rewardTitle = req.body.rewardTitle || req.body.reward || req.body.title || req.body.rewardName || req.body.reward_title || 'Canje';
+  const userInput = req.body.userInput || req.body.input || req.body.message || req.body.user_input || '';
+  const cost = req.body.cost || req.body.points || null;
+  const chatmessage = userInput
+    ? `canjeó "${rewardTitle}" → ${userInput}`
+    : `canjeó "${rewardTitle}"${cost ? ` (${cost} pts)` : ''}`;
+  console.log('[Kick Redemption TouchPortal]', username, rewardTitle, userInput);
+  getKickAvatar(username, (av) => broadcast({
+    type: 'donation',
+    platform: 'kick',
+    donationType: 'redemption',
+    chatname: username,
+    chatmessage,
+    rewardTitle,
+    amount: cost || null,
+    chatimg: av || null,
+    nameColor: '#FFD700',
+    roles: [],
+    mid: 'kick-redeem-tp-' + Date.now(),
+  }));
+  res.json({ ok: true, username, rewardTitle, userInput });
+});
+
+// También acepta GET para facilitar integración con herramientas simples
+app.get('/api/kick/redemption', (req, res) => {
+  const username = req.query.username || req.query.user || req.query.viewer || 'KickUser';
+  const rewardTitle = req.query.rewardTitle || req.query.reward || req.query.title || req.query.rewardName || 'Canje';
+  const userInput = req.query.userInput || req.query.input || req.query.message || '';
+  const cost = req.query.cost || req.query.points || null;
+  const chatmessage = userInput
+    ? `canjeó "${rewardTitle}" → ${userInput}`
+    : `canjeó "${rewardTitle}"${cost ? ` (${cost} pts)` : ''}`;
+  console.log('[Kick Redemption GET]', username, rewardTitle, userInput);
+  getKickAvatar(username, (av) => broadcast({
+    type: 'donation',
+    platform: 'kick',
+    donationType: 'redemption',
+    chatname: username,
+    chatmessage,
+    rewardTitle,
+    amount: cost || null,
+    chatimg: av || null,
+    nameColor: '#FFD700',
+    roles: [],
+    mid: 'kick-redeem-get-' + Date.now(),
+  }));
+  res.json({ ok: true, username, rewardTitle, userInput });
+});
+
+// ============================================================
 // ADMIN PANEL
 // ============================================================
 app.get('/admin/emotes', (req, res) => res.json(QUEUE_STATE.kickEmotes || []));
