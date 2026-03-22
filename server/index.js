@@ -535,7 +535,7 @@ async function registerKickWebhooks() {
       { name: 'channel.subscription.gifts', version: 1 },
       { name: 'channel.followed', version: 1 },
       { name: 'chat.message.sent', version: 1 },
-      { name: 'channel.channel_points_redemption.add', version: 1 },
+      { name: 'reward-redeemed', version: 1 },
     ],
     method: 'webhook',
     broadcaster_user_id: broadcasterId,
@@ -577,7 +577,7 @@ function handleKickWebhookEvent(eventType, data) {
   if (!data) return;
 
   // ── LOG: eventos de webhook no reconocidos ───────────────────────────────
-  const KNOWN_WEBHOOK_EVENTS = ['chat.message.sent', 'channel.subscription.new', 'channel.subscription.renewal', 'channel.subscription.gifts', 'channel.followed', 'channel.channel_points_redemption.add'];
+  const KNOWN_WEBHOOK_EVENTS = ['chat.message.sent', 'channel.subscription.new', 'channel.subscription.renewal', 'channel.subscription.gifts', 'channel.followed',   'reward-redeemed'];
   if (eventType && !KNOWN_WEBHOOK_EVENTS.includes(eventType)) {
     console.log('[Kick Webhook UNKNOWN EVENT]', eventType, JSON.stringify(data).slice(0, 800));
   }
@@ -597,14 +597,17 @@ function handleKickWebhookEvent(eventType, data) {
   if (eventType === 'channel.followed') { const u = data.follower?.username || 'Alguien'; getKickAvatar(u, (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'follow', chatname: u, chatmessage: '¡Siguió el canal! 💚', chatimg: av || null, nameColor: '#53FC18', roles: [], mid: 'kick-follow-wh-' + Date.now() })); }
 
   // ── CANJES DE CHANNEL POINTS ─────────────────────────────────────────────
-  if (eventType === 'channel.channel_points_redemption.add') {
-    const username = data.user?.username || data.redeemer?.username || data.username || 'KickUser';
-    const rewardTitle = data.reward?.title || data.reward_title || data.title || 'Canje';
-    const cost = data.reward?.cost || data.cost || null;
-    const userInput = data.user_input || data.message || '';
+  if (eventType === 'reward-redeemed') {
+    // Kick payload: { type: 'reward-redeemed', data: { redemption: { user, reward, user_input } } }
+    const redemption = data.redemption || data;
+    const username = redemption.user?.display_name || redemption.user?.login || redemption.user?.username || data.user?.display_name || 'KickUser';
+    const rewardTitle = redemption.reward?.title || data.reward?.title || 'Canje';
+    const cost = redemption.reward?.cost || data.reward?.cost || null;
+    const userInput = redemption.user_input || data.user_input || '';
     const chatmessage = userInput
       ? `canjeó "${rewardTitle}" → ${userInput}`
       : `canjeó "${rewardTitle}"${cost ? ` (${cost} pts)` : ''}`;
+    console.log('[Kick Redemption]', username, rewardTitle, cost);
     getKickAvatar(username, (av) => broadcast({
       type: 'donation',
       platform: 'kick',
@@ -614,9 +617,9 @@ function handleKickWebhookEvent(eventType, data) {
       rewardTitle,
       amount: cost,
       chatimg: av || null,
-      nameColor: '#53FC18',
+      nameColor: '#FFD700',
       roles: [],
-      mid: 'kick-redeem-' + (data.id || Date.now()),
+      mid: 'kick-redeem-' + (redemption.id || Date.now()),
     }));
   }
   // ────────────────────────────────────────────────────────────────────────
