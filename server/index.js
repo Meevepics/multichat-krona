@@ -586,7 +586,11 @@ function handleKickWebhookEvent(eventType, data) {
   if (eventType === 'chat.message.sent') {
     const sender = data.sender || {}, username = sender.username || data.username || 'KickUser', content = data.content || data.message_content || '';
     if (!content) return;
-    const avatarInMsg = sender.profile_picture || sender.profile_pic || null, nameColor = (sender.identity && sender.identity.color) || '#53FC18', kickRoles = parseKickRoles(sender.identity?.badges), mid = data.message_id || data.id || ('kick-wh-' + Date.now());
+    // webhook usa identity.username_color, pusher usa identity.color
+    const avatarInMsg = sender.profile_picture || sender.profile_pic || null;
+    const nameColor = (sender.identity && (sender.identity.username_color || sender.identity.color)) || '#53FC18';
+    const kickRoles = parseKickRoles(sender.identity?.badges);
+    const mid = data.message_id || data.id || ('kick-wh-' + Date.now());
     const send = (av) => broadcast({ type: 'kick', platform: 'kick', chatname: username, chatmessage: content, nameColor, chatimg: av || null, roles: kickRoles, mid });
     if (avatarInMsg) { kickAvatarCache[username.toLowerCase()] = avatarInMsg; send(avatarInMsg); } else getKickAvatar(username, send);
     return;
