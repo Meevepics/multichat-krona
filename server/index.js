@@ -450,6 +450,10 @@ function tryKickPusher(channelId) {
     if (event === 'pusher:error') { ws.terminate(); return; }
     let d; try { d = typeof m.data === 'string' ? JSON.parse(m.data) : m.data; } catch(e) { return; }
     if (!d) return;
+    // Log todos los eventos que no son de chat normal
+    if (event && !event.includes('ChatMessageEvent')) {
+      console.log('[Kick RAW Event]', event, JSON.stringify(d).slice(0, 300));
+    }
     if (event === 'App\\Events\\ChatMessageEvent' || event === 'App.Events.ChatMessageEvent') {
       const sender = d.sender || {}, username = sender.username || 'KickUser', content = d.content || '';
       const badges = (sender.identity && sender.identity.badges) || [], nameColor = (sender.identity && sender.identity.color) || '#53FC18';
@@ -460,6 +464,12 @@ function tryKickPusher(channelId) {
     }
     if (event === 'App\\Events\\GiftedSubscriptionsEvent') { const gifter = (d.gifted_by && d.gifted_by.username) || 'Anónimo', qty = (d.gifted_usernames && d.gifted_usernames.length) || 1; getKickAvatar(gifter, (avatar) => broadcast({ type: 'donation', platform: 'kick', donationType: 'giftedsub', chatname: gifter, chatmessage: `¡Regaló ${qty} sub(s)!`, amount: qty, chatimg: avatar || null, nameColor: '#53FC18', roles: [], mid: 'kick-gift-' + Date.now() })); }
     if (event === 'App\\Events\\SubscriptionEvent') { const uname = (d.usernames && d.usernames[0]) || d.username || 'KickUser'; getKickAvatar(uname, (avatar) => broadcast({ type: 'donation', platform: 'kick', donationType: 'sub', chatname: uname, chatmessage: '¡Se suscribió!', chatimg: avatar || null, nameColor: '#53FC18', roles: [], mid: 'kick-sub-' + Date.now() })); }
+    if (event === 'App\\Events\\ChannelPointsRedemptionEvent' || event === 'App.Events.ChannelPointsRedemptionEvent' || event === 'App\\Events\\PointRedemptionEvent' || event === 'App.Events.PointRedemptionEvent') {
+      const username = (d.user && d.user.username) || (d.sender && d.sender.username) || 'KickUser';
+      const rewardTitle = (d.reward && d.reward.title) || d.reward_title || (d.channel_point_reward && d.channel_point_reward.title) || 'Recompensa';
+      const content = d.message || d.comment || '';
+      getKickAvatar(username, (avatar) => broadcast({ type: 'donation', platform: 'kick', donationType: 'redemption', chatname: username, chatmessage: '🎁 Canjeó: "' + rewardTitle + '"' + (content ? ' — ' + content : ''), rewardTitle, nameColor: '#53FC18', chatimg: avatar || null, roles: [], mid: d.id || ('kick-redeem-' + Date.now()) }));
+    }
   });
   ws.on('close', () => { if (kickPingInterval) { clearInterval(kickPingInterval); kickPingInterval = null; } chatState.kick.connected = false; broadcastStatus(); kickUrlIndex++; kickRetryDelay = Math.min(kickRetryDelay * 1.5, 60000); kickRetryTimeout = setTimeout(() => tryKickPusher(channelId), kickRetryDelay); });
   ws.on('error', (e) => console.error('[Kick Pusher] WS error:', e.message));
