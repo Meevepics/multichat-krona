@@ -970,6 +970,52 @@ app.get('/api/youtube/connect', (req, res) => {
 app.post('/api/youtube/disconnect', (req, res) => { disconnectYouTubeApi(); res.json({ ok: true }); });
 app.post('/api/kick/reregister-webhooks', async (req, res) => { if (!kickOAuth.accessToken) return res.status(400).json({ error: 'Sin token OAuth' }); try { await loadKickUserInfo(); await registerKickWebhooks(); res.json({ ok: true }); } catch(e) { res.status(500).json({ error: e.message }); } });
 
+// Elimina TODAS las suscripciones de webhook actuales y las vuelve a registrar para el canal correcto
+app.post('/api/kick/fix-webhooks', async (req, res) => {
+  if (!kickOAuth.accessToken) return res.status(400).json({ error: 'Sin token OAuth. Hacé /auth/kick primero.' });
+  try {
+    // 1. Listar todas las suscripciones actuales
+    const listRes = await httpsRequest({
+      hostname: 'api.kick.com',
+      path: '/public/v1/events/subscriptions',
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${kickOAuth.accessToken}`, 'Accept': 'application/json' }
+    }, null);
+    console.log('[Fix Webhooks] Suscripciones actuales:', JSON.stringify(listRes.data).slice(0, 500));
+
+    // 2. Eliminar todas las suscripciones existentes
+    const subs = listRes.data?.data || [];
+    let deleted = 0;
+    for (const sub of subs) {
+      const subId = sub.subscription_id || sub.id;
+      if (!subId) continue;
+      try {
+        await httpsRequest({
+          hostname: 'api.kick.com',
+          path: `/public/v1/events/subscriptions?id=${subId}`,
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${kickOAuth.accessToken}`, 'Accept': 'application/json' }
+        }, null);
+        deleted++;
+      } catch(e) {}
+    }
+    console.log('[Fix Webhooks] Eliminadas:', deleted, 'suscripciones');
+
+    // 3. Forzar channelId correcto (KronaAbisal)
+    kickOAuth.channelId = CONFIG.kickBroadcasterId || CONFIG.kickId || kickOAuth.channelId;
+    kickOAuth.userId = kickOAuth.channelId;
+    console.log('[Fix Webhooks] Registrando para channelId:', kickOAuth.channelId);
+
+    // 4. Registrar nuevamente para el canal correcto
+    await registerKickWebhooks();
+
+    res.json({ ok: true, deleted, channelId: kickOAuth.channelId });
+  } catch(e) {
+    console.error('[Fix Webhooks] Error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.post('/api/kick/set-token', async (req, res) => {
   const { accessToken, refreshToken } = req.body;
   if (!accessToken) return res.status(400).json({ error: 'accessToken requerido' });
