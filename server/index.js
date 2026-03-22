@@ -477,7 +477,7 @@ function tryKickPusher(channelId) {
       const sender = d.sender || {}, username = sender.username || 'KickUser', content = d.content || '';
       const badges = (sender.identity && sender.identity.badges) || [], nameColor = (sender.identity && (sender.identity.color || sender.identity.username_color)) || '#53FC18';
       const kickRoles = []; badges.forEach(b => { const bt = (b.type || '').toLowerCase(); if (bt === 'broadcaster' || bt === 'owner') kickRoles.push({ type: 'broadcaster', label: 'Owner' }); else if (bt === 'moderator' || bt === 'mod') kickRoles.push({ type: 'moderator', label: 'Mod' }); else if (bt === 'vip') kickRoles.push({ type: 'vip', label: 'VIP' }); else if (bt === 'subscriber' || bt === 'sub') kickRoles.push({ type: 'subscriber', label: 'Sub' }); });
-      const avatarInMsg = sender.profile_pic || sender.profilePic || sender.profile_picture || null;
+      const avatarInMsg = sender.profile_picture || sender.profile_pic || sender.profilePic || sender.avatar || null;
       // Detectar canjes: mensajes que empiezan con "canjeó "
       const isRedemption = /^(canjeó |canjeo |redeemed |redimió |redemption )/i.test(content);
       if (isRedemption) {
@@ -486,8 +486,11 @@ function tryKickPusher(channelId) {
         const send = (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'redemption', chatname: username, chatmessage: content, rewardTitle, chatimg: av || null, nameColor: '#FFD700', roles: kickRoles, mid: d.id || ('kick-redeem-' + Date.now()) });
         if (avatarInMsg) { kickAvatarCache[username.toLowerCase()] = avatarInMsg; send(avatarInMsg); } else getKickAvatar(username, send);
       } else {
-        if (avatarInMsg) { kickAvatarCache[username.toLowerCase()] = avatarInMsg; broadcast({ type: 'kick', platform: 'kick', chatname: username, chatmessage: content, nameColor, chatimg: avatarInMsg, roles: kickRoles, mid: d.id || ('kick-' + Date.now()) }); }
-        else { getKickAvatar(username, (avatar) => broadcast({ type: 'kick', platform: 'kick', chatname: username, chatmessage: content, nameColor, chatimg: avatar || null, roles: kickRoles, mid: d.id || ('kick-' + Date.now()) })); }
+        const mid3 = d.id || ('kick-' + Date.now());
+        const sendChat = (av) => broadcast({ type: 'kick', platform: 'kick', chatname: username, chatmessage: content, nameColor, chatimg: av || null, roles: kickRoles, mid: mid3 });
+        if (avatarInMsg) { kickAvatarCache[username.toLowerCase()] = avatarInMsg; sendChat(avatarInMsg); }
+        else if (kickAvatarCache[username.toLowerCase()]) { sendChat(kickAvatarCache[username.toLowerCase()]); }
+        else { getKickAvatar(username, sendChat); }
       }
     }
     if (event === 'App\\Events\\GiftedSubscriptionsEvent') { const gifter = (d.gifted_by && d.gifted_by.username) || 'Anónimo', qty = (d.gifted_usernames && d.gifted_usernames.length) || 1; getKickAvatar(gifter, (avatar) => broadcast({ type: 'donation', platform: 'kick', donationType: 'giftedsub', chatname: gifter, chatmessage: `¡Regaló ${qty} sub(s)!`, amount: qty, chatimg: avatar || null, nameColor: '#53FC18', roles: [], mid: 'kick-gift-' + Date.now() })); }
@@ -595,7 +598,7 @@ function handleKickWebhookEvent(eventType, data) {
   if (eventType === 'chat.message.sent') {
     const sender = data.sender || {}, username = sender.username || data.username || 'KickUser', content = data.content || data.message_content || '';
     if (!content) return;
-    const avatarInMsg = sender.profile_picture || sender.profile_pic || null;
+    const avatarInMsg = sender.profile_picture || sender.profile_pic || sender.profilePic || sender.avatar || null;
     const nameColor = (sender.identity && (sender.identity.username_color || sender.identity.color)) || '#53FC18';
     const kickRoles = parseKickRoles(sender.identity?.badges);
     const mid = data.message_id || data.id || ('kick-wh-' + Date.now());
@@ -749,28 +752,90 @@ function disconnectYouTubeApi() {
   chatState.youtube.connected = false; chatState.youtube.videoId = null; broadcastStatus();
 }
 
+// Extrae video ID de cualquier formato de URL de YouTube
+function extractYouTubeVideoId(input) {
+  if (!input) return null;
+  input = input.trim();
+  // Si ya es un ID puro (11 chars alfanuméricos)
+  if (/^[a-zA-Z0-9_-]{11}$/.test(input)) return input;
+  // youtu.be/ID
+  const short = input.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+  if (short) return short[1];
+  // youtube.com/watch?v=ID
+  const watch = input.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+  if (watch) return watch[1];
+  // youtube.com/live/ID
+  const live = input.match(/\/live\/([a-zA-Z0-9_-]{11})/);
+  if (live) return live[1];
+  // youtube.com/embed/ID
+  const embed = input.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
+  if (embed) return embed[1];
+  return null;
+}
+
+let ytAutoDetectRetries = 0;
+
 async function autoConnectYouTubeLive() {
   if (ytAutoDetectTimer) { clearTimeout(ytAutoDetectTimer); ytAutoDetectTimer = null; }
   if (ytPollState.active && ytPollState.videoId) return;
   const channelId = CONFIG.youtubeChannelId, handle = CONFIG.youtubeHandle.replace('@', '');
   if (!channelId && !handle) return;
   if (!getYouTubeApiKey()) return;
+
+  // Reintentar más seguido al inicio (primeros 10 intentos cada 1 min, luego cada 5 min)
+  ytAutoDetectRetries++;
+  const retryDelay = ytAutoDetectRetries <= 10 ? 60 * 1000 : 5 * 60 * 1000;
+
   try {
     let searchPath;
-    if (channelId) { searchPath = 'search?part=snippet&channelId=' + channelId + '&eventType=live&type=video&maxResults=1&order=date'; }
-    else {
+    if (channelId) {
+      searchPath = 'search?part=snippet&channelId=' + channelId + '&eventType=live&type=video&maxResults=3&order=date';
+    } else {
+      // Intentar resolver el channelId desde el handle
       const rr = await ytApiGet('channels?part=id&forHandle=' + encodeURIComponent('@' + handle));
-      if (rr.status !== 200 || !rr.data.items?.length) { ytAutoDetectTimer = setTimeout(autoConnectYouTubeLive, 10 * 60 * 1000); return; }
-      CONFIG.youtubeChannelId = rr.data.items[0].id;
-      searchPath = 'search?part=snippet&channelId=' + CONFIG.youtubeChannelId + '&eventType=live&type=video&maxResults=1&order=date';
+      if (rr.status !== 200 || !rr.data.items?.length) {
+        // Intentar también sin @ por si acaso
+        const rr2 = await ytApiGet('channels?part=id&forUsername=' + encodeURIComponent(handle));
+        if (rr2.status !== 200 || !rr2.data.items?.length) {
+          console.log('[YouTube AutoDetect] No se pudo resolver channelId para:', handle, '— reintentando en', retryDelay/1000, 's');
+          ytAutoDetectTimer = setTimeout(autoConnectYouTubeLive, retryDelay);
+          return;
+        }
+        CONFIG.youtubeChannelId = rr2.data.items[0].id;
+      } else {
+        CONFIG.youtubeChannelId = rr.data.items[0].id;
+      }
+      searchPath = 'search?part=snippet&channelId=' + CONFIG.youtubeChannelId + '&eventType=live&type=video&maxResults=3&order=date';
     }
+
     const r = await ytApiGet(searchPath);
-    if (r.status !== 200 || !r.data.items?.length) { ytAutoDetectTimer = setTimeout(autoConnectYouTubeLive, 5 * 60 * 1000); return; }
+    if (r.status === 403) {
+      console.log('[YouTube AutoDetect] API key agotada, rotando...');
+      rotateYouTubeApiKey();
+      ytAutoDetectTimer = setTimeout(autoConnectYouTubeLive, 10000);
+      return;
+    }
+    if (r.status !== 200 || !r.data.items?.length) {
+      console.log('[YouTube AutoDetect] Sin live detectado — reintentando en', retryDelay/1000, 's');
+      ytAutoDetectTimer = setTimeout(autoConnectYouTubeLive, retryDelay);
+      return;
+    }
+
     const videoId = r.data.items[0].id?.videoId;
-    if (!videoId) { ytAutoDetectTimer = setTimeout(autoConnectYouTubeLive, 5 * 60 * 1000); return; }
+    if (!videoId) {
+      ytAutoDetectTimer = setTimeout(autoConnectYouTubeLive, retryDelay);
+      return;
+    }
+
+    console.log('[YouTube AutoDetect] Live encontrado:', videoId, '— conectando...');
+    ytAutoDetectRetries = 0;
     await connectYouTubeApi(videoId);
+    // Una vez conectado, recheck cada 30 min por si se cae
     ytAutoDetectTimer = setTimeout(autoConnectYouTubeLive, 30 * 60 * 1000);
-  } catch(e) { ytAutoDetectTimer = setTimeout(autoConnectYouTubeLive, 10 * 60 * 1000); }
+  } catch(e) {
+    console.log('[YouTube AutoDetect] Error:', e.message, '— reintentando en', retryDelay/1000, 's');
+    ytAutoDetectTimer = setTimeout(autoConnectYouTubeLive, retryDelay);
+  }
 }
 
 // ============================================================
@@ -880,7 +945,28 @@ app.get('/api/status', (req, res) => res.json({ twitch: { connected: chatState.t
 
 app.post('/api/kick/restart', (req, res) => { if (kickRetryTimeout) { clearTimeout(kickRetryTimeout); kickRetryTimeout = null; } chatState.kick.connected = false; CONFIG.kickId = process.env.KICK_CHANNEL_ID || ''; broadcastStatus(); connectKick(); res.json({ ok: true }); });
 app.post('/api/tiktok/restart', (req, res) => { chatState.tiktok.connected = false; broadcastStatus(); connectTikTokConnector(); res.json({ ok: true }); });
-app.post('/api/youtube/connect', (req, res) => { const { videoId } = req.body; if (!videoId) return res.status(400).json({ error: 'videoId requerido' }); connectYouTubeApi(videoId); res.json({ ok: true, videoId }); });
+app.post('/api/youtube/connect', (req, res) => {
+  // Acepta videoId directo o URL completa de YouTube
+  const raw = req.body.videoId || req.body.url || req.body.link || '';
+  if (!raw) return res.status(400).json({ error: 'videoId o url requerido' });
+  const videoId = extractYouTubeVideoId(raw) || raw.trim();
+  if (!videoId) return res.status(400).json({ error: 'No se pudo extraer el video ID' });
+  ytAutoDetectRetries = 0;
+  connectYouTubeApi(videoId);
+  res.json({ ok: true, videoId });
+});
+
+// GET para conectar desde el browser fácilmente
+// Ej: /api/youtube/connect?url=https://youtube.com/watch?v=XXXX
+app.get('/api/youtube/connect', (req, res) => {
+  const raw = req.query.videoId || req.query.url || req.query.link || '';
+  if (!raw) return res.status(400).json({ error: 'videoId o url requerido' });
+  const videoId = extractYouTubeVideoId(raw) || raw.trim();
+  if (!videoId) return res.status(400).json({ error: 'No se pudo extraer el video ID' });
+  ytAutoDetectRetries = 0;
+  connectYouTubeApi(videoId);
+  res.json({ ok: true, videoId });
+});
 app.post('/api/youtube/disconnect', (req, res) => { disconnectYouTubeApi(); res.json({ ok: true }); });
 app.post('/api/kick/reregister-webhooks', async (req, res) => { if (!kickOAuth.accessToken) return res.status(400).json({ error: 'Sin token OAuth' }); try { await loadKickUserInfo(); await registerKickWebhooks(); res.json({ ok: true }); } catch(e) { res.status(500).json({ error: e.message }); } });
 
