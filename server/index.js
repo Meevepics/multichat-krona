@@ -598,6 +598,10 @@ function handleKickWebhookEvent(eventType, data) {
   if (eventType === 'chat.message.sent') {
     const sender = data.sender || {}, username = sender.username || data.username || 'KickUser', content = data.content || data.message_content || '';
     if (!content) return;
+    // Filtrar mensajes de canales que no son el canal configurado
+    const broadcasterSlug = (data.broadcaster?.channel_slug || data.broadcaster?.username || '').toLowerCase();
+    const expectedSlug = (CONFIG.kick || '').toLowerCase();
+    if (broadcasterSlug && expectedSlug && broadcasterSlug !== expectedSlug) return;
     const avatarInMsg = sender.profile_picture || sender.profile_pic || sender.profilePic || sender.avatar || null;
     const nameColor = (sender.identity && (sender.identity.username_color || sender.identity.color)) || '#53FC18';
     const kickRoles = parseKickRoles(sender.identity?.badges);
