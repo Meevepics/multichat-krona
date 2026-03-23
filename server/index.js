@@ -475,6 +475,10 @@ function tryKickPusher(channelId) {
 
     if (event === 'App\\Events\\ChatMessageEvent' || event === 'App.Events.ChatMessageEvent') {
       const sender = d.sender || {}, username = sender.username || 'KickUser', content = d.content || '';
+      // Log tipo de mensaje para detectar canjes
+      if (d.type && d.type !== 'message' && d.type !== 'reply') {
+        console.log('[Kick MSG TYPE]', d.type, '| user:', username, '| content:', content.slice(0, 100));
+      }
       const badges = (sender.identity && sender.identity.badges) || [], nameColor = (sender.identity && (sender.identity.color || sender.identity.username_color)) || '#53FC18';
       const kickRoles = []; badges.forEach(b => { const bt = (b.type || '').toLowerCase(); if (bt === 'broadcaster' || bt === 'owner') kickRoles.push({ type: 'broadcaster', label: 'Owner' }); else if (bt === 'moderator' || bt === 'mod') kickRoles.push({ type: 'moderator', label: 'Mod' }); else if (bt === 'vip') kickRoles.push({ type: 'vip', label: 'VIP' }); else if (bt === 'subscriber' || bt === 'sub') kickRoles.push({ type: 'subscriber', label: 'Sub' }); });
       const avatarInMsg = sender.profile_picture || sender.profile_pic || sender.profilePic || sender.avatar || null;
