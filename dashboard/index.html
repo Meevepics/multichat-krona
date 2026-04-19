@@ -414,7 +414,7 @@ const { WebSocket: NodeWS } = require('ws');
 const PUSHER_URLS = ['wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0-rc2&flash=false', 'wss://ws-us2.pusher.com/app/eb1d5f283081a78b932c?protocol=7&client=js&version=7.6.0&flash=false'];
 let kickPusherWs = null, kickRetryDelay = 5000, kickRetryTimeout = null, kickUrlIndex = 0, kickPingInterval = null;
 
-// ── CAMBIO 3: channel.reward.redemption.updated agregado a la lista de conocidos ──
+// Eventos de Pusher que ya manejamos (para filtrar el log de desconocidos)
 const KNOWN_PUSHER_EVENTS = new Set([
   'App\\Events\\ChatMessageEvent',
   'App\\Events\\GiftedSubscriptionsEvent',
@@ -467,18 +467,22 @@ function tryKickPusher(channelId) {
     let d; try { d = typeof m.data === 'string' ? JSON.parse(m.data) : m.data; } catch(e) { return; }
     if (!d) return;
 
+    // ── LOG: eventos desconocidos de Pusher (canjes, follows, etc.) ──────────
     if (!KNOWN_PUSHER_EVENTS.has(event)) {
       console.log('[Kick PUSHER UNKNOWN]', event, JSON.stringify(d).slice(0, 800));
     }
+    // ────────────────────────────────────────────────────────────────────────
 
     if (event === 'App\\Events\\ChatMessageEvent' || event === 'App.Events.ChatMessageEvent') {
       const sender = d.sender || {}, username = sender.username || 'KickUser', content = d.content || '';
+      // Log tipo de mensaje para detectar canjes
       if (d.type && d.type !== 'message' && d.type !== 'reply') {
         console.log('[Kick MSG TYPE]', d.type, '| user:', username, '| content:', content.slice(0, 100));
       }
       const badges = (sender.identity && sender.identity.badges) || [], nameColor = (sender.identity && (sender.identity.color || sender.identity.username_color)) || '#53FC18';
       const kickRoles = []; badges.forEach(b => { const bt = (b.type || '').toLowerCase(); if (bt === 'broadcaster' || bt === 'owner') kickRoles.push({ type: 'broadcaster', label: 'Owner' }); else if (bt === 'moderator' || bt === 'mod') kickRoles.push({ type: 'moderator', label: 'Mod' }); else if (bt === 'vip') kickRoles.push({ type: 'vip', label: 'VIP' }); else if (bt === 'subscriber' || bt === 'sub') kickRoles.push({ type: 'subscriber', label: 'Sub' }); });
       const avatarInMsg = sender.profile_picture || sender.profile_pic || sender.profilePic || sender.avatar || null;
+      // Detectar canjes: mensajes que empiezan con "canjeó "
       const isRedemption = /^(canjeó |canjeo |redeemed |redimió |redemption )/i.test(content);
       if (isRedemption) {
         const rewardTitle = content.replace(/^(canjeó |canjeo |redeemed |redimió |redemption )/i, '').trim();
@@ -536,7 +540,6 @@ async function loadKickUserInfo() {
   if (!kickOAuth.channelId && CONFIG.kickId) { kickOAuth.channelId = CONFIG.kickId; if (!kickOAuth.userId) kickOAuth.userId = CONFIG.kickId; }
 }
 
-// ── CAMBIO 1: channel.reward.redemption.updated agregado al registro de webhooks ──
 async function registerKickWebhooks() {
   if (!kickOAuth.accessToken) return;
   const broadcasterId = parseInt(kickOAuth.channelId || kickOAuth.userId);
@@ -549,7 +552,6 @@ async function registerKickWebhooks() {
       { name: 'channel.followed', version: 1 },
       { name: 'chat.message.sent', version: 1 },
       { name: 'reward-redeemed', version: 1 },
-      { name: 'channel.reward.redemption.updated', version: 1 },
     ],
     method: 'webhook',
     broadcaster_user_id: broadcasterId,
@@ -567,12 +569,14 @@ async function registerKickWebhooks() {
 app.post('/webhook/kick', (req, res) => {
   res.sendStatus(200);
   try {
+    // ── LOG TEMPORAL: ver todo lo que llega al webhook ───────────────────────
     console.log('[Kick Webhook HEADERS]', JSON.stringify({
       'kick-event-type': req.headers['kick-event-type'],
       'kick-event-version': req.headers['kick-event-version'],
       'content-type': req.headers['content-type'],
     }));
     console.log('[Kick Webhook BODY]', req.body.toString().slice(0, 1000));
+    // ────────────────────────────────────────────────────────────────────────
 
     let payload; try { payload = JSON.parse(req.body.toString()); } catch(e) { return; }
     const eventType = payload.type || payload.event_type || req.headers['kick-event-type'] || '';
@@ -585,26 +589,20 @@ function parseKickRoles(badges) {
   const roles = []; (badges || []).forEach(b => { const bt = (b.type || '').toLowerCase(); if (bt === 'broadcaster' || bt === 'owner') roles.push({ type: 'broadcaster', label: 'Owner' }); else if (bt === 'moderator' || bt === 'mod') roles.push({ type: 'moderator', label: 'Mod' }); else if (bt === 'vip') roles.push({ type: 'vip', label: 'VIP' }); else if (bt === 'subscriber' || bt === 'sub') roles.push({ type: 'subscriber', label: 'Sub' }); }); return roles;
 }
 
-// ── CAMBIO 3: KNOWN_WEBHOOK_EVENTS actualizado ──
 function handleKickWebhookEvent(eventType, data) {
   if (!data) return;
 
-  const KNOWN_WEBHOOK_EVENTS = [
-    'chat.message.sent',
-    'channel.subscription.new',
-    'channel.subscription.renewal',
-    'channel.subscription.gifts',
-    'channel.followed',
-    'reward-redeemed',
-    'channel.reward.redemption.updated',
-  ];
+  // ── LOG: eventos de webhook no reconocidos ───────────────────────────────
+  const KNOWN_WEBHOOK_EVENTS = ['chat.message.sent', 'channel.subscription.new', 'channel.subscription.renewal', 'channel.subscription.gifts', 'channel.followed',   'reward-redeemed'];
   if (eventType && !KNOWN_WEBHOOK_EVENTS.includes(eventType)) {
     console.log('[Kick Webhook UNKNOWN EVENT]', eventType, JSON.stringify(data).slice(0, 800));
   }
+  // ────────────────────────────────────────────────────────────────────────
 
   if (eventType === 'chat.message.sent') {
     const sender = data.sender || {}, username = sender.username || data.username || 'KickUser', content = data.content || data.message_content || '';
     if (!content) return;
+    // Filtrar mensajes de canales que no son el canal configurado
     const broadcasterSlug = (data.broadcaster?.channel_slug || data.broadcaster?.username || '').toLowerCase();
     const expectedSlug = (CONFIG.kick || '').toLowerCase();
     if (broadcasterSlug && expectedSlug && broadcasterSlug !== expectedSlug) return;
@@ -612,6 +610,7 @@ function handleKickWebhookEvent(eventType, data) {
     const nameColor = (sender.identity && (sender.identity.username_color || sender.identity.color)) || '#53FC18';
     const kickRoles = parseKickRoles(sender.identity?.badges);
     const mid = data.message_id || data.id || ('kick-wh-' + Date.now());
+    // Detectar canjes: mensajes que empiezan con "canjeó "
     const isRedemption = /^(canjeó |canjeo |redeemed |redimió |redemption )/i.test(content);
     if (isRedemption) {
       const rewardTitle = content.replace(/^(canjeó |canjeo |redeemed |redimió |redemption )/i, '').trim();
@@ -629,7 +628,9 @@ function handleKickWebhookEvent(eventType, data) {
   if (eventType === 'channel.subscription.gifts') { const g = data.gifter?.username || 'Anónimo', qty = data.quantity || 1; getKickAvatar(g, (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'giftedsub', chatname: g, chatmessage: `¡Regaló ${qty} sub(s)!`, amount: qty, chatimg: av || null, nameColor: '#53FC18', roles: [], mid: 'kick-gift-wh-' + Date.now() })); }
   if (eventType === 'channel.followed') { const u = data.follower?.username || 'Alguien'; getKickAvatar(u, (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'follow', chatname: u, chatmessage: '¡Siguió el canal! 💚', chatimg: av || null, nameColor: '#53FC18', roles: [], mid: 'kick-follow-wh-' + Date.now() })); }
 
+  // ── CANJES DE CHANNEL POINTS ─────────────────────────────────────────────
   if (eventType === 'reward-redeemed') {
+    // Kick payload: { type: 'reward-redeemed', data: { redemption: { user, reward, user_input } } }
     const redemption = data.redemption || data;
     const username = redemption.user?.display_name || redemption.user?.login || redemption.user?.username || data.user?.display_name || 'KickUser';
     const rewardTitle = redemption.reward?.title || data.reward?.title || 'Canje';
@@ -653,46 +654,7 @@ function handleKickWebhookEvent(eventType, data) {
       mid: 'kick-redeem-' + (redemption.id || Date.now()),
     }));
   }
-
-  // ── CAMBIO 2: handler para channel.reward.redemption.updated ──────────────
-  if (eventType === 'channel.reward.redemption.updated') {
-    const status = data.status || 'pending';
-    // No filtrar por status — mostrar pending, accepted y rejected
-    if (status === 'rejected') return; // solo ignorar los rechazados
-
-    const redeemer   = data.redeemer  || {};
-    const reward     = data.reward    || {};
-    const username   = redeemer.username    || redeemer.display_name || 'KickUser';
-    const rewardTitle = reward.title        || 'Canje';
-    const cost        = reward.cost         || null;
-    const userInput   = data.user_input     || '';
-
-    const statusLabel = status === 'accepted' ? ' ✅' : ' ⏳';
-    const chatmessage = userInput
-      ? `canjeó "${rewardTitle}" → ${userInput}${statusLabel}`
-      : `canjeó "${rewardTitle}"${cost ? ` (${cost} pts)` : ''}${statusLabel}`;
-
-    console.log('[Kick Redemption Updated]', username, rewardTitle, status);
-
-    const avatarInData = redeemer.profile_picture || null;
-    const send = (av) => broadcast({
-      type: 'donation',
-      platform: 'kick',
-      donationType: 'redemption',
-      chatname: username,
-      chatmessage,
-      rewardTitle,
-      amount: cost,
-      chatimg: av || null,
-      nameColor: '#FFD700',
-      roles: [],
-      mid: 'kick-redeem-updated-' + (data.id || Date.now()),
-    });
-
-    if (avatarInData) { kickAvatarCache[username.toLowerCase()] = avatarInData; send(avatarInData); }
-    else getKickAvatar(username, send);
-  }
-  // ────────────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────────
 }
 
 async function refreshKickTokenIfNeeded() {
@@ -798,16 +760,22 @@ function disconnectYouTubeApi() {
   chatState.youtube.connected = false; chatState.youtube.videoId = null; broadcastStatus();
 }
 
+// Extrae video ID de cualquier formato de URL de YouTube
 function extractYouTubeVideoId(input) {
   if (!input) return null;
   input = input.trim();
+  // Si ya es un ID puro (11 chars alfanuméricos)
   if (/^[a-zA-Z0-9_-]{11}$/.test(input)) return input;
+  // youtu.be/ID
   const short = input.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
   if (short) return short[1];
+  // youtube.com/watch?v=ID
   const watch = input.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
   if (watch) return watch[1];
+  // youtube.com/live/ID
   const live = input.match(/\/live\/([a-zA-Z0-9_-]{11})/);
   if (live) return live[1];
+  // youtube.com/embed/ID
   const embed = input.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
   if (embed) return embed[1];
   return null;
@@ -822,6 +790,7 @@ async function autoConnectYouTubeLive() {
   if (!channelId && !handle) return;
   if (!getYouTubeApiKey()) return;
 
+  // Reintentar más seguido al inicio (primeros 10 intentos cada 1 min, luego cada 5 min)
   ytAutoDetectRetries++;
   const retryDelay = ytAutoDetectRetries <= 10 ? 60 * 1000 : 5 * 60 * 1000;
 
@@ -830,8 +799,10 @@ async function autoConnectYouTubeLive() {
     if (channelId) {
       searchPath = 'search?part=snippet&channelId=' + channelId + '&eventType=live&type=video&maxResults=3&order=date';
     } else {
+      // Intentar resolver el channelId desde el handle
       const rr = await ytApiGet('channels?part=id&forHandle=' + encodeURIComponent('@' + handle));
       if (rr.status !== 200 || !rr.data.items?.length) {
+        // Intentar también sin @ por si acaso
         const rr2 = await ytApiGet('channels?part=id&forUsername=' + encodeURIComponent(handle));
         if (rr2.status !== 200 || !rr2.data.items?.length) {
           console.log('[YouTube AutoDetect] No se pudo resolver channelId para:', handle, '— reintentando en', retryDelay/1000, 's');
@@ -867,6 +838,7 @@ async function autoConnectYouTubeLive() {
     console.log('[YouTube AutoDetect] Live encontrado:', videoId, '— conectando...');
     ytAutoDetectRetries = 0;
     await connectYouTubeApi(videoId);
+    // Una vez conectado, recheck cada 30 min por si se cae
     ytAutoDetectTimer = setTimeout(autoConnectYouTubeLive, 30 * 60 * 1000);
   } catch(e) {
     console.log('[YouTube AutoDetect] Error:', e.message, '— reintentando en', retryDelay/1000, 's');
@@ -982,6 +954,7 @@ app.get('/api/status', (req, res) => res.json({ twitch: { connected: chatState.t
 app.post('/api/kick/restart', (req, res) => { if (kickRetryTimeout) { clearTimeout(kickRetryTimeout); kickRetryTimeout = null; } chatState.kick.connected = false; CONFIG.kickId = process.env.KICK_CHANNEL_ID || ''; broadcastStatus(); connectKick(); res.json({ ok: true }); });
 app.post('/api/tiktok/restart', (req, res) => { chatState.tiktok.connected = false; broadcastStatus(); connectTikTokConnector(); res.json({ ok: true }); });
 app.post('/api/youtube/connect', (req, res) => {
+  // Acepta videoId directo o URL completa de YouTube
   const raw = req.body.videoId || req.body.url || req.body.link || '';
   if (!raw) return res.status(400).json({ error: 'videoId o url requerido' });
   const videoId = extractYouTubeVideoId(raw) || raw.trim();
@@ -991,6 +964,8 @@ app.post('/api/youtube/connect', (req, res) => {
   res.json({ ok: true, videoId });
 });
 
+// GET para conectar desde el browser fácilmente
+// Ej: /api/youtube/connect?url=https://youtube.com/watch?v=XXXX
 app.get('/api/youtube/connect', (req, res) => {
   const raw = req.query.videoId || req.query.url || req.query.link || '';
   if (!raw) return res.status(400).json({ error: 'videoId o url requerido' });
@@ -1003,9 +978,11 @@ app.get('/api/youtube/connect', (req, res) => {
 app.post('/api/youtube/disconnect', (req, res) => { disconnectYouTubeApi(); res.json({ ok: true }); });
 app.post('/api/kick/reregister-webhooks', async (req, res) => { if (!kickOAuth.accessToken) return res.status(400).json({ error: 'Sin token OAuth' }); try { await loadKickUserInfo(); await registerKickWebhooks(); res.json({ ok: true }); } catch(e) { res.status(500).json({ error: e.message }); } });
 
+// Elimina TODAS las suscripciones de webhook actuales y las vuelve a registrar para el canal correcto
 app.post('/api/kick/fix-webhooks', async (req, res) => {
   if (!kickOAuth.accessToken) return res.status(400).json({ error: 'Sin token OAuth. Hacé /auth/kick primero.' });
   try {
+    // 1. Listar todas las suscripciones actuales
     const listRes = await httpsRequest({
       hostname: 'api.kick.com',
       path: '/public/v1/events/subscriptions',
@@ -1014,6 +991,7 @@ app.post('/api/kick/fix-webhooks', async (req, res) => {
     }, null);
     console.log('[Fix Webhooks] Suscripciones actuales:', JSON.stringify(listRes.data).slice(0, 500));
 
+    // 2. Eliminar todas las suscripciones existentes
     const subs = listRes.data?.data || [];
     let deleted = 0;
     for (const sub of subs) {
@@ -1031,10 +1009,12 @@ app.post('/api/kick/fix-webhooks', async (req, res) => {
     }
     console.log('[Fix Webhooks] Eliminadas:', deleted, 'suscripciones');
 
+    // 3. Forzar channelId correcto (KronaAbisal)
     kickOAuth.channelId = CONFIG.kickBroadcasterId || CONFIG.kickId || kickOAuth.channelId;
     kickOAuth.userId = kickOAuth.channelId;
     console.log('[Fix Webhooks] Registrando para channelId:', kickOAuth.channelId);
 
+    // 4. Registrar nuevamente para el canal correcto
     await registerKickWebhooks();
 
     res.json({ ok: true, deleted, channelId: kickOAuth.channelId });
@@ -1062,6 +1042,7 @@ app.post('/api/kick/set-token', async (req, res) => {
 // ENDPOINT CANJES TOUCH PORTAL / EXTERNOS
 // ============================================================
 app.post('/api/kick/redemption', (req, res) => {
+  // Acepta cualquier combinación de campos que mande Touch Portal
   const username = req.body.username || req.body.user || req.body.viewer || req.body.sender || 'KickUser';
   const rewardTitle = req.body.rewardTitle || req.body.reward || req.body.title || req.body.rewardName || req.body.reward_title || 'Canje';
   const userInput = req.body.userInput || req.body.input || req.body.message || req.body.user_input || '';
@@ -1086,6 +1067,7 @@ app.post('/api/kick/redemption', (req, res) => {
   res.json({ ok: true, username, rewardTitle, userInput });
 });
 
+// También acepta GET para facilitar integración con herramientas simples
 app.get('/api/kick/redemption', (req, res) => {
   const username = req.query.username || req.query.user || req.query.viewer || 'KickUser';
   const rewardTitle = req.query.rewardTitle || req.query.reward || req.query.title || req.query.rewardName || 'Canje';
