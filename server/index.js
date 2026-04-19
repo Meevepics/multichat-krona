@@ -414,7 +414,6 @@ const { WebSocket: NodeWS } = require('ws');
 const PUSHER_URLS = ['wss://ws-us2.pusher.com/app/32cbd69e4b950bf97679?protocol=7&client=js&version=8.4.0-rc2&flash=false', 'wss://ws-us2.pusher.com/app/eb1d5f283081a78b932c?protocol=7&client=js&version=7.6.0&flash=false'];
 let kickPusherWs = null, kickRetryDelay = 5000, kickRetryTimeout = null, kickUrlIndex = 0, kickPingInterval = null;
 
-// ── CAMBIO 3: channel.reward.redemption.updated agregado a la lista de conocidos ──
 const KNOWN_PUSHER_EVENTS = new Set([
   'App\\Events\\ChatMessageEvent',
   'App\\Events\\GiftedSubscriptionsEvent',
@@ -536,7 +535,6 @@ async function loadKickUserInfo() {
   if (!kickOAuth.channelId && CONFIG.kickId) { kickOAuth.channelId = CONFIG.kickId; if (!kickOAuth.userId) kickOAuth.userId = CONFIG.kickId; }
 }
 
-// ── CAMBIO 1: channel.reward.redemption.updated agregado al registro de webhooks ──
 async function registerKickWebhooks() {
   if (!kickOAuth.accessToken) return;
   const broadcasterId = parseInt(kickOAuth.channelId || kickOAuth.userId);
@@ -549,6 +547,7 @@ async function registerKickWebhooks() {
       { name: 'channel.followed', version: 1 },
       { name: 'chat.message.sent', version: 1 },
       { name: 'reward-redeemed', version: 1 },
+      // ── NUEVO: canjes con flujo de aprobación ──────────────────────────────
       { name: 'channel.reward.redemption.updated', version: 1 },
     ],
     method: 'webhook',
@@ -585,7 +584,6 @@ function parseKickRoles(badges) {
   const roles = []; (badges || []).forEach(b => { const bt = (b.type || '').toLowerCase(); if (bt === 'broadcaster' || bt === 'owner') roles.push({ type: 'broadcaster', label: 'Owner' }); else if (bt === 'moderator' || bt === 'mod') roles.push({ type: 'moderator', label: 'Mod' }); else if (bt === 'vip') roles.push({ type: 'vip', label: 'VIP' }); else if (bt === 'subscriber' || bt === 'sub') roles.push({ type: 'subscriber', label: 'Sub' }); }); return roles;
 }
 
-// ── CAMBIO 3: KNOWN_WEBHOOK_EVENTS actualizado ──
 function handleKickWebhookEvent(eventType, data) {
   if (!data) return;
 
@@ -596,7 +594,7 @@ function handleKickWebhookEvent(eventType, data) {
     'channel.subscription.gifts',
     'channel.followed',
     'reward-redeemed',
-    'channel.reward.redemption.updated',
+    'channel.reward.redemption.updated', // ── NUEVO
   ];
   if (eventType && !KNOWN_WEBHOOK_EVENTS.includes(eventType)) {
     console.log('[Kick Webhook UNKNOWN EVENT]', eventType, JSON.stringify(data).slice(0, 800));
@@ -624,6 +622,7 @@ function handleKickWebhookEvent(eventType, data) {
     }
     return;
   }
+
   if (eventType === 'channel.subscription.new') { const u = data.subscriber?.username || 'KickUser'; getKickAvatar(u, (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'sub', chatname: u, chatmessage: '¡Se suscribió!', chatimg: av || null, nameColor: '#53FC18', roles: [], mid: 'kick-sub-wh-' + Date.now() })); }
   if (eventType === 'channel.subscription.renewal') { const u = data.subscriber?.username || 'KickUser', months = data.months || 1; getKickAvatar(u, (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'resub', chatname: u, chatmessage: `¡${months} mes(es)!`, months, chatimg: av || null, nameColor: '#53FC18', roles: [], mid: 'kick-resub-wh-' + Date.now() })); }
   if (eventType === 'channel.subscription.gifts') { const g = data.gifter?.username || 'Anónimo', qty = data.quantity || 1; getKickAvatar(g, (av) => broadcast({ type: 'donation', platform: 'kick', donationType: 'giftedsub', chatname: g, chatmessage: `¡Regaló ${qty} sub(s)!`, amount: qty, chatimg: av || null, nameColor: '#53FC18', roles: [], mid: 'kick-gift-wh-' + Date.now() })); }
@@ -640,59 +639,45 @@ function handleKickWebhookEvent(eventType, data) {
       : `canjeó "${rewardTitle}"${cost ? ` (${cost} pts)` : ''}`;
     console.log('[Kick Redemption]', username, rewardTitle, cost);
     getKickAvatar(username, (av) => broadcast({
-      type: 'donation',
-      platform: 'kick',
-      donationType: 'redemption',
-      chatname: username,
-      chatmessage,
-      rewardTitle,
-      amount: cost,
-      chatimg: av || null,
-      nameColor: '#FFD700',
-      roles: [],
+      type: 'donation', platform: 'kick', donationType: 'redemption',
+      chatname: username, chatmessage, rewardTitle, amount: cost,
+      chatimg: av || null, nameColor: '#FFD700', roles: [],
       mid: 'kick-redeem-' + (redemption.id || Date.now()),
     }));
   }
 
-  // ── CAMBIO 2: handler para channel.reward.redemption.updated ──────────────
+  // ── NUEVO: canjes con flujo de aprobación (pending/accepted/rejected) ────
   if (eventType === 'channel.reward.redemption.updated') {
-    const status = data.status || 'pending';
-    // No filtrar por status — mostrar pending, accepted y rejected
-    if (status === 'rejected') return; // solo ignorar los rechazados
+    const username = data.redeemer?.username || data.redeemer?.display_name || 'KickUser';
+    const rewardTitle = data.reward?.title || 'Canje';
+    const cost = data.reward?.cost || null;
+    const userInput = data.user_input || '';
+    const status = data.status || 'pending'; // "pending" | "accepted" | "rejected"
 
-    const redeemer   = data.redeemer  || {};
-    const reward     = data.reward    || {};
-    const username   = redeemer.username    || redeemer.display_name || 'KickUser';
-    const rewardTitle = reward.title        || 'Canje';
-    const cost        = reward.cost         || null;
-    const userInput   = data.user_input     || '';
+    // Mostrar siempre, independientemente del status
+    // Si querés mostrar solo los aceptados, descomentá la línea siguiente:
+    // if (status === 'rejected') return;
 
-    const statusLabel = status === 'accepted' ? ' ✅' : ' ⏳';
+    const statusLabel = status === 'accepted' ? '✅' : status === 'rejected' ? '❌' : '⏳';
     const chatmessage = userInput
-      ? `canjeó "${rewardTitle}" → ${userInput}${statusLabel}`
-      : `canjeó "${rewardTitle}"${cost ? ` (${cost} pts)` : ''}${statusLabel}`;
+      ? `canjeó "${rewardTitle}" → ${userInput} ${statusLabel}`
+      : `canjeó "${rewardTitle}"${cost ? ` (${cost} pts)` : ''} ${statusLabel}`;
 
     console.log('[Kick Redemption Updated]', username, rewardTitle, status);
 
-    const avatarInData = redeemer.profile_picture || null;
+    const avatarUrl = data.redeemer?.profile_picture || null;
     const send = (av) => broadcast({
-      type: 'donation',
-      platform: 'kick',
-      donationType: 'redemption',
-      chatname: username,
-      chatmessage,
-      rewardTitle,
-      amount: cost,
-      chatimg: av || null,
-      nameColor: '#FFD700',
+      type: 'donation', platform: 'kick', donationType: 'redemption',
+      chatname: username, chatmessage, rewardTitle,
+      amount: cost, chatimg: av || null,
+      nameColor: status === 'accepted' ? '#53FC18' : status === 'rejected' ? '#ff4444' : '#FFD700',
       roles: [],
       mid: 'kick-redeem-updated-' + (data.id || Date.now()),
     });
-
-    if (avatarInData) { kickAvatarCache[username.toLowerCase()] = avatarInData; send(avatarInData); }
+    if (avatarUrl) { kickAvatarCache[username.toLowerCase()] = avatarUrl; send(avatarUrl); }
     else getKickAvatar(username, send);
   }
-  // ────────────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────────
 }
 
 async function refreshKickTokenIfNeeded() {
@@ -859,10 +844,7 @@ async function autoConnectYouTubeLive() {
     }
 
     const videoId = r.data.items[0].id?.videoId;
-    if (!videoId) {
-      ytAutoDetectTimer = setTimeout(autoConnectYouTubeLive, retryDelay);
-      return;
-    }
+    if (!videoId) { ytAutoDetectTimer = setTimeout(autoConnectYouTubeLive, retryDelay); return; }
 
     console.log('[YouTube AutoDetect] Live encontrado:', videoId, '— conectando...');
     ytAutoDetectRetries = 0;
@@ -1006,42 +988,22 @@ app.post('/api/kick/reregister-webhooks', async (req, res) => { if (!kickOAuth.a
 app.post('/api/kick/fix-webhooks', async (req, res) => {
   if (!kickOAuth.accessToken) return res.status(400).json({ error: 'Sin token OAuth. Hacé /auth/kick primero.' });
   try {
-    const listRes = await httpsRequest({
-      hostname: 'api.kick.com',
-      path: '/public/v1/events/subscriptions',
-      method: 'GET',
-      headers: { 'Authorization': `Bearer ${kickOAuth.accessToken}`, 'Accept': 'application/json' }
-    }, null);
+    const listRes = await httpsRequest({ hostname: 'api.kick.com', path: '/public/v1/events/subscriptions', method: 'GET', headers: { 'Authorization': `Bearer ${kickOAuth.accessToken}`, 'Accept': 'application/json' } }, null);
     console.log('[Fix Webhooks] Suscripciones actuales:', JSON.stringify(listRes.data).slice(0, 500));
-
     const subs = listRes.data?.data || [];
     let deleted = 0;
     for (const sub of subs) {
       const subId = sub.subscription_id || sub.id;
       if (!subId) continue;
-      try {
-        await httpsRequest({
-          hostname: 'api.kick.com',
-          path: `/public/v1/events/subscriptions?id=${subId}`,
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${kickOAuth.accessToken}`, 'Accept': 'application/json' }
-        }, null);
-        deleted++;
-      } catch(e) {}
+      try { await httpsRequest({ hostname: 'api.kick.com', path: `/public/v1/events/subscriptions?id=${subId}`, method: 'DELETE', headers: { 'Authorization': `Bearer ${kickOAuth.accessToken}`, 'Accept': 'application/json' } }, null); deleted++; } catch(e) {}
     }
     console.log('[Fix Webhooks] Eliminadas:', deleted, 'suscripciones');
-
     kickOAuth.channelId = CONFIG.kickBroadcasterId || CONFIG.kickId || kickOAuth.channelId;
     kickOAuth.userId = kickOAuth.channelId;
     console.log('[Fix Webhooks] Registrando para channelId:', kickOAuth.channelId);
-
     await registerKickWebhooks();
-
     res.json({ ok: true, deleted, channelId: kickOAuth.channelId });
-  } catch(e) {
-    console.error('[Fix Webhooks] Error:', e.message);
-    res.status(500).json({ error: e.message });
-  }
+  } catch(e) { console.error('[Fix Webhooks] Error:', e.message); res.status(500).json({ error: e.message }); }
 });
 
 app.post('/api/kick/set-token', async (req, res) => {
@@ -1071,16 +1033,9 @@ app.post('/api/kick/redemption', (req, res) => {
     : `canjeó "${rewardTitle}"${cost ? ` (${cost} pts)` : ''}`;
   console.log('[Kick Redemption TouchPortal]', username, rewardTitle, userInput);
   getKickAvatar(username, (av) => broadcast({
-    type: 'donation',
-    platform: 'kick',
-    donationType: 'redemption',
-    chatname: username,
-    chatmessage,
-    rewardTitle,
-    amount: cost || null,
-    chatimg: av || null,
-    nameColor: '#FFD700',
-    roles: [],
+    type: 'donation', platform: 'kick', donationType: 'redemption',
+    chatname: username, chatmessage, rewardTitle, amount: cost || null,
+    chatimg: av || null, nameColor: '#FFD700', roles: [],
     mid: 'kick-redeem-tp-' + Date.now(),
   }));
   res.json({ ok: true, username, rewardTitle, userInput });
@@ -1096,16 +1051,9 @@ app.get('/api/kick/redemption', (req, res) => {
     : `canjeó "${rewardTitle}"${cost ? ` (${cost} pts)` : ''}`;
   console.log('[Kick Redemption GET]', username, rewardTitle, userInput);
   getKickAvatar(username, (av) => broadcast({
-    type: 'donation',
-    platform: 'kick',
-    donationType: 'redemption',
-    chatname: username,
-    chatmessage,
-    rewardTitle,
-    amount: cost || null,
-    chatimg: av || null,
-    nameColor: '#FFD700',
-    roles: [],
+    type: 'donation', platform: 'kick', donationType: 'redemption',
+    chatname: username, chatmessage, rewardTitle, amount: cost || null,
+    chatimg: av || null, nameColor: '#FFD700', roles: [],
     mid: 'kick-redeem-get-' + Date.now(),
   }));
   res.json({ ok: true, username, rewardTitle, userInput });
