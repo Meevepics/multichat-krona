@@ -657,9 +657,8 @@ function handleKickWebhookEvent(eventType, data) {
   // ── CAMBIO 2: handler para channel.reward.redemption.updated ──────────────
   if (eventType === 'channel.reward.redemption.updated') {
     const status = data.status || 'pending';
-    // Solo broadcastear si fue aceptado. Cambiá a 'rejected' para mostrar rechazos,
-    // o eliminá este if para mostrar todos los estados.
-    if (status !== 'accepted') return;
+    // No filtrar por status — mostrar pending, accepted y rejected
+    if (status === 'rejected') return; // solo ignorar los rechazados
 
     const redeemer   = data.redeemer  || {};
     const reward     = data.reward    || {};
@@ -668,9 +667,10 @@ function handleKickWebhookEvent(eventType, data) {
     const cost        = reward.cost         || null;
     const userInput   = data.user_input     || '';
 
+    const statusLabel = status === 'accepted' ? ' ✅' : ' ⏳';
     const chatmessage = userInput
-      ? `canjeó "${rewardTitle}" → ${userInput}`
-      : `canjeó "${rewardTitle}"${cost ? ` (${cost} pts)` : ''}`;
+      ? `canjeó "${rewardTitle}" → ${userInput}${statusLabel}`
+      : `canjeó "${rewardTitle}"${cost ? ` (${cost} pts)` : ''}${statusLabel}`;
 
     console.log('[Kick Redemption Updated]', username, rewardTitle, status);
 
