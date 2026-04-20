@@ -230,153 +230,266 @@
     /* ── Animaciones disponibles para el emote suelto ───────────── */
     var EMOTE_ANIMATIONS = [
 
-      // 1. Corre de derecha a izquierda y se cae
-      function animRunAndFall(el, img, onDone) {
+      // 1. Sube desde abajo corriendo con balanceo lateral y cae de vuelta
+      function animRunUp(el, img, onDone) {
         var vw = window.innerWidth;
         var vh = window.innerHeight;
-        el.style.top  = (vh * 0.35 + Math.random() * vh * 0.2) + 'px';
-        el.style.left = (vw + 20) + 'px';
-        gsap.set(el, { opacity:1, scaleX:-1 }); // flip para que "corra" hacia la izq
+        var startX = vw * 0.15 + Math.random() * vw * 0.6;
+        el.style.left = startX + 'px';
+        el.style.top  = (vh + 20) + 'px';
+        gsap.set(el, { opacity:1, scaleX:1, scaleY:1.1 }); // estirado al salir corriendo
+        var holdTime = Math.max(0.5, SHOW_TIME_MS/1000 - 3.5);
         var tl = gsap.timeline({ onComplete: onDone });
-        tl.to(el, { x: -(vw + 200), duration: 2.2, ease: 'power1.inOut' })
-          .to(el, { y: vh * 0.4, rotation: 90, opacity: 0, duration: 0.5, ease: 'power2.in' }, '-=0.4');
+        // sube con squash al llegar
+        tl.to(el, {
+            y: -(vh * 0.55),
+            scaleX:0.88, scaleY:1.18,   // se estira al subir rápido
+            duration: 0.55,
+            ease: 'power3.out'
+          })
+          // aterriza: squash horizontal
+          .to(el, { scaleX:1.25, scaleY:0.78, duration:0.1, ease:'power2.out' })
+          .to(el, { scaleX:0.92, scaleY:1.1,  duration:0.12, ease:'power2.inOut' })
+          .to(el, { scaleX:1,    scaleY:1,    duration:0.15, ease:'elastic.out(1,0.4)' })
+          // balanceo idle: se mece suavemente mientras espera
+          .to(img, {
+            rotation: 8, duration: 0.4, ease:'sine.inOut',
+            yoyo:true, repeat: Math.ceil(holdTime / 0.8) * 2
+          })
+          // anticipación: se agacha antes de saltar para irse
+          .to(el, { scaleX:1.2, scaleY:0.75, y: '+=18', duration:0.18, ease:'power2.in' })
+          // salta hacia abajo y sale por abajo de pantalla (se fue corriendo)
+          .to(el, { y: vh * 0.6, scaleX:0.85, scaleY:1.2, opacity:0, duration:0.5, ease:'power3.in' })
+          .to(img, { rotation:0, duration:0.1 }, '<');
       },
 
-      // 2. Aparece en el centro y tiembla como loco
-      function animShake(el, img, onDone) {
-        var vw = window.innerWidth;
-        var vh = window.innerHeight;
-        el.style.left = (vw / 2 - 60) + 'px';
-        el.style.top  = (vh / 2 - 60) + 'px';
-        gsap.set(el, { opacity:0, scale:0 });
-        var tl = gsap.timeline({ onComplete: onDone });
-        tl.to(el, { opacity:1, scale:1.3, duration:0.3, ease:'back.out(3)' })
-          .to(img, { animation:'ep-shake 0.08s linear 8', duration: 0.001 })
-          .to(el,  {
-            keyframes:[
-              {x:-14,duration:0.07},{x:14,duration:0.07},{x:-12,duration:0.07},
-              {x:12,duration:0.07},{x:-8,duration:0.07},{x:8,duration:0.07},
-              {x:0,duration:0.07}
-            ]
-          }, '<')
-          .to(el, { scale:1, duration:0.2, ease:'elastic.out(1,0.5)' })
-          .to(el, { opacity:1, duration: SHOW_TIME_MS/1000 - 1.2 })
-          .to(el, { opacity:0, scale:0.5, y:-30, duration:0.4, ease:'power2.in' });
-      },
-
-      // 3. Rebota desde arriba como una pelota
-      function animDropBounce(el, img, onDone) {
-        var vw = window.innerWidth;
-        var vh = window.innerHeight;
-        el.style.left  = (vw * 0.2 + Math.random() * vw * 0.6) + 'px';
-        el.style.top   = '-120px';
-        gsap.set(el, { opacity:1 });
-        var floor = vh * 0.55;
-        var tl = gsap.timeline({ onComplete: onDone });
-        tl.to(el, { y: floor, duration:0.6, ease:'bounce.out' })
-          .to(el, { opacity:1, duration: SHOW_TIME_MS/1000 - 1.5 })
-          .to(el, { y: floor + vh * 0.5, opacity:0, duration:0.5, ease:'power2.in' });
-      },
-
-      // 4. Gira y crece desde el centro, luego se encoge
-      function animSpinGrow(el, img, onDone) {
-        var vw = window.innerWidth;
-        var vh = window.innerHeight;
-        el.style.left = (vw / 2 - 60) + 'px';
-        el.style.top  = (vh / 2 - 80) + 'px';
-        gsap.set(el, { opacity:0, scale:0, rotation:-180 });
-        var tl = gsap.timeline({ onComplete: onDone });
-        tl.to(el, { opacity:1, scale:1.5, rotation:15, duration:0.6, ease:'back.out(2)' })
-          .to(el, { scale:1, rotation:-5, duration:0.25, ease:'power2.inOut' })
-          .to(el, { scale:1.05, rotation:0, duration:0.2 })
-          .to(el, { opacity:1, duration: SHOW_TIME_MS/1000 - 1.8 })
-          .to(el, { scale:0, rotation:180, opacity:0, duration:0.5, ease:'back.in(2)' });
-      },
-
-      // 5. Entra volando desde abajo izquierda en arco y sale por arriba derecha
-      function animArcFly(el, img, onDone) {
+      // 2. Entra desde abajo izquierda, corre en arco balanceándose y sale por abajo derecha
+      function animRunAcross(el, img, onDone) {
         var vw = window.innerWidth;
         var vh = window.innerHeight;
         el.style.left = '-120px';
-        el.style.top  = (vh + 20) + 'px';
-        gsap.set(el, { opacity:1, rotation:45 });
+        el.style.top  = (vh * 0.45) + 'px';
+        gsap.set(el, { opacity:1, scaleX:-1 }); // mirando hacia la derecha
         var tl = gsap.timeline({ onComplete: onDone });
-        tl.to(el, {
-            motionPath: {
-              path: [
-                { x: 0, y: 0 },
-                { x: vw * 0.4, y: -vh * 0.5 },
-                { x: vw * 0.5, y: -vh * 0.65 },
-                { x: vw * 0.6, y: -vh * 0.5 },
-                { x: vw + 100, y: -vh * 0.9 }
-              ],
-              type: 'cubic'
-            },
-            rotation: -20,
-            opacity: 1,
-            duration: 1.8,
-            ease: 'power1.inOut'
-          })
-          .to(el, { opacity:0, duration:0.3, ease:'power2.in' }, '-=0.4');
-      },
-
-      // 6. Aparece, da saltitos en el sitio y explota en partículas (scale)
-      function animJumpExplode(el, img, onDone) {
-        var vw = window.innerWidth;
-        var vh = window.innerHeight;
-        el.style.left = (vw * 0.3 + Math.random() * vw * 0.4) + 'px';
-        el.style.top  = (vh * 0.3 + Math.random() * vh * 0.3) + 'px';
-        gsap.set(el, { opacity:0, scale:0 });
-        var tl = gsap.timeline({ onComplete: onDone });
-        tl.to(el, { opacity:1, scale:1, duration:0.3, ease:'back.out(3)' })
-          .to(el, {
+        // el balanceo de carrera: rotación con cada "paso"
+        var runDur = 2.0;
+        tl.to(img, {
             keyframes:[
-              {y:-30,scaleX:0.85,scaleY:1.15,duration:0.2,ease:'power2.out'},
-              {y:0, scaleX:1.1, scaleY:0.9, duration:0.15,ease:'power2.in'},
-              {y:-18,scaleX:0.9, scaleY:1.1, duration:0.15,ease:'power2.out'},
-              {y:0, scaleX:1, scaleY:1, duration:0.12,ease:'power2.in'},
-              {y:-8, duration:0.1,ease:'power2.out'},
-              {y:0, duration:0.1,ease:'power2.in'}
+              { rotation:-12, duration: runDur/8 },
+              { rotation: 12, duration: runDur/8 },
+              { rotation:-12, duration: runDur/8 },
+              { rotation: 12, duration: runDur/8 },
+              { rotation:-12, duration: runDur/8 },
+              { rotation: 12, duration: runDur/8 },
+              { rotation:-12, duration: runDur/8 },
+              { rotation: 12, duration: runDur/8 }
             ]
           })
-          .to(el, { opacity:1, duration: SHOW_TIME_MS/1000 - 2 })
+          // la trayectoria: arco suave, baja un poco a media pantalla y sube al final
           .to(el, {
-            scale:2.5, opacity:0, duration:0.35, ease:'power3.out',
-            onStart: function(){ gsap.to(img,{rotation:720,duration:0.35,ease:'power3.in'}); }
-          });
+            x: vw + 200,
+            keyframes:[
+              { y: 0,         duration: runDur * 0.3, ease:'power1.in'  },
+              { y: -vh*0.12,  duration: runDur * 0.4, ease:'sine.inOut' },
+              { y: vh * 0.5,  duration: runDur * 0.3, ease:'power2.in' }
+            ],
+            duration: runDur,
+            ease: 'none'
+          }, '<')
+          .to(el, { opacity:0, duration:0.3, ease:'power2.in' }, '-=0.35');
       },
 
-      // 7. Péndulo / swing de lado a lado
-      function animSwing(el, img, onDone) {
+      // 3. Sube desde abajo como globo, flota tranquilo y sube escapando
+      function animBalloon(el, img, onDone) {
         var vw = window.innerWidth;
-        el.style.left  = (vw / 2 - 60) + 'px';
-        el.style.top   = '40px';
-        el.style.transformOrigin = '50% 0%';
-        gsap.set(el, { opacity:1, rotation:-40 });
+        var vh = window.innerHeight;
+        var startX = vw * 0.2 + Math.random() * vw * 0.6;
+        el.style.left = startX + 'px';
+        el.style.top  = (vh + 20) + 'px';
+        gsap.set(el, { opacity:0, scaleY:0.6, scaleX:1.3 }); // aplastado antes de inflarse
+        var holdTime = Math.max(1, SHOW_TIME_MS/1000 - 2.8);
         var tl = gsap.timeline({ onComplete: onDone });
-        tl.to(el, { rotation:40, duration:0.7, ease:'sine.inOut' })
-          .to(el, { rotation:-30, duration:0.6, ease:'sine.inOut' })
-          .to(el, { rotation:25, duration:0.55, ease:'sine.inOut' })
-          .to(el, { rotation:-18, duration:0.5, ease:'sine.inOut' })
-          .to(el, { rotation:10, duration:0.45, ease:'sine.inOut' })
-          .to(el, { rotation:0, duration:0.4, ease:'sine.inOut' })
-          .to(el, { opacity:1, duration: SHOW_TIME_MS/1000 - 3.5 })
-          .to(el, { y: 200, opacity:0, duration:0.5, ease:'power2.in' });
+        tl.to(el, { opacity:1, scaleY:1.1, scaleX:0.92, duration:0.4, ease:'power2.out' }) // se infla
+          .to(el, { scaleY:1, scaleX:1, duration:0.3, ease:'elastic.out(1.2,0.5)' })
+          .to(el, { y: -(vh * 0.5), duration: 1.0, ease:'power2.out' })
+          // drift lateral suave mientras flota
+          .to(img, {
+            x: 12, rotation:6, duration:0.9, ease:'sine.inOut',
+            yoyo:true, repeat: Math.ceil(holdTime / 1.8) * 2
+          })
+          .to(el, {
+            y: '-=30', duration: holdTime * 0.5, ease:'sine.inOut',
+            yoyo:true, repeat:1
+          }, '<')
+          // escapa flotando hacia arriba
+          .to(el, { y: '-=' + (vh * 0.7), scaleX:0.85, scaleY:1.15, opacity:0, duration:0.8, ease:'power2.in' })
+          .to(img, { rotation:0, x:0 }, '<');
       },
 
-      // 8. Aparece enorme y se encoge hasta tamaño normal, luego se va flotando
-      function animShrinkFloat(el, img, onDone) {
+      // 4. Cae desde arriba con peso real: rebota varias veces achicándose
+      function animDropHeavy(el, img, onDone) {
+        var vw = window.innerWidth;
+        var vh = window.innerHeight;
+        var startX = vw * 0.15 + Math.random() * vw * 0.65;
+        el.style.left  = startX + 'px';
+        el.style.top   = '-130px';
+        gsap.set(el, { opacity:1, scaleX:0.9, scaleY:1.2, rotation: -8 }); // estirado en caída
+        var floorY = vh * 0.42;
+        var holdTime = Math.max(0.5, SHOW_TIME_MS/1000 - 2.8);
+        var tl = gsap.timeline({ onComplete: onDone });
+        // caída
+        tl.to(el, { y: floorY, rotation:5, duration:0.55, ease:'power2.in' })
+          // primer bote: squash fuerte
+          .to(el, { scaleX:1.45, scaleY:0.6,  duration:0.09, ease:'power2.out' })
+          .to(el, { scaleX:0.88, scaleY:1.2,  duration:0.12, ease:'power2.out' })
+          .to(el, { y: floorY - vh*0.12, scaleX:0.92, scaleY:1.1, rotation:-4, duration:0.28, ease:'power2.out' })
+          // segundo bote: más chico
+          .to(el, { y: floorY, scaleX:1.25, scaleY:0.78, duration:0.2, ease:'power2.in' })
+          .to(el, { scaleX:0.95, scaleY:1.08, duration:0.1 })
+          .to(el, { y: floorY - vh*0.04, duration:0.14, ease:'power2.out' })
+          .to(el, { y: floorY, scaleX:1, scaleY:1, duration:0.12, ease:'power2.in' })
+          // idle: respira suavemente
+          .to(el, {
+            scaleY:1.05, scaleX:0.97, duration:0.7, ease:'sine.inOut',
+            yoyo:true, repeat: Math.ceil(holdTime / 1.4) * 2
+          })
+          // se hunde hacia abajo y sale por la pantalla
+          .to(el, { scaleX:1.15, scaleY:0.8, duration:0.15, ease:'power2.in' })
+          .to(el, { y: floorY + vh * 0.7, scaleX:0.85, scaleY:1.2, opacity:0, duration:0.55, ease:'power3.in' });
+      },
+
+      // 5. Aparece con susto desde el centro, tiembla de miedo y sale disparado
+      function animFright(el, img, onDone) {
         var vw = window.innerWidth;
         var vh = window.innerHeight;
         el.style.left = (vw / 2 - 60) + 'px';
-        el.style.top  = (vh / 2 - 80) + 'px';
-        gsap.set(el, { opacity:0.3, scale:4 });
+        el.style.top  = (vh * 0.38) + 'px';
+        gsap.set(el, { opacity:0, scale:0, rotation:0 });
+        var holdTime = Math.max(0.5, SHOW_TIME_MS/1000 - 2.5);
         var tl = gsap.timeline({ onComplete: onDone });
-        tl.to(el, { opacity:1, scale:1, duration:0.7, ease:'elastic.out(1,0.5)' })
-          .to(el, { opacity:1, duration: SHOW_TIME_MS/1000 - 1.5,
-                    y: -20, yoyo:true, repeat: Math.floor((SHOW_TIME_MS/1000 - 1.5)*0.5),
-                    ease:'sine.inOut', repeatDelay: 0.1 })
-          .to(el, { y:-80, opacity:0, duration:0.5, ease:'power2.in' });
+        // aparece con pop
+        tl.to(el, { opacity:1, scale:1.35, duration:0.18, ease:'power3.out' })
+          .to(el, { scale:0.9, duration:0.1 })
+          .to(el, { scale:1.08, duration:0.08 })
+          .to(el, { scale:1,   duration:0.1, ease:'elastic.out(1,0.4)' })
+          // tiembla de miedo: vibración pequeña y orgánica
+          .to(el, {
+            keyframes:[
+              {x:-9, y:-4, rotation:-5, duration:0.06},
+              {x: 8, y: 3, rotation: 4, duration:0.06},
+              {x:-7, y:-6, rotation:-3, duration:0.06},
+              {x: 6, y: 2, rotation: 5, duration:0.06},
+              {x:-5, y:-3, rotation:-2, duration:0.06},
+              {x: 4, y: 1, rotation: 3, duration:0.06},
+              {x:-3, y:-2, rotation:-1, duration:0.06},
+              {x: 2, y: 0, rotation: 1, duration:0.06},
+              {x: 0, y: 0, rotation: 0, duration:0.08}
+            ]
+          })
+          // respira asustado (escala sutil)
+          .to(el, {
+            scale:1.04, duration:0.35, ease:'sine.inOut',
+            yoyo:true, repeat: Math.ceil(holdTime / 0.7) * 2
+          })
+          // sale disparado hacia arriba girando (huyó del susto)
+          .to(el, { scale:0.7, y:10, duration:0.12, ease:'power2.in' })
+          .to(el, { y: -(vh * 0.9), scale:1.4, rotation:-380, opacity:0, duration:0.55, ease:'power3.in' });
+      },
+
+      // 6. Sube bailando: rebota de izq a der con squash en cada piso
+      function animDanceBounce(el, img, onDone) {
+        var vw = window.innerWidth;
+        var vh = window.innerHeight;
+        var cx = vw * 0.3 + Math.random() * vw * 0.3;
+        el.style.left = cx + 'px';
+        el.style.top  = (vh + 20) + 'px';
+        gsap.set(el, { opacity:1 });
+        var floorY = vh * 0.48;
+        var holdTime = Math.max(0, SHOW_TIME_MS/1000 - 4.2);
+        var tl = gsap.timeline({ onComplete: onDone });
+
+        function bounce(fromY, toY, xShift, rot, dur) {
+          tl.to(el, { y: toY, x: '+='+xShift, rotation:rot,
+                      scaleX:0.88, scaleY:1.18, duration:dur*0.55, ease:'power2.in' })
+            .to(el, { scaleX:1.35, scaleY:0.65, duration:0.09 })
+            .to(el, { scaleX:0.9, scaleY:1.12, duration:0.12 })
+            .to(el, { scaleX:1, scaleY:1, duration:0.1 });
+        }
+
+        // sube de abajo al piso
+        bounce(vh, floorY, 0, 8, 0.45);
+        bounce(floorY, floorY - vh*0.18, 70, -10, 0.38);
+        bounce(floorY - vh*0.18, floorY - vh*0.08, -50, 7, 0.32);
+        bounce(floorY - vh*0.08, floorY - vh*0.22, 55, -8, 0.3);
+        bounce(floorY - vh*0.22, floorY - vh*0.12, -45, 5, 0.28);
+
+        // queda flotando con meneo
+        tl.to(img, {
+            rotation:12, duration:0.45, ease:'sine.inOut',
+            yoyo:true, repeat: Math.ceil(holdTime / 0.9) * 2
+          })
+          // salto final: sube y se va por arriba
+          .to(el, { scaleX:1.2, scaleY:0.75, duration:0.15, ease:'power2.in' })
+          .to(el, { y: -(vh * 0.8), scaleX:0.82, scaleY:1.25, opacity:0, duration:0.5, ease:'power2.in' })
+          .to(img, { rotation:0, duration:0.3 }, '<');
+      },
+
+      // 7. Péndulo orgánico: cuelga desde arriba y suelta cuando para
+      function animPendulum(el, img, onDone) {
+        var vw = window.innerWidth;
+        var vh = window.innerHeight;
+        el.style.left = (vw * 0.3 + Math.random() * vw * 0.35) + 'px';
+        el.style.top  = '30px';
+        gsap.set(el, { opacity:1, rotation:-55, transformOrigin:'50% -20px' });
+        var holdTime = Math.max(0, SHOW_TIME_MS/1000 - 3.8);
+        var tl = gsap.timeline({ onComplete: onDone });
+        // oscilaciones que se van amortiguando naturalmente
+        var swings = [55, -42, 32, -22, 15, -9, 5, -2, 0];
+        var durations = [0.65, 0.60, 0.55, 0.50, 0.46, 0.42, 0.38, 0.34, 0.28];
+        swings.forEach(function(r, i){
+          tl.to(el, { rotation:r, duration:durations[i], ease:'sine.inOut' });
+        });
+        // idle: respira colgado
+        tl.to(el, {
+            scaleX:1.04, scaleY:0.97, duration:0.5, ease:'sine.inOut',
+            yoyo:true, repeat: Math.ceil(holdTime / 1.0) * 2
+          })
+          // suelta: cae con peso
+          .to(el, { transformOrigin:'50% 50%', duration:0.01 })
+          .to(el, { y: vh * 0.6, rotation:720, scaleX:0.82, scaleY:1.2, opacity:0, duration:0.7, ease:'power3.in' });
+      },
+
+      // 8. Pop desde abajo: sale como resorte, se estira al llegar y baja suave
+      function animSpringPop(el, img, onDone) {
+        var vw = window.innerWidth;
+        var vh = window.innerHeight;
+        var startX = vw * 0.2 + Math.random() * vw * 0.55;
+        el.style.left = startX + 'px';
+        el.style.top  = (vh + 20) + 'px';
+        gsap.set(el, { opacity:0, scaleX:1.3, scaleY:0.5 }); // aplastado listo para disparar
+        var peakY = vh * 0.2;
+        var restY = vh * 0.38;
+        var holdTime = Math.max(0.5, SHOW_TIME_MS/1000 - 2.6);
+        var tl = gsap.timeline({ onComplete: onDone });
+        tl.to(el, { opacity:1, duration:0.05 })
+          // disparo hacia arriba: se estira
+          .to(el, { y: -(vh - peakY), scaleX:0.78, scaleY:1.35, duration:0.38, ease:'power3.out' })
+          // pico: squash al desacelerar en el aire
+          .to(el, { scaleX:1.12, scaleY:0.88, duration:0.12, ease:'power2.out' })
+          // cae suave al punto de reposo
+          .to(el, { y: -(vh - restY), scaleX:0.92, scaleY:1.1, duration:0.35, ease:'power2.in' })
+          // rebotecito al llegar
+          .to(el, { scaleX:1.28, scaleY:0.72, duration:0.08 })
+          .to(el, { scaleX:0.94, scaleY:1.08, duration:0.12 })
+          .to(el, { scaleX:1, scaleY:1, duration:0.18, ease:'elastic.out(1,0.5)' })
+          // idle: flota suavemente
+          .to(el, {
+            y: '-=15', duration:0.8, ease:'sine.inOut',
+            yoyo:true, repeat: Math.ceil(holdTime / 1.6) * 2
+          })
+          // se hunde un poco (anticipación) y sale disparado hacia abajo
+          .to(el, { scaleX:1.18, scaleY:0.75, y:'+=12', duration:0.14, ease:'power2.in' })
+          .to(el, { y: vh * 0.5, scaleX:0.8, scaleY:1.3, opacity:0, duration:0.45, ease:'power3.in' });
       }
     ];
 
